@@ -2,5 +2,5 @@
 *.xcuserstate
 xcuserdata/
 .build/
-*.o
-*.d
+DerivedData/
+.claude/

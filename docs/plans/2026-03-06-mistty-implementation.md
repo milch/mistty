@@ -14,25 +14,30 @@
 
 > Goal: Understand libghostty's surface lifecycle, event model, and rendering requirements before committing to Phase 1 architecture.
 
-### Task 1: Create Xcode project
+### Task 1: Create Swift Package Manager project
 
 **Files:**
-- Create: `Mistty.xcodeproj` (via Xcode)
+- Create: `Package.swift`
 - Create: `Mistty/MisttyApp.swift`
 - Create: `Mistty/ContentView.swift`
 - Create: `MisttyTests/MisttyTests.swift`
 
-**Step 1: Create project in Xcode**
+**Step 1: Initialize with SPM**
 
-Open Xcode → New Project → macOS → App
-- Product Name: `Mistty`
-- Interface: SwiftUI
-- Language: Swift
-- Include Tests: yes
+```bash
+cd /Users/manu/Developer/mistty
+swift package init --name Mistty --type executable
+```
 
-Save to `/Users/manu/Developer/mistty`.
+**Step 2: Update Package.swift for macOS 14 SwiftUI app**
 
-**Step 2: Initialize git**
+Edit `Package.swift` to set the platform to `.macOS(.v14)` and add SwiftUI as a framework dependency.
+
+**Step 3: Create source files**
+
+Create `Mistty/MisttyApp.swift` with `@main` App entry point and `Mistty/ContentView.swift` with initial SwiftUI view. Create `MisttyTests/MisttyTests.swift` with a placeholder XCTest case.
+
+**Step 4: Initialize git**
 
 ```bash
 cd /Users/manu/Developer/mistty
@@ -41,11 +46,12 @@ cat > .gitignore << 'EOF'
 .DS_Store
 *.xcuserstate
 xcuserdata/
-DerivedData/
 .build/
+DerivedData/
+.claude/
 EOF
 git add .
-git commit -m "chore: initial Xcode project"
+git commit -m "chore: initial SPM project"
 ```
 
 Expected: Repository initialized with initial commit.
@@ -124,7 +130,7 @@ In Xcode:
 **Step 3: Verify it links**
 
 ```bash
-xcodebuild build -scheme Mistty -destination "platform=macOS" 2>&1 | tail -20
+swift build 2>&1 | tail -20
 ```
 
 Expected: `BUILD SUCCEEDED`
@@ -203,7 +209,7 @@ struct ContentView: View {
 **Step 4: Build and run**
 
 ```bash
-xcodebuild build -scheme Mistty -destination "platform=macOS" 2>&1 | tail -10
+swift build 2>&1 | tail -10
 ```
 
 Open the app. Verify:
@@ -915,7 +921,7 @@ struct PaneLayoutView: View {
 **Step 4: Build**
 
 ```bash
-xcodebuild build -scheme Mistty -destination "platform=macOS" 2>&1 | tail -10
+swift build 2>&1 | tail -10
 ```
 
 Expected: `BUILD SUCCEEDED`
@@ -1007,7 +1013,7 @@ struct TabBarItem: View {
 **Step 2: Build**
 
 ```bash
-xcodebuild build -scheme Mistty -destination "platform=macOS" 2>&1 | tail -10
+swift build 2>&1 | tail -10
 ```
 
 Expected: `BUILD SUCCEEDED`
@@ -1083,7 +1089,7 @@ struct SessionRowView: View {
 **Step 2: Build**
 
 ```bash
-xcodebuild build -scheme Mistty -destination "platform=macOS" 2>&1 | tail -10
+swift build 2>&1 | tail -10
 ```
 
 **Step 3: Commit**
@@ -1403,7 +1409,7 @@ struct SessionManagerView: View {
 **Step 3: Build**
 
 ```bash
-xcodebuild build -scheme Mistty -destination "platform=macOS" 2>&1 | tail -10
+swift build 2>&1 | tail -10
 ```
 
 Expected: `BUILD SUCCEEDED`
@@ -1560,7 +1566,7 @@ Add to `ContentView.body` after `.overlay`:
 **Step 4: Build**
 
 ```bash
-xcodebuild build -scheme Mistty -destination "platform=macOS" 2>&1 | tail -10
+swift build 2>&1 | tail -10
 ```
 
 Expected: `BUILD SUCCEEDED`
