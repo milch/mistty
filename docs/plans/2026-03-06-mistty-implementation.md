@@ -6,7 +6,7 @@
 
 **Architecture:** Two-phase — Phase 0 spikes libghostty to discover API constraints, Phase 1 builds the MVP using protocol-based session/tab/pane abstractions designed for future daemon migration.
 
-**Tech Stack:** Swift 6, SwiftUI, libghostty (C API), XCTest, TOMLKit
+**Tech Stack:** Swift 6, SwiftUI, libghostty (C API), XCTest, TOMLKit, Nix flakes (build env)
 
 ---
 
@@ -80,7 +80,7 @@ Browse https://github.com/ghostty-org/ghostty — look at:
 **Step 3: Document findings**
 
 Create `docs/spike/libghostty-api.md` and write:
-- How to obtain the library (build from source vs extract from app bundle)
+- How to obtain the library (built from source via the git submodule at `vendor/ghostty`, added in Task 3)
 - The surface lifecycle: create → resize → input → render → destroy
 - Threading model (is rendering on main thread? background?)
 - How output/bell events are surfaced to the host app
@@ -95,51 +95,152 @@ git commit -m "docs: libghostty API research notes"
 
 ---
 
-### Task 3: Link libghostty in Xcode
+### Task 3: Add Ghostty submodule and Nix build environment
 
-**Step 1: Obtain libghostty**
+**Files:**
+- Create: `vendor/ghostty/` (git submodule)
+- Create: `flake.nix`
+- Create: `.envrc` (optional, for direnv integration)
 
-Based on Task 2 findings, either:
+**Step 1: Add Ghostty as a git submodule**
 
-Option A — Extract from Ghostty.app bundle:
 ```bash
-cp /Applications/Ghostty.app/Contents/Frameworks/libghostty.dylib ./vendor/
-cp /path/to/ghostty.h ./vendor/
+cd /Users/manu/Developer/mistty
+git submodule add https://github.com/ghostty-org/ghostty vendor/ghostty
+git submodule update --init --recursive
 ```
 
-Option B — Build from Ghostty source:
-```bash
-git clone https://github.com/ghostty-org/ghostty /tmp/ghostty
-cd /tmp/ghostty
-zig build -Doptimize=ReleaseFast 2>&1 | tail -20
+Add `vendor/ghostty` to `.gitignore` entries? No — submodules are tracked by git, not ignored. But add to `.gitignore`:
+```
+result
+result-*
+.direnv/
 ```
 
-**Step 2: Add to Xcode project**
+Commit:
+```bash
+git add .gitmodules vendor/ghostty .gitignore
+git commit -m "chore: add ghostty as git submodule"
+```
 
-In Xcode:
-1. Drag the `.dylib` or `.a` into the project navigator → add to Mistty target
-2. In Build Settings → Header Search Paths, add the path to `ghostty.h`
-3. Create a bridging header at `Mistty/Mistty-Bridging-Header.h`:
+**Step 2: Create flake.nix**
 
+Check which Zig version Ghostty requires:
+```bash
+cat vendor/ghostty/build.zig.zon | grep -i zig
+# or
+cat vendor/ghostty/flake.nix | grep zig  # if it has one
+```
+
+Create `flake.nix` at the repo root:
+
+```nix
+{
+  description = "Mistty — macOS terminal emulator";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+      in {
+        devShells.default = pkgs.mkShell {
+          name = "mistty-dev";
+
+          # Swift is provided by Xcode — do not include here
+          buildInputs = with pkgs; [
+            zig        # for building libghostty from source
+            git        # for submodule operations
+          ];
+
+          shellHook = ''
+            echo "Mistty dev environment"
+            echo "Zig: $(zig version)"
+          '';
+        };
+      });
+}
+```
+
+Note: Check `vendor/ghostty/flake.nix` or `vendor/ghostty/build.zig.zon` to see if a specific Zig version is required. If so, pin it in nixpkgs or use a Zig-specific overlay. Document the required version in a comment in `flake.nix`.
+
+**Step 3: Create .envrc for direnv (optional)**
+
+```bash
+cat > .envrc << 'EOF'
+use flake
+EOF
+```
+
+Add to `.gitignore` if not already:
+```
+.direnv/
+```
+
+**Step 4: Verify the Nix environment**
+
+```bash
+nix develop --command zig version
+```
+
+Expected: prints the Zig version that Ghostty requires.
+
+**Step 5: Build libghostty**
+
+From within the Nix dev shell:
+
+```bash
+nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast 2>&1 | tail -30"
+```
+
+This produces the static library and headers. The output location depends on the Ghostty build system — check `vendor/ghostty/zig-out/` or `vendor/ghostty/build/`.
+
+Document the exact output path in `docs/spike/libghostty-api.md`.
+
+**Step 6: Link in Package.swift**
+
+Once the library is built, update `Package.swift` to link against it:
+
+```swift
+.executableTarget(
+    name: "Mistty",
+    path: "Mistty",
+    linkerSettings: [
+        .linkedLibrary("ghostty", .when(platforms: [.macOS])),
+        .unsafeFlags(["-L", "vendor/ghostty/zig-out/lib"])
+    ]
+)
+```
+
+Create the bridging header `Mistty/Mistty-Bridging-Header.h`:
 ```c
-#include "ghostty.h"
+#include "../vendor/ghostty/include/ghostty.h"
 ```
 
-4. In Build Settings → Swift Compiler - General → Objective-C Bridging Header, set the path.
+Update `Package.swift` to reference it via `swiftSettings`:
+```swift
+swiftSettings: [
+    .unsafeFlags(["-import-objc-header", "Mistty/Mistty-Bridging-Header.h"])
+]
+```
 
-**Step 3: Verify it links**
+**Step 7: Verify it links**
 
 ```bash
 swift build 2>&1 | tail -20
 ```
 
-Expected: `BUILD SUCCEEDED`
+Expected: `Build complete!`
 
-**Step 4: Commit**
+**Step 8: Commit**
 
 ```bash
-git add vendor/ Mistty/Mistty-Bridging-Header.h
-git commit -m "chore: link libghostty"
+git add flake.nix .envrc .gitignore Mistty/Mistty-Bridging-Header.h Package.swift
+git commit -m "chore: nix dev environment and link libghostty from submodule"
 ```
 
 ---
