@@ -8,7 +8,11 @@ let package = Package(
         .executableTarget(
             name: "Mistty",
             dependencies: ["GhosttyKit"],
-            path: "Mistty"
+            path: "Mistty",
+            linkerSettings: [
+                .linkedLibrary("c++"),
+                .linkedFramework("Carbon"),
+            ]
         ),
         .binaryTarget(
             name: "GhosttyKit",
