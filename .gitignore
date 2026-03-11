@@ -4,3 +4,6 @@ xcuserdata/
 .build/
 DerivedData/
 .claude/
+result
+result-*
+.direnv/

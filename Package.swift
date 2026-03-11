@@ -7,7 +7,12 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Mistty",
+            dependencies: ["GhosttyKit"],
             path: "Mistty"
+        ),
+        .binaryTarget(
+            name: "GhosttyKit",
+            path: "vendor/ghostty/macos/GhosttyKit.xcframework"
         ),
         .testTarget(
             name: "MisttyTests",
