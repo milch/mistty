@@ -6,17 +6,20 @@ final class MisttyTab: Identifiable {
     var title: String = "Shell"
     private(set) var panes: [MisttyPane] = []
     var activePane: MisttyPane?
+    var layout: PaneLayout
 
     init() {
         let pane = MisttyPane()
+        layout = PaneLayout(pane: pane)
         panes = [pane]
         activePane = pane
     }
 
     func splitActivePane(direction: SplitDirection) {
-        let newPane = MisttyPane()
-        panes.append(newPane)
-        activePane = newPane
+        guard let activePane else { return }
+        layout.split(pane: activePane, direction: direction)
+        panes = layout.leaves
+        self.activePane = layout.leaves.last
     }
 
     func closePane(_ pane: MisttyPane) {
