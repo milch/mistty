@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 import SwiftUI
 
 struct ContentView: View {
@@ -352,8 +353,17 @@ struct ContentView: View {
       tab.isWindowModeActive = false
       removeWindowModeMonitor()
     }
-    // TODO: get actual terminal dimensions from ghostty
-    tab.copyModeState = CopyModeState(rows: 24, cols: 80)
+
+    // Get actual terminal dimensions from ghostty
+    var rows = 24
+    var cols = 80
+    if let surface = tab.activePane?.surfaceView.surface {
+      let size = ghostty_surface_size(surface)
+      rows = Int(size.rows)
+      cols = Int(size.columns)
+    }
+
+    tab.copyModeState = CopyModeState(rows: rows, cols: cols)
     installCopyModeMonitor()
   }
 

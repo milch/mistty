@@ -2,7 +2,7 @@ import AppKit
 import GhosttyKit
 
 final class TerminalSurfaceView: NSView {
-  nonisolated(unsafe) private var surface: ghostty_surface_t?
+  nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
   var onSelect: (() -> Void)?
 
   /// Back-reference to the owning pane (set by MisttyPane).
