@@ -12,6 +12,7 @@ struct MisttyCLI: ParsableCommand {
             TabCommand.self,
             PaneCommand.self,
             WindowCommand.self,
+            PopupCommand.self,
         ]
     )
 }
