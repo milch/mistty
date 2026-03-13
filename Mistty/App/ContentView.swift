@@ -66,7 +66,20 @@ struct ContentView: View {
         }
       }
     }
+    .onAppear {
+      DispatchQueue.main.async {
+        if let window = NSApplication.shared.keyWindow {
+          _ = store.registerWindow(window)
+        }
+      }
+    }
     .onDisappear {
+      DispatchQueue.main.async { [store] in
+        // Unregister any windows that are no longer visible
+        for tracked in store.trackedWindows where !tracked.window.isVisible {
+          store.unregisterWindow(tracked.window)
+        }
+      }
       removeKeyMonitor()
       removeWindowModeMonitor()
       removeCopyModeMonitor()

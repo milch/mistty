@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 @testable import Mistty
@@ -110,6 +111,51 @@ final class SessionStoreTests: XCTestCase {
     let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
     session.addTab(exec: "top")
     XCTAssertEqual(session.tabs.last?.panes.first?.command, "top")
+  }
+
+  // MARK: - Window Registry
+
+  func test_registerWindow() {
+    let window = NSWindow()
+    let id = store.registerWindow(window)
+    XCTAssertEqual(id, 1)
+    XCTAssertEqual(store.trackedWindows.count, 1)
+  }
+
+  func test_unregisterWindow() {
+    let window = NSWindow()
+    let _ = store.registerWindow(window)
+    store.unregisterWindow(window)
+    XCTAssertTrue(store.trackedWindows.isEmpty)
+  }
+
+  func test_windowIdsAreStable() {
+    let w1 = NSWindow()
+    let w2 = NSWindow()
+    let id1 = store.registerWindow(w1)
+    let id2 = store.registerWindow(w2)
+    store.unregisterWindow(w1)
+    XCTAssertEqual(store.trackedWindows.first?.id, id2)
+    XCTAssertEqual(id1, 1)
+    XCTAssertEqual(id2, 2)
+  }
+
+  func test_registerSameWindowTwice() {
+    let window = NSWindow()
+    let id1 = store.registerWindow(window)
+    let id2 = store.registerWindow(window)
+    XCTAssertEqual(id1, id2)
+    XCTAssertEqual(store.trackedWindows.count, 1)
+  }
+
+  func test_trackedWindowById() {
+    let window = NSWindow()
+    let id = store.registerWindow(window)
+    let tracked = store.trackedWindow(byId: id)
+    XCTAssertNotNil(tracked)
+    XCTAssertEqual(tracked?.id, id)
+    XCTAssertTrue(tracked?.window === window)
+    XCTAssertNil(store.trackedWindow(byId: 999))
   }
 
   func test_idsAreSequential() {

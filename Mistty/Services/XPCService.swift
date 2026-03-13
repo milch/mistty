@@ -358,9 +358,8 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     func listWindows(reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
-            let windows = NSApplication.shared.windows.filter { $0.isVisible }
-            let responses = windows.enumerated().map { index, _ in
-                WindowResponse(id: index + 1, sessionCount: self.store.sessions.count)
+            let responses = self.store.trackedWindows.map { tracked in
+                WindowResponse(id: tracked.id, sessionCount: self.store.sessions.count)
             }
             reply(self.encode(responses), nil)
         }
@@ -369,26 +368,23 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     func getWindow(id: Int, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
-            let windows = NSApplication.shared.windows.filter { $0.isVisible }
-            let index = id - 1
-            guard index >= 0 && index < windows.count else {
+            guard let tracked = self.store.trackedWindow(byId: id) else {
                 reply(nil, MisttyXPC.error(.entityNotFound, "Window \(id) not found"))
                 return
             }
-            reply(self.encode(WindowResponse(id: id, sessionCount: self.store.sessions.count)), nil)
+            reply(self.encode(WindowResponse(id: tracked.id, sessionCount: self.store.sessions.count)), nil)
         }
     }
 
     func closeWindow(id: Int, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
-            let windows = NSApplication.shared.windows.filter { $0.isVisible }
-            let index = id - 1
-            guard index >= 0 && index < windows.count else {
+            guard let tracked = self.store.trackedWindow(byId: id) else {
                 reply(nil, MisttyXPC.error(.entityNotFound, "Window \(id) not found"))
                 return
             }
-            windows[index].close()
+            tracked.window.close()
+            self.store.unregisterWindow(tracked.window)
             reply(self.encode([String: String]()), nil)
         }
     }
@@ -396,13 +392,11 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     func focusWindow(id: Int, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
-            let windows = NSApplication.shared.windows.filter { $0.isVisible }
-            let index = id - 1
-            guard index >= 0 && index < windows.count else {
+            guard let tracked = self.store.trackedWindow(byId: id) else {
                 reply(nil, MisttyXPC.error(.entityNotFound, "Window \(id) not found"))
                 return
             }
-            windows[index].makeKeyAndOrderFront(nil)
+            tracked.window.makeKeyAndOrderFront(nil)
             reply(self.encode([String: String]()), nil)
         }
     }

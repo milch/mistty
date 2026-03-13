@@ -1,4 +1,10 @@
+import AppKit
 import Foundation
+
+struct TrackedWindow {
+  let id: Int
+  let window: NSWindow
+}
 
 @Observable
 @MainActor
@@ -9,6 +15,8 @@ final class SessionStore {
   private var nextSessionId = 1
   private var nextTabId = 1
   private var nextPaneId = 1
+  private var nextWindowId = 1
+  private(set) var trackedWindows: [TrackedWindow] = []
 
   private func generateSessionID() -> Int {
     let id = nextSessionId
@@ -58,6 +66,31 @@ final class SessionStore {
   func closeSession(_ session: MisttySession) {
     sessions.removeAll { $0.id == session.id }
     if activeSession?.id == session.id { activeSession = sessions.last }
+  }
+
+  // MARK: - Window registry
+
+  private func generateWindowID() -> Int {
+    let id = nextWindowId
+    nextWindowId += 1
+    return id
+  }
+
+  func registerWindow(_ window: NSWindow) -> Int {
+    if let existing = trackedWindows.first(where: { $0.window === window }) {
+      return existing.id
+    }
+    let id = generateWindowID()
+    trackedWindows.append(TrackedWindow(id: id, window: window))
+    return id
+  }
+
+  func unregisterWindow(_ window: NSWindow) {
+    trackedWindows.removeAll { $0.window === window }
+  }
+
+  func trackedWindow(byId id: Int) -> TrackedWindow? {
+    trackedWindows.first { $0.id == id }
   }
 
   // MARK: - Lookup helpers
