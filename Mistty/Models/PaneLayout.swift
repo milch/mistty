@@ -122,13 +122,16 @@ struct PaneLayout {
 
   // MARK: - Resize
 
-  mutating func resizeSplit(containing pane: MisttyPane, delta: CGFloat) {
-    root = Self.adjustRatio(root, target: pane.id, delta: delta)
+  mutating func resizeSplit(containing pane: MisttyPane, delta: CGFloat, along direction: SplitDirection? = nil) {
+    root = Self.adjustRatio(root, target: pane.id, delta: delta, along: direction)
   }
 
-  private static func adjustRatio(_ node: PaneLayoutNode, target: UUID, delta: CGFloat)
-    -> PaneLayoutNode
-  {
+  private static func adjustRatio(
+    _ node: PaneLayoutNode,
+    target: UUID,
+    delta: CGFloat,
+    along direction: SplitDirection?
+  ) -> PaneLayoutNode {
     switch node {
     case .leaf:
       return node
@@ -136,16 +139,22 @@ struct PaneLayout {
       let aContains = collectLeaves(a).contains { $0.id == target }
       if aContains {
         if case .leaf(let p) = a, p.id == target {
-          return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
+          if direction == nil || direction == dir {
+            return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
+          }
+          return node
         }
-        return .split(dir, adjustRatio(a, target: target, delta: delta), b, ratio)
+        return .split(dir, adjustRatio(a, target: target, delta: delta, along: direction), b, ratio)
       }
       let bContains = collectLeaves(b).contains { $0.id == target }
       if bContains {
         if case .leaf(let p) = b, p.id == target {
-          return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
+          if direction == nil || direction == dir {
+            return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
+          }
+          return node
         }
-        return .split(dir, a, adjustRatio(b, target: target, delta: delta), ratio)
+        return .split(dir, a, adjustRatio(b, target: target, delta: delta, along: direction), ratio)
       }
       return node
     }

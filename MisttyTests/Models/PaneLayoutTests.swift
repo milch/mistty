@@ -113,6 +113,29 @@ final class PaneLayoutTests: XCTestCase {
     }
   }
 
+  func test_resizeSplitDirectionAware() {
+    let pane1 = MisttyPane()
+    var layout = PaneLayout(pane: pane1)
+    layout.split(pane: pane1, direction: .vertical)
+    let panes = layout.leaves
+
+    // Get initial ratio
+    let ratioBefore: CGFloat
+    if case .split(_, _, _, let r) = layout.root { ratioBefore = r } else { return XCTFail() }
+
+    // Resizing a vertical split with horizontal direction should be a no-op
+    layout.resizeSplit(containing: panes[0], delta: 0.1, along: .horizontal)
+    if case .split(_, _, _, let r) = layout.root {
+      XCTAssertEqual(r, ratioBefore, accuracy: 0.001)
+    }
+
+    // Resizing along matching direction should work
+    layout.resizeSplit(containing: panes[0], delta: 0.1, along: .vertical)
+    if case .split(_, _, _, let r) = layout.root {
+      XCTAssertEqual(r, 0.6, accuracy: 0.001)
+    }
+  }
+
   func test_tabIntegration_splitUpdatesLayout() {
     let tab = MisttyTab()
     XCTAssertEqual(tab.layout.leaves.count, 1)

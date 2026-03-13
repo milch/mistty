@@ -246,17 +246,17 @@ struct ContentView: View {
       // Cmd+Arrow to resize
       if event.modifierFlags.contains(.command) {
         switch event.keyCode {
-        case 123:  // Cmd+Left — shrink
-          resizeActivePane(delta: -0.05)
+        case 123:  // Cmd+Left — shrink horizontal
+          resizeActivePane(delta: -0.05, along: .horizontal)
           return nil
-        case 124:  // Cmd+Right — grow
-          resizeActivePane(delta: 0.05)
+        case 124:  // Cmd+Right — grow horizontal
+          resizeActivePane(delta: 0.05, along: .horizontal)
           return nil
-        case 126:  // Cmd+Up — shrink
-          resizeActivePane(delta: -0.05)
+        case 126:  // Cmd+Up — shrink vertical
+          resizeActivePane(delta: -0.05, along: .vertical)
           return nil
-        case 125:  // Cmd+Down — grow
-          resizeActivePane(delta: 0.05)
+        case 125:  // Cmd+Down — grow vertical
+          resizeActivePane(delta: 0.05, along: .vertical)
           return nil
         default: break
         }
@@ -330,11 +330,11 @@ struct ContentView: View {
     tab.layout.rotateDirection(containing: pane)
   }
 
-  private func resizeActivePane(delta: CGFloat) {
+  private func resizeActivePane(delta: CGFloat, along direction: SplitDirection) {
     guard let tab = store.activeSession?.activeTab,
       let pane = tab.activePane
     else { return }
-    tab.layout.resizeSplit(containing: pane, delta: delta)
+    tab.layout.resizeSplit(containing: pane, delta: delta, along: direction)
   }
 
   private func removeWindowModeMonitor() {
