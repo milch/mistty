@@ -17,23 +17,36 @@ private let wakeupCallback: ghostty_runtime_wakeup_cb = { userdata in
 private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
     switch action.tag {
     case GHOSTTY_ACTION_RENDER:
-        // Render is handled by ghostty's own Metal layer
         return true
+
     case GHOSTTY_ACTION_SET_TITLE:
-        // Could update window title here
+        if target.tag == GHOSTTY_TARGET_SURFACE {
+            let surface = target.target.surface
+            if let title = action.action.set_title.title {
+                let titleStr = String(cString: title)
+                DispatchQueue.main.async {
+                    guard let userdata = ghostty_surface_userdata(surface) else { return }
+                    let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+                    NotificationCenter.default.post(
+                        name: .ghosttySetTitle,
+                        object: nil,
+                        userInfo: ["paneID": view.pane?.id as Any, "title": titleStr]
+                    )
+                }
+            }
+        }
         return true
+
     case GHOSTTY_ACTION_CLOSE_WINDOW:
         return true
-    case GHOSTTY_ACTION_CELL_SIZE:
+
+    case GHOSTTY_ACTION_CELL_SIZE,
+         GHOSTTY_ACTION_SIZE_LIMIT,
+         GHOSTTY_ACTION_INITIAL_SIZE,
+         GHOSTTY_ACTION_MOUSE_SHAPE,
+         GHOSTTY_ACTION_MOUSE_VISIBILITY:
         return true
-    case GHOSTTY_ACTION_SIZE_LIMIT:
-        return true
-    case GHOSTTY_ACTION_INITIAL_SIZE:
-        return true
-    case GHOSTTY_ACTION_MOUSE_SHAPE:
-        return true
-    case GHOSTTY_ACTION_MOUSE_VISIBILITY:
-        return true
+
     default:
         return false
     }
@@ -42,19 +55,16 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
 /// Clipboard read callback (stub).
 private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = { userdata, clipboard, state in
     guard let state else { return }
-    // Provide clipboard content
     let pasteboard = NSPasteboard.general
     if let str = pasteboard.string(forType: .string) {
         str.withCString { ptr in
-            // We need the surface from userdata to complete the request
-            // For now this is a minimal stub
+            // TODO: complete clipboard read
         }
     }
 }
 
 /// Clipboard confirm read callback (stub).
 private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard_cb = { userdata, str, state, request in
-    // Auto-confirm for spike
     guard let state else { return }
 }
 
@@ -68,9 +78,24 @@ private let writeClipboardCallback: ghostty_runtime_write_clipboard_cb = { userd
     }
 }
 
-/// Close surface callback (stub).
+/// Close surface callback — shell exited.
 private let closeSurfaceCallback: ghostty_runtime_close_surface_cb = { userdata, processAlive in
-    // Minimal stub - in a real app we'd close the tab/window
+    guard let userdata else { return }
+    let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+    DispatchQueue.main.async {
+        NotificationCenter.default.post(
+            name: .ghosttyCloseSurface,
+            object: nil,
+            userInfo: ["paneID": view.pane?.id as Any]
+        )
+    }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let ghosttySetTitle = Notification.Name("ghosttySetTitle")
+    static let ghosttyCloseSurface = Notification.Name("ghosttyCloseSurface")
 }
 
 // MARK: - GhosttyAppManager

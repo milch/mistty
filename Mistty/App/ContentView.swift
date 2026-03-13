@@ -91,17 +91,45 @@ struct ContentView: View {
                 store.closeSession(session)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .ghosttySetTitle)) { notification in
+            guard let paneID = notification.userInfo?["paneID"] as? UUID,
+                  let title = notification.userInfo?["title"] as? String else { return }
+            // Find the tab containing this pane and update its title
+            for session in store.sessions {
+                for tab in session.tabs {
+                    if tab.panes.contains(where: { $0.id == paneID }) {
+                        tab.title = title
+                        return
+                    }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .ghosttyCloseSurface)) { notification in
+            guard let paneID = notification.userInfo?["paneID"] as? UUID else { return }
+            // Find and close the pane whose shell exited
+            for session in store.sessions {
+                for tab in session.tabs {
+                    if let pane = tab.panes.first(where: { $0.id == paneID }) {
+                        closePaneInTab(pane, tab: tab, session: session)
+                        return
+                    }
+                }
+            }
+        }
     }
 
     private func closePane(_ pane: MisttyPane) {
-        guard let tab = store.activeSession?.activeTab else { return }
+        guard let session = store.activeSession,
+              let tab = session.activeTab else { return }
+        closePaneInTab(pane, tab: tab, session: session)
+    }
+
+    private func closePaneInTab(_ pane: MisttyPane, tab: MisttyTab, session: MisttySession) {
         tab.closePane(pane)
         if tab.panes.isEmpty {
-            store.activeSession?.closeTab(tab)
-            if store.activeSession?.tabs.isEmpty == true {
-                if let session = store.activeSession {
-                    store.closeSession(session)
-                }
+            session.closeTab(tab)
+            if session.tabs.isEmpty {
+                store.closeSession(session)
             }
         }
     }

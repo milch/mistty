@@ -1,6 +1,7 @@
 import XCTest
 @testable import Mistty
 
+@MainActor
 final class SessionStoreTests: XCTestCase {
     var store: SessionStore!
 

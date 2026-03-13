@@ -5,6 +5,7 @@ indirect enum PaneLayoutNode {
     case split(SplitDirection, PaneLayoutNode, PaneLayoutNode)
 }
 
+@MainActor
 struct PaneLayout {
     var root: PaneLayoutNode
 
@@ -60,8 +61,9 @@ struct PaneLayout {
         }
     }
 
-    mutating func split(pane: MisttyPane, direction: SplitDirection) {
+    mutating func split(pane: MisttyPane, direction: SplitDirection, directory: URL? = nil) {
         let newPane = MisttyPane()
+        newPane.directory = directory
         root = Self.insertSplit(root, target: pane.id, direction: direction, newPane: newPane)
     }
 

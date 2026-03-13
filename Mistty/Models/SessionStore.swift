@@ -1,6 +1,7 @@
 import Foundation
 
 @Observable
+@MainActor
 final class SessionStore {
     private(set) var sessions: [MisttySession] = []
     var activeSession: MisttySession?

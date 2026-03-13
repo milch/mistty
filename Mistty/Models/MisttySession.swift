@@ -1,6 +1,7 @@
 import Foundation
 
 @Observable
+@MainActor
 final class MisttySession: Identifiable {
     let id = UUID()
     var name: String
@@ -15,7 +16,7 @@ final class MisttySession: Identifiable {
     }
 
     func addTab() {
-        let tab = MisttyTab()
+        let tab = MisttyTab(directory: directory)
         tabs.append(tab)
         activeTab = tab
     }

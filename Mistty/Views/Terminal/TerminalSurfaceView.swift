@@ -5,7 +5,13 @@ final class TerminalSurfaceView: NSView {
     nonisolated(unsafe) private var surface: ghostty_surface_t?
     var onSelect: (() -> Void)?
 
-    override init(frame: NSRect) {
+    /// Back-reference to the owning pane (set by MisttyPane).
+    weak var pane: MisttyPane?
+
+    /// Stores the working directory path string to keep it alive for the C pointer.
+    private var workingDirectoryPath: String?
+
+    init(frame: NSRect, workingDirectory: URL? = nil) {
         super.init(frame: frame)
         wantsLayer = true
 
@@ -25,7 +31,20 @@ final class TerminalSurfaceView: NSView {
         cfg.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 2.0)
         cfg.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
-        surface = ghostty_surface_new(app, &cfg)
+        // Set working directory for the shell
+        if let dir = workingDirectory {
+            workingDirectoryPath = dir.path
+        }
+
+        if let path = workingDirectoryPath {
+            path.withCString { ptr in
+                cfg.working_directory = ptr
+                surface = ghostty_surface_new(app, &cfg)
+            }
+        } else {
+            surface = ghostty_surface_new(app, &cfg)
+        }
+
         if surface == nil {
             print("[TerminalSurfaceView] ghostty_surface_new failed")
         }

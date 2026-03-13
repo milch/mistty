@@ -1,15 +1,19 @@
 import Foundation
 
 @Observable
+@MainActor
 final class MisttyTab: Identifiable {
     let id = UUID()
     var title: String = "Shell"
+    let directory: URL?
     private(set) var panes: [MisttyPane] = []
     var activePane: MisttyPane?
     var layout: PaneLayout
 
-    init() {
+    init(directory: URL? = nil) {
+        self.directory = directory
         let pane = MisttyPane()
+        pane.directory = directory
         layout = PaneLayout(pane: pane)
         panes = [pane]
         activePane = pane
@@ -17,7 +21,7 @@ final class MisttyTab: Identifiable {
 
     func splitActivePane(direction: SplitDirection) {
         guard let activePane else { return }
-        layout.split(pane: activePane, direction: direction)
+        layout.split(pane: activePane, direction: direction, directory: directory)
         panes = layout.leaves
         self.activePane = layout.leaves.last
     }

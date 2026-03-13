@@ -1,6 +1,7 @@
 import Foundation
 
-enum SessionManagerItem: Identifiable {
+@MainActor
+enum SessionManagerItem {
     case runningSession(MisttySession)
     case directory(URL)
     case sshHost(SSHHost)
