@@ -14,11 +14,10 @@ final class TerminalSurfaceView: NSView {
   /// Stores the command string to keep it alive for the C pointer.
   private var commandString: String?
 
-  /// Whether ghostty should wait for a keypress after the command exits.
-  private var waitAfterCommand: Bool
+  /// Stores the initial input string to keep it alive for the C pointer.
+  private var initialInputString: String?
 
-  init(frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, waitAfterCommand: Bool = true) {
-    self.waitAfterCommand = waitAfterCommand
+  init(frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, initialInput: String? = nil) {
     super.init(frame: frame)
     wantsLayer = true
 
@@ -46,9 +45,13 @@ final class TerminalSurfaceView: NSView {
     // Store command string
     self.commandString = command
 
-    // Override ghostty's default of wait_after_command=true when a command is set.
-    // Popups with closeOnExit need the surface to close immediately.
-    cfg.wait_after_command = waitAfterCommand
+    // For popups that should close on exit, send the command as initial_input
+    // instead of cfg.command. ghostty forces wait-after-command=true when
+    // cfg.command is set, which shows "press any key to close". Using
+    // initial_input runs the command in the shell naturally.
+    if let input = initialInput {
+      self.initialInputString = "exec \(input)\n"
+    }
 
     // Both C pointers from withCString are only valid inside the closure,
     // so we nest them to ensure they're alive when ghostty_surface_new is called.
@@ -59,6 +62,18 @@ final class TerminalSurfaceView: NSView {
           if let cmd = commandString {
             cmd.withCString { cmdPtr in
               cfg.command = cmdPtr
+              if let input = initialInputString {
+                input.withCString { inputPtr in
+                  cfg.initial_input = inputPtr
+                  surface = ghostty_surface_new(app, &cfg)
+                }
+              } else {
+                surface = ghostty_surface_new(app, &cfg)
+              }
+            }
+          } else if let input = initialInputString {
+            input.withCString { inputPtr in
+              cfg.initial_input = inputPtr
               surface = ghostty_surface_new(app, &cfg)
             }
           } else {
@@ -68,6 +83,18 @@ final class TerminalSurfaceView: NSView {
       } else if let cmd = commandString {
         cmd.withCString { cmdPtr in
           cfg.command = cmdPtr
+          if let input = initialInputString {
+            input.withCString { inputPtr in
+              cfg.initial_input = inputPtr
+              surface = ghostty_surface_new(app, &cfg)
+            }
+          } else {
+            surface = ghostty_surface_new(app, &cfg)
+          }
+        }
+      } else if let input = initialInputString {
+        input.withCString { inputPtr in
+          cfg.initial_input = inputPtr
           surface = ghostty_surface_new(app, &cfg)
         }
       } else {

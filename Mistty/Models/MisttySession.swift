@@ -68,7 +68,7 @@ final class MisttySession: Identifiable {
     pane.directory = activeTab?.activePane?.directory ?? directory
     pane.command = definition.command
     if definition.closeOnExit {
-      pane.waitAfterCommand = false
+      pane.useCommandField = false
     }
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
@@ -90,7 +90,7 @@ final class MisttySession: Identifiable {
     pane.directory = activeTab?.activePane?.directory ?? directory
     pane.command = definition.command
     if definition.closeOnExit {
-      pane.waitAfterCommand = false
+      pane.useCommandField = false
     }
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
