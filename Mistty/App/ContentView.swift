@@ -354,16 +354,24 @@ struct ContentView: View {
       removeWindowModeMonitor()
     }
 
-    // Get actual terminal dimensions from ghostty
+    // Get actual terminal dimensions and cursor position from ghostty
     var rows = 24
     var cols = 80
-    if let surface = tab.activePane?.surfaceView.surface {
-      let size = ghostty_surface_size(surface)
-      rows = Int(size.rows)
-      cols = Int(size.columns)
+    var cursorRow: Int?
+    var cursorCol: Int?
+    if let surfaceView = tab.activePane?.surfaceView {
+      if let surface = surfaceView.surface {
+        let size = ghostty_surface_size(surface)
+        rows = Int(size.rows)
+        cols = Int(size.columns)
+      }
+      if let pos = surfaceView.cursorPosition() {
+        cursorRow = pos.row
+        cursorCol = pos.col
+      }
     }
 
-    tab.copyModeState = CopyModeState(rows: rows, cols: cols)
+    tab.copyModeState = CopyModeState(rows: rows, cols: cols, cursorRow: cursorRow, cursorCol: cursorCol)
     installCopyModeMonitor()
   }
 
@@ -396,6 +404,7 @@ struct ContentView: View {
       if state.isSearching {
         if event.keyCode == 36 {  // Return — confirm search
           state.isSearching = false
+          self.performSearch(&state)
           store.activeSession?.activeTab?.copyModeState = state
           return nil
         }
@@ -428,6 +437,8 @@ struct ContentView: View {
       case "w": state.moveWordForward()
       case "b": state.moveWordBackward()
       case "/": state.startSearch()
+      case "n":
+        if !state.searchQuery.isEmpty { performSearch(&state) }
       case "y":
         yankSelection()
         exitCopyMode()
@@ -444,6 +455,47 @@ struct ContentView: View {
     if let monitor = copyModeMonitor {
       NSEvent.removeMonitor(monitor)
       copyModeMonitor = nil
+    }
+  }
+
+  private func performSearch(_ state: inout CopyModeState) {
+    guard !state.searchQuery.isEmpty,
+      let pane = store.activeSession?.activeTab?.activePane,
+      let surface = pane.surfaceView.surface
+    else { return }
+
+    let size = ghostty_surface_size(surface)
+    let rows = Int(size.rows)
+    let cols = Int(size.columns)
+
+    // Read each line from viewport and search for the query
+    // Start searching from the line after the cursor, wrapping around
+    for offset in 1...rows {
+      let row = (state.cursorRow + offset) % rows
+
+      var sel = ghostty_selection_s()
+      sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
+      sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
+      sel.top_left.x = 0
+      sel.top_left.y = UInt32(row)
+      sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
+      sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
+      sel.bottom_right.x = UInt32(cols - 1)
+      sel.bottom_right.y = UInt32(row)
+      sel.rectangle = false
+
+      var text = ghostty_text_s()
+      guard ghostty_surface_read_text(surface, sel, &text) else { continue }
+      defer { ghostty_surface_free_text(surface, &text) }
+      guard let ptr = text.text else { continue }
+
+      let line = String(cString: ptr)
+      if let range = line.range(of: state.searchQuery, options: .caseInsensitive) {
+        let col = line.distance(from: line.startIndex, to: range.lowerBound)
+        state.cursorRow = row
+        state.cursorCol = min(col, cols - 1)
+        return
+      }
     }
   }
 

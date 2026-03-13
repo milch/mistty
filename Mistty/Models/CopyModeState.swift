@@ -10,10 +10,11 @@ struct CopyModeState {
   var searchQuery: String = ""
   var isSearching = false
 
-  init(rows: Int, cols: Int) {
+  init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
     self.rows = rows
     self.cols = cols
-    self.cursorRow = rows - 1
+    self.cursorRow = min(max(cursorRow ?? (rows - 1), 0), rows - 1)
+    self.cursorCol = min(max(cursorCol ?? 0, 0), cols - 1)
   }
 
   mutating func moveUp() { cursorRow = max(0, cursorRow - 1) }
