@@ -57,6 +57,16 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         )
     }
 
+    @MainActor private func popupResponse(_ popup: PopupState) -> PopupResponse {
+        PopupResponse(
+            id: popup.id,
+            name: popup.definition.name,
+            command: popup.definition.command,
+            isVisible: popup.isVisible,
+            paneId: popup.pane.id
+        )
+    }
+
     // MARK: - Sessions
 
     func createSession(name: String, directory: String?, exec: String?, reply: @escaping (Data?, Error?) -> Void) {
@@ -398,6 +408,70 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
             }
             tracked.window.makeKeyAndOrderFront(nil)
             reply(self.encode([String: String]()), nil)
+        }
+    }
+
+    // MARK: - Popups
+
+    func openPopup(sessionId: Int, name: String, exec: String, width: Double, height: Double, closeOnExit: Bool, reply: @escaping (Data?, Error?) -> Void) {
+        let reply = Reply(handler: reply)
+        Task { @MainActor in
+            guard let session = self.store.session(byId: sessionId) else {
+                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                return
+            }
+            let definition = PopupDefinition(name: name, command: exec, width: width, height: height, closeOnExit: closeOnExit)
+            session.togglePopup(definition: definition)
+            guard let popup = session.activePopup else {
+                reply(nil, MisttyXPC.error(.operationFailed, "Failed to create popup"))
+                return
+            }
+            reply(self.encode(self.popupResponse(popup)), nil)
+        }
+    }
+
+    func closePopup(popupId: Int, reply: @escaping (Data?, Error?) -> Void) {
+        let reply = Reply(handler: reply)
+        Task { @MainActor in
+            guard let (session, popup) = self.store.popup(byId: popupId) else {
+                reply(nil, MisttyXPC.error(.entityNotFound, "Popup \(popupId) not found"))
+                return
+            }
+            session.closePopup(popup)
+            reply(self.encode([String: String]()), nil)
+        }
+    }
+
+    func togglePopup(sessionId: Int, name: String, reply: @escaping (Data?, Error?) -> Void) {
+        let reply = Reply(handler: reply)
+        Task { @MainActor in
+            guard let session = self.store.session(byId: sessionId) else {
+                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                return
+            }
+            let config = MisttyConfig.load()
+            guard let definition = config.popups.first(where: { $0.name == name }) else {
+                reply(nil, MisttyXPC.error(.entityNotFound, "Popup definition '\(name)' not found in config"))
+                return
+            }
+            session.togglePopup(definition: definition)
+            if let popup = session.popups.first(where: { $0.definition.name == name }) {
+                reply(self.encode(self.popupResponse(popup)), nil)
+            } else {
+                reply(self.encode([String: String]()), nil)
+            }
+        }
+    }
+
+    func listPopups(sessionId: Int, reply: @escaping (Data?, Error?) -> Void) {
+        let reply = Reply(handler: reply)
+        Task { @MainActor in
+            guard let session = self.store.session(byId: sessionId) else {
+                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                return
+            }
+            let responses = session.popups.map { self.popupResponse($0) }
+            reply(self.encode(responses), nil)
         }
     }
 }
