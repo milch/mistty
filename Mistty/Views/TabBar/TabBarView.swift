@@ -1,90 +1,93 @@
 import SwiftUI
 
 struct TabBarView: View {
-    @Bindable var session: MisttySession
+  @Bindable var session: MisttySession
 
-    var body: some View {
-        HStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(session.tabs) { tab in
-                        TabBarItem(
-                            tab: tab,
-                            isActive: session.activeTab?.id == tab.id,
-                            onSelect: { session.activeTab = tab },
-                            onClose: { session.closeTab(tab) }
-                        )
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-
-            Button(action: { session.addTab() }) {
-                Image(systemName: "plus")
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 4)
+  var body: some View {
+    HStack(spacing: 0) {
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 2) {
+          ForEach(session.tabs) { tab in
+            TabBarItem(
+              tab: tab,
+              isActive: session.activeTab?.id == tab.id,
+              onSelect: { session.activeTab = tab },
+              onClose: { session.closeTab(tab) }
+            )
+          }
         }
-        .frame(height: 36)
-        .background(.bar)
+        .padding(.horizontal, 4)
+      }
+
+      Button(action: { session.addTab() }) {
+        Image(systemName: "plus")
+          .frame(width: 28, height: 28)
+      }
+      .buttonStyle(.plain)
+      .padding(.trailing, 4)
     }
+    .frame(height: 36)
+    .background(.bar)
+  }
 }
 
 struct TabBarItem: View {
-    @Bindable var tab: MisttyTab
-    let isActive: Bool
-    let onSelect: () -> Void
-    let onClose: () -> Void
-    @State private var isEditing = false
-    @State private var editText = ""
-    @FocusState private var editFocused: Bool
+  @Bindable var tab: MisttyTab
+  let isActive: Bool
+  let onSelect: () -> Void
+  let onClose: () -> Void
+  @State private var isEditing = false
+  @State private var editText = ""
+  @FocusState private var editFocused: Bool
 
-    var body: some View {
-        HStack(spacing: 4) {
-            if tab.hasBell {
-                Circle()
-                    .fill(Color.orange)
-                    .frame(width: 6, height: 6)
-            }
+  var body: some View {
+    HStack(spacing: 4) {
+      if tab.hasBell {
+        Circle()
+          .fill(Color.orange)
+          .frame(width: 6, height: 6)
+      }
 
-            if isEditing {
-                TextField("Tab name", text: $editText, onCommit: {
-                    tab.customTitle = editText.isEmpty ? nil : editText
-                    isEditing = false
-                })
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .focused($editFocused)
-                .frame(maxWidth: 120)
-                .onAppear { editFocused = true }
-            } else {
-                Text(tab.displayTitle)
-                    .font(.system(size: 12))
-                    .lineLimit(1)
-                    .onTapGesture(count: 2) {
-                        editText = tab.displayTitle
-                        isEditing = true
-                    }
-            }
+      if isEditing {
+        TextField(
+          "Tab name", text: $editText,
+          onCommit: {
+            tab.customTitle = editText.isEmpty ? nil : editText
+            isEditing = false
+          }
+        )
+        .textFieldStyle(.plain)
+        .font(.system(size: 12))
+        .focused($editFocused)
+        .frame(maxWidth: 120)
+        .onAppear { editFocused = true }
+      } else {
+        Text(tab.displayTitle)
+          .font(.system(size: 12))
+          .lineLimit(1)
+          .onTapGesture(count: 2) {
+            editText = tab.displayTitle
+            isEditing = true
+          }
+      }
 
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9))
-            }
-            .buttonStyle(.plain)
-            .opacity(isActive ? 1 : 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
-        .cornerRadius(6)
-        .onTapGesture { onSelect() }
-        .onReceive(NotificationCenter.default.publisher(for: .misttyRenameTab)) { _ in
-            if isActive {
-                editText = tab.displayTitle
-                isEditing = true
-            }
-        }
+      Button(action: onClose) {
+        Image(systemName: "xmark")
+          .font(.system(size: 9))
+      }
+      .buttonStyle(.plain)
+      .opacity(isActive ? 1 : 0)
     }
+    .padding(.horizontal, 10)
+    .padding(.vertical, 6)
+    .background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
+    .cornerRadius(6)
+    .onTapGesture { onSelect() }
+    .onReceive(NotificationCenter.default.publisher(for: .misttyRenameTab)) { _ in
+      if isActive {
+        editText = tab.displayTitle
+        isEditing = true
+      }
+    }
+  }
 }
