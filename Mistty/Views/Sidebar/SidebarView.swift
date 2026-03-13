@@ -52,6 +52,11 @@ struct SessionRowView: View {
         DisclosureGroup(isExpanded: $isExpanded) {
             ForEach(session.tabs) { tab in
                 HStack {
+                    if tab.hasBell {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
+                    }
                     Text(tab.title)
                         .font(.system(size: 12))
                     Spacer()

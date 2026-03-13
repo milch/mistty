@@ -39,6 +39,11 @@ struct TabBarItem: View {
 
     var body: some View {
         HStack(spacing: 4) {
+            if tab.hasBell {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 6, height: 6)
+            }
             Text(tab.title)
                 .font(.system(size: 12))
                 .lineLimit(1)
