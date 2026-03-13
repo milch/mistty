@@ -62,9 +62,8 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     func createSession(name: String, directory: String?, exec: String?, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
-            // TODO: exec parameter — launch specified command in the first pane
             let dir = URL(fileURLWithPath: directory ?? FileManager.default.homeDirectoryForCurrentUser.path)
-            let session = self.store.createSession(name: name, directory: dir)
+            let session = self.store.createSession(name: name, directory: dir, exec: exec)
             reply(self.encode(self.sessionResponse(session)), nil)
         }
     }
@@ -105,12 +104,11 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     func createTab(sessionId: Int, name: String?, exec: String?, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
-            // TODO: exec parameter — launch specified command in the first pane
             guard let session = self.store.session(byId: sessionId) else {
                 reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
                 return
             }
-            session.addTab()
+            session.addTab(exec: exec)
             guard let tab = session.tabs.last else {
                 reply(nil, MisttyXPC.error(.operationFailed, "Failed to create tab"))
                 return

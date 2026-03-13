@@ -29,11 +29,12 @@ final class SessionStore {
   }
 
   @discardableResult
-  func createSession(name: String, directory: URL) -> MisttySession {
+  func createSession(name: String, directory: URL, exec: String? = nil) -> MisttySession {
     let session = MisttySession(
       id: generateSessionID(),
       name: name,
       directory: directory,
+      exec: exec,
       tabIDGenerator: { [weak self] in
         guard let self else {
           assertionFailure("SessionStore was deallocated while sessions still exist")

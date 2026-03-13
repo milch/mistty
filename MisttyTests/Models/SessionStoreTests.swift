@@ -96,6 +96,22 @@ final class SessionStoreTests: XCTestCase {
     XCTAssertNotNil(tab.zoomedPane)
   }
 
+  func test_createSessionWithExec() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"), exec: "nvim")
+    XCTAssertEqual(session.tabs.first?.panes.first?.command, "nvim")
+  }
+
+  func test_createSessionWithoutExec() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    XCTAssertNil(session.tabs.first?.panes.first?.command)
+  }
+
+  func test_addTabWithExec() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab(exec: "top")
+    XCTAssertEqual(session.tabs.last?.panes.first?.command, "top")
+  }
+
   func test_idsAreSequential() {
     let s1 = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
     let s2 = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))

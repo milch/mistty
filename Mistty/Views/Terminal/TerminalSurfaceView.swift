@@ -11,7 +11,10 @@ final class TerminalSurfaceView: NSView {
   /// Stores the working directory path string to keep it alive for the C pointer.
   private var workingDirectoryPath: String?
 
-  init(frame: NSRect, workingDirectory: URL? = nil) {
+  /// Stores the command string to keep it alive for the C pointer.
+  private var commandString: String?
+
+  init(frame: NSRect, workingDirectory: URL? = nil, command: String? = nil) {
     super.init(frame: frame)
     wantsLayer = true
 
@@ -36,14 +39,35 @@ final class TerminalSurfaceView: NSView {
       workingDirectoryPath = dir.path
     }
 
-    if let path = workingDirectoryPath {
-      path.withCString { ptr in
-        cfg.working_directory = ptr
+    // Store command string
+    self.commandString = command
+
+    // Both C pointers from withCString are only valid inside the closure,
+    // so we nest them to ensure they're alive when ghostty_surface_new is called.
+    func createSurface(_ cfg: inout ghostty_surface_config_s) {
+      if let path = workingDirectoryPath {
+        path.withCString { dirPtr in
+          cfg.working_directory = dirPtr
+          if let cmd = commandString {
+            cmd.withCString { cmdPtr in
+              cfg.command = cmdPtr
+              surface = ghostty_surface_new(app, &cfg)
+            }
+          } else {
+            surface = ghostty_surface_new(app, &cfg)
+          }
+        }
+      } else if let cmd = commandString {
+        cmd.withCString { cmdPtr in
+          cfg.command = cmdPtr
+          surface = ghostty_surface_new(app, &cfg)
+        }
+      } else {
         surface = ghostty_surface_new(app, &cfg)
       }
-    } else {
-      surface = ghostty_surface_new(app, &cfg)
     }
+
+    createSurface(&cfg)
 
     if surface == nil {
       print("[TerminalSurfaceView] ghostty_surface_new failed")

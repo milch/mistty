@@ -15,17 +15,17 @@ final class MisttySession: Identifiable {
   @ObservationIgnored
   private(set) var paneIDGenerator: () -> Int
 
-  init(id: Int, name: String, directory: URL, tabIDGenerator: @escaping () -> Int, paneIDGenerator: @escaping () -> Int) {
+  init(id: Int, name: String, directory: URL, exec: String? = nil, tabIDGenerator: @escaping () -> Int, paneIDGenerator: @escaping () -> Int) {
     self.id = id
     self.name = name
     self.directory = directory
     self.tabIDGenerator = tabIDGenerator
     self.paneIDGenerator = paneIDGenerator
-    addTab()
+    addTab(exec: exec)
   }
 
-  func addTab() {
-    let tab = MisttyTab(id: tabIDGenerator(), directory: directory, paneIDGenerator: paneIDGenerator)
+  func addTab(exec: String? = nil) {
+    let tab = MisttyTab(id: tabIDGenerator(), directory: directory, exec: exec, paneIDGenerator: paneIDGenerator)
     tabs.append(tab)
     activeTab = tab
   }

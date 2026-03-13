@@ -24,12 +24,13 @@ final class MisttyTab: Identifiable {
   @ObservationIgnored
   private(set) var paneIDGenerator: () -> Int
 
-  init(id: Int, directory: URL? = nil, paneIDGenerator: @escaping () -> Int) {
+  init(id: Int, directory: URL? = nil, exec: String? = nil, paneIDGenerator: @escaping () -> Int) {
     self.id = id
     self.directory = directory
     self.paneIDGenerator = paneIDGenerator
     let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = directory
+    pane.command = exec
     layout = PaneLayout(pane: pane)
     panes = [pane]
     activePane = pane
