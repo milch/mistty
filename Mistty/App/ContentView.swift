@@ -32,6 +32,7 @@ struct ContentView: View {
                                 pane: zoomedPane,
                                 isActive: true,
                                 isWindowModeActive: tab.isWindowModeActive,
+                                copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
                                 onClose: { closePane(zoomedPane) },
                                 onSelect: {}
                             )
@@ -40,6 +41,8 @@ struct ContentView: View {
                                 node: tab.layout.root,
                                 activePane: tab.activePane,
                                 isWindowModeActive: tab.isWindowModeActive,
+                                copyModeState: tab.copyModeState,
+                                copyModePaneID: tab.activePane?.id,
                                 onClosePane: { pane in closePane(pane) },
                                 onSelectPane: { pane in tab.activePane = pane }
                             )

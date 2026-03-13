@@ -4,6 +4,7 @@ struct PaneView: View {
     let pane: MisttyPane
     let isActive: Bool
     var isWindowModeActive: Bool = false
+    var copyModeState: CopyModeState?
     var onClose: (() -> Void)?
     var onSelect: (() -> Void)?
     @State private var isHovering = false
@@ -33,6 +34,15 @@ struct PaneView: View {
                     RoundedRectangle(cornerRadius: 2)
                         .stroke(Color.accentColor, lineWidth: 1)
                         .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                if let state = copyModeState {
+                    GeometryReader { geo in
+                        let cellW = geo.size.width / CGFloat(state.cols)
+                        let cellH = geo.size.height / CGFloat(state.rows)
+                        CopyModeOverlay(state: state, cellWidth: cellW, cellHeight: cellH)
+                    }
                 }
             }
             .onHover { hovering in
