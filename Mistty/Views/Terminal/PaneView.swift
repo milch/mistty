@@ -3,6 +3,7 @@ import SwiftUI
 struct PaneView: View {
     let pane: MisttyPane
     let isActive: Bool
+    var isWindowModeActive: Bool = false
     var onClose: (() -> Void)?
     var onSelect: (() -> Void)?
     @State private var isHovering = false
@@ -24,7 +25,11 @@ struct PaneView: View {
                 }
             }
             .overlay {
-                if isActive {
+                if isActive && isWindowModeActive {
+                    RoundedRectangle(cornerRadius: 2)
+                        .stroke(Color.orange, lineWidth: 2)
+                        .allowsHitTesting(false)
+                } else if isActive {
                     RoundedRectangle(cornerRadius: 2)
                         .stroke(Color.accentColor, lineWidth: 1)
                         .allowsHitTesting(false)

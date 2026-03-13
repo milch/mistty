@@ -29,6 +29,7 @@ struct ContentView: View {
                         PaneLayoutView(
                             node: tab.layout.root,
                             activePane: tab.activePane,
+                            isWindowModeActive: tab.isWindowModeActive,
                             onClosePane: { pane in closePane(pane) },
                             onSelectPane: { pane in tab.activePane = pane }
                         )
