@@ -59,6 +59,11 @@ struct MisttyApp: App {
                 }
                 .keyboardShortcut("x", modifiers: .command)
 
+                Button("Copy Mode") {
+                    NotificationCenter.default.post(name: .misttyCopyMode, object: nil)
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+
                 Divider()
 
                 Button("Rename Tab") {
@@ -83,4 +88,5 @@ extension Notification.Name {
     static let misttyCloseTab = Notification.Name("misttyCloseTab")
     static let misttyRenameTab = Notification.Name("misttyRenameTab")
     static let misttyWindowMode = Notification.Name("misttyWindowMode")
+    static let misttyCopyMode = Notification.Name("misttyCopyMode")
 }

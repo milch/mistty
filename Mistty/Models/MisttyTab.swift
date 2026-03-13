@@ -15,6 +15,8 @@ final class MisttyTab: Identifiable {
     var activePane: MisttyPane?
     var hasBell = false
     var isWindowModeActive = false
+    var copyModeState: CopyModeState?
+    var isCopyModeActive: Bool { copyModeState != nil }
     var zoomedPane: MisttyPane?
     var layout: PaneLayout
 

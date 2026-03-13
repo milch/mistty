@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var sessionManagerVM: SessionManagerViewModel?
     @State private var eventMonitor: Any?
     @State private var windowModeMonitor: Any?
+    @State private var copyModeMonitor: Any?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -102,6 +103,14 @@ struct ContentView: View {
                 installWindowModeMonitor()
             } else {
                 removeWindowModeMonitor()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .misttyCopyMode)) { _ in
+            guard let tab = store.activeSession?.activeTab else { return }
+            if tab.isCopyModeActive {
+                exitCopyMode()
+            } else {
+                enterCopyMode()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
@@ -307,5 +316,69 @@ struct ContentView: View {
             NSEvent.removeMonitor(monitor)
             windowModeMonitor = nil
         }
+    }
+
+    // MARK: - Copy Mode
+
+    private func enterCopyMode() {
+        guard let tab = store.activeSession?.activeTab else { return }
+        // TODO: get actual terminal dimensions from ghostty
+        tab.copyModeState = CopyModeState(rows: 24, cols: 80)
+        installCopyModeMonitor()
+    }
+
+    private func exitCopyMode() {
+        store.activeSession?.activeTab?.copyModeState = nil
+        removeCopyModeMonitor()
+    }
+
+    private func installCopyModeMonitor() {
+        copyModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard var state = store.activeSession?.activeTab?.copyModeState else { return event }
+
+            switch event.keyCode {
+            case 53: // Escape
+                exitCopyMode()
+                return nil
+            default: break
+            }
+
+            guard let chars = event.characters else { return event }
+            switch chars {
+            case "h": state.moveLeft()
+            case "j": state.moveDown()
+            case "k": state.moveUp()
+            case "l": state.moveRight()
+            case "0": state.moveToLineStart()
+            case "$": state.moveToLineEnd()
+            case "G": state.moveToBottom()
+            case "g": state.moveToTop()
+            case "v": state.toggleSelection()
+            case "y":
+                yankSelection()
+                exitCopyMode()
+                return nil
+            default: break
+            }
+
+            store.activeSession?.activeTab?.copyModeState = state
+            return nil
+        }
+    }
+
+    private func removeCopyModeMonitor() {
+        if let monitor = copyModeMonitor {
+            NSEvent.removeMonitor(monitor)
+            copyModeMonitor = nil
+        }
+    }
+
+    private func yankSelection() {
+        guard let tab = store.activeSession?.activeTab,
+              let state = tab.copyModeState,
+              let range = state.selectionRange else { return }
+        // TODO: Read selected text from ghostty surface using ghostty_surface_read_text
+        // once the API is available. For now, log the selection range.
+        _ = range
     }
 }
