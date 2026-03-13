@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import GhosttyKit
 import MisttyShared
 
 /// Wraps a non-Sendable XPC reply closure so it can be captured by a @MainActor Task.
@@ -271,38 +272,31 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
 
     func sendKeys(paneId: Int, keys: String, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
-        Task { @MainActor in
+        Task { @MainActor [store] in
             let targetPane: MisttyPane?
             if paneId == 0 {
-                targetPane = self.store.activePaneInfo()?.pane
+                targetPane = store.activePaneInfo()?.pane
             } else {
-                targetPane = self.store.pane(byId: paneId)?.pane
+                targetPane = store.pane(byId: paneId)?.pane
             }
             guard let pane = targetPane else {
                 reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
                 return
             }
-            _ = pane
-            reply(nil, MisttyXPC.error(.operationFailed, "Not yet implemented: requires ghostty surface integration"))
+            let view = pane.surfaceView
+            guard let surface = view.surface else {
+                reply(nil, MisttyXPC.error(.operationFailed, "Pane has no active surface"))
+                return
+            }
+            keys.withCString { ptr in
+                ghostty_surface_text(surface, ptr, UInt(keys.utf8.count))
+            }
+            reply(self.encode([String: String]()), nil)
         }
     }
 
     func runCommand(paneId: Int, command: String, reply: @escaping (Data?, Error?) -> Void) {
-        let reply = Reply(handler: reply)
-        Task { @MainActor in
-            let targetPane: MisttyPane?
-            if paneId == 0 {
-                targetPane = self.store.activePaneInfo()?.pane
-            } else {
-                targetPane = self.store.pane(byId: paneId)?.pane
-            }
-            guard let pane = targetPane else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
-                return
-            }
-            _ = pane
-            reply(nil, MisttyXPC.error(.operationFailed, "Not yet implemented: requires ghostty surface integration"))
-        }
+        sendKeys(paneId: paneId, keys: command + "\n", reply: reply)
     }
 
     func getText(paneId: Int, reply: @escaping (Data?, Error?) -> Void) {

@@ -257,6 +257,57 @@ final class XPCServiceTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2)
     }
 
+    // MARK: - SendKeys / RunCommand Tests
+
+    func testSendKeysResolvesPane() async throws {
+        let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+        let paneId = session.activeTab!.activePane!.id
+
+        let expectation = XCTestExpectation(description: "send keys")
+        service.sendKeys(paneId: paneId, keys: "hello") { data, error in
+            // Pane found but surface is nil in test → operationFailed
+            if let error = error as? NSError {
+                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+            }
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
+    func testSendKeysPaneNotFound() async throws {
+        let expectation = XCTestExpectation(description: "send keys not found")
+        service.sendKeys(paneId: 999, keys: "hello") { data, error in
+            XCTAssertNotNil(error)
+            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
+    func testSendKeysActivePane() async throws {
+        let _ = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+
+        let expectation = XCTestExpectation(description: "send keys active")
+        service.sendKeys(paneId: 0, keys: "hello") { data, error in
+            // Resolves active pane, surface nil → operationFailed
+            if let error = error as? NSError {
+                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+            }
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
+    func testRunCommandDelegatesToSendKeys() async throws {
+        let expectation = XCTestExpectation(description: "run command not found")
+        service.runCommand(paneId: 999, command: "ls") { data, error in
+            XCTAssertNotNil(error)
+            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
     func testFocusPane() async throws {
         let session = store.createSession(name: "proj", directory: URL(fileURLWithPath: "/tmp"))
         let tab = session.tabs[0]
