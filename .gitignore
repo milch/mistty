@@ -2,6 +2,7 @@
 *.xcuserstate
 xcuserdata/
 .build/
+build/
 DerivedData/
 .claude/
 result

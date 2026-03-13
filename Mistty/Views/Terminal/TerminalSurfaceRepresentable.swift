@@ -1,9 +1,16 @@
 import SwiftUI
 
 struct TerminalSurfaceRepresentable: NSViewRepresentable {
+    let pane: MisttyPane
+    var onSelect: (() -> Void)?
+
     func makeNSView(context: Context) -> TerminalSurfaceView {
-        TerminalSurfaceView(frame: .zero)
+        let view = pane.surfaceView
+        view.onSelect = onSelect
+        return view
     }
 
-    func updateNSView(_ nsView: TerminalSurfaceView, context: Context) {}
+    func updateNSView(_ nsView: TerminalSurfaceView, context: Context) {
+        nsView.onSelect = onSelect
+    }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Bindable var store: SessionStore
+    @Binding var width: CGFloat
 
     var body: some View {
         List {
@@ -10,7 +11,33 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 180, idealWidth: 220)
+        .frame(width: width)
+        .overlay(alignment: .trailing) {
+            SidebarDragHandle(width: $width)
+        }
+    }
+}
+
+struct SidebarDragHandle: View {
+    @Binding var width: CGFloat
+
+    var body: some View {
+        Color.clear
+            .frame(width: 6)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(coordinateSpace: .global)
+                    .onChanged { value in
+                        width = max(140, min(400, value.location.x))
+                    }
+            )
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
     }
 }
 

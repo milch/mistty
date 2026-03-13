@@ -8,12 +8,36 @@ build:
     swift build
 
 # Build the app (release)
-build-release:
+build-release: build-libghostty
     swift build -c release
 
-# Run the app (debug build)
-run: build
-    .build/debug/Mistty
+# Package as .app bundle (debug)
+bundle: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    APP="build/Mistty.app"
+    rm -rf "$APP"
+    mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+    cp .build/debug/Mistty "$APP/Contents/MacOS/Mistty"
+    cp Mistty/Resources/Info.plist "$APP/Contents/"
+    codesign -s - -f "$APP"
+    echo "Bundled: $APP"
+
+# Package as .app bundle (release)
+bundle-release: build-release
+    #!/usr/bin/env bash
+    set -euo pipefail
+    APP="build/Mistty.app"
+    rm -rf "$APP"
+    mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+    cp .build/release/Mistty "$APP/Contents/MacOS/Mistty"
+    cp Mistty/Resources/Info.plist "$APP/Contents/"
+    codesign -s - -f "$APP"
+    echo "Bundled: $APP"
+
+# Run the app (debug, as .app bundle)
+run: bundle
+    open build/Mistty.app
 
 # Run tests
 test:
@@ -22,6 +46,7 @@ test:
 # Clean build artifacts
 clean:
     swift package clean
+    rm -rf build/
 
 # Build libghostty from the vendored submodule (requires nix)
 build-libghostty:

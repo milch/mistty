@@ -48,9 +48,14 @@ final class SessionManagerViewModel {
         let dirs = await ZoxideService.recentDirectories()
         let sshHosts = SSHConfigService.loadHosts()
 
+        // Directories that already have active sessions
+        let activeDirectories = Set(store.sessions.map { $0.directory.standardizedFileURL })
+
         var items: [SessionManagerItem] = []
         items += store.sessions.map { .runningSession($0) }
-        items += dirs.map { .directory($0) }
+        items += dirs
+            .filter { !activeDirectories.contains($0.standardizedFileURL) }
+            .map { .directory($0) }
         items += sshHosts.map { .sshHost($0) }
 
         allItems = items

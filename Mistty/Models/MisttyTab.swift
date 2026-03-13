@@ -23,7 +23,8 @@ final class MisttyTab: Identifiable {
     }
 
     func closePane(_ pane: MisttyPane) {
-        panes.removeAll { $0.id == pane.id }
+        layout.remove(pane: pane)
+        panes = layout.leaves
         if activePane?.id == pane.id { activePane = panes.last }
     }
 }

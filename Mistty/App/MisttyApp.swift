@@ -41,6 +41,18 @@ struct MisttyApp: App {
                     NotificationCenter.default.post(name: .misttySessionManager, object: nil)
                 }
                 .keyboardShortcut("j", modifiers: .command)
+
+                Divider()
+
+                Button("Close Pane") {
+                    NotificationCenter.default.post(name: .misttyClosePane, object: nil)
+                }
+                .keyboardShortcut("w", modifiers: .command)
+
+                Button("Close Tab") {
+                    NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
+                }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
             }
         }
     }
@@ -51,4 +63,6 @@ extension Notification.Name {
     static let mistrySplitHorizontal = Notification.Name("mistrySplitHorizontal")
     static let mistrySplitVertical = Notification.Name("mistrySplitVertical")
     static let misttySessionManager = Notification.Name("misttySessionManager")
+    static let misttyClosePane = Notification.Name("misttyClosePane")
+    static let misttyCloseTab = Notification.Name("misttyCloseTab")
 }

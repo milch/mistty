@@ -15,9 +15,16 @@ let package = Package(
                 .product(name: "TOMLKit", package: "TOMLKit"),
             ],
             path: "Mistty",
+            exclude: ["Resources/Info.plist"],
             linkerSettings: [
                 .linkedLibrary("c++"),
                 .linkedFramework("Carbon"),
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Mistty/Resources/Info.plist",
+                ]),
             ]
         ),
         .binaryTarget(

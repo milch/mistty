@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SessionManagerView: View {
@@ -7,13 +8,15 @@ struct SessionManagerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Search sessions, directories, hosts...", text: $queryText)
-                .textFieldStyle(.plain)
-                .font(.title3)
-                .padding(14)
-                .onChange(of: queryText) { _, newValue in
-                    vm.updateQuery(newValue)
-                }
+            FocusableTextField(
+                text: $queryText,
+                placeholder: "Search sessions, directories, hosts..."
+            )
+            .font(.title3)
+            .padding(14)
+            .onChange(of: queryText) { _, newValue in
+                vm.updateQuery(newValue)
+            }
 
             Divider()
 
@@ -57,10 +60,53 @@ struct SessionManagerView: View {
         .frame(width: 560)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.3), radius: 20)
-        .onKeyPress(.upArrow) { vm.moveUp(); return .handled }
-        .onKeyPress(.downArrow) { vm.moveDown(); return .handled }
-        .onKeyPress(.return) { vm.confirmSelection(); isPresented = false; return .handled }
-        .onKeyPress(.escape) { isPresented = false; return .handled }
         .task { await vm.load() }
+    }
+}
+
+/// An NSTextField wrapper that steals first responder on appear,
+/// ensuring it gets keyboard input even when an NSView (like the terminal) has focus.
+struct FocusableTextField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.placeholderString = placeholder
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.delegate = context.coordinator
+        field.font = .systemFont(ofSize: 17)
+
+        // Steal focus from the terminal on next run loop tick
+        DispatchQueue.main.async {
+            field.window?.makeFirstResponder(field)
+        }
+
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            text.wrappedValue = field.stringValue
+        }
     }
 }

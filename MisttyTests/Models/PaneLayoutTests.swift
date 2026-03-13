@@ -1,6 +1,7 @@
 import XCTest
 @testable import Mistty
 
+@MainActor
 final class PaneLayoutTests: XCTestCase {
     func test_singlePaneHasOneLeaf() {
         let pane = MisttyPane()

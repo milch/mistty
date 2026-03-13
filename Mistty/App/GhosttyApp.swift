@@ -95,7 +95,15 @@ final class GhosttyAppManager {
             print("[GhosttyAppManager] ghostty_config_new failed")
             return
         }
-        ghostty_config_load_default_files(cfg)
+
+        // Load Mistty's own ghostty config (always separate from Ghostty.app config)
+        let misttyConfigPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/mistty/ghostty.conf").path
+        if FileManager.default.fileExists(atPath: misttyConfigPath) {
+            misttyConfigPath.withCString { path in
+                ghostty_config_load_file(cfg, path)
+            }
+        }
         ghostty_config_finalize(cfg)
         self.config = cfg
 
