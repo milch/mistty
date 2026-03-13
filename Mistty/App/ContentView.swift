@@ -415,11 +415,31 @@ struct ContentView: View {
 
   private func yankSelection() {
     guard let tab = store.activeSession?.activeTab,
+      let pane = tab.activePane,
       let state = tab.copyModeState,
-      let range = state.selectionRange
+      let range = state.selectionRange,
+      let surface = pane.surfaceView.surface
     else { return }
-    // TODO: Read selected text from ghostty surface using ghostty_surface_read_text
-    // once the API is available. For now, log the selection range.
-    _ = range
+
+    var sel = ghostty_selection_s()
+    sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
+    sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.top_left.x = UInt32(range.start.col)
+    sel.top_left.y = UInt32(range.start.row)
+    sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
+    sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.bottom_right.x = UInt32(range.end.col)
+    sel.bottom_right.y = UInt32(range.end.row)
+    sel.rectangle = false
+
+    var text = ghostty_text_s()
+    if ghostty_surface_read_text(surface, sel, &text) {
+      if let ptr = text.text {
+        let str = String(cString: ptr)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(str, forType: .string)
+      }
+      ghostty_surface_free_text(surface, &text)
+    }
   }
 }
