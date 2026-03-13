@@ -202,6 +202,25 @@ struct ContentView: View {
 
     private func installWindowModeMonitor() {
         windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Cmd+Arrow to resize
+            if event.modifierFlags.contains(.command) {
+                switch event.keyCode {
+                case 123: // Cmd+Left — shrink
+                    resizeActivePane(delta: -0.05)
+                    return nil
+                case 124: // Cmd+Right — grow
+                    resizeActivePane(delta: 0.05)
+                    return nil
+                case 126: // Cmd+Up — shrink
+                    resizeActivePane(delta: -0.05)
+                    return nil
+                case 125: // Cmd+Down — grow
+                    resizeActivePane(delta: 0.05)
+                    return nil
+                default: break
+                }
+            }
+
             switch event.keyCode {
             case 53: // Escape — exit window mode
                 store.activeSession?.activeTab?.isWindowModeActive = false
@@ -231,6 +250,12 @@ struct ContentView: View {
               let target = tab.layout.adjacentPane(from: current, direction: direction) else { return }
         tab.activePane = target
         target.surfaceView.window?.makeFirstResponder(target.surfaceView)
+    }
+
+    private func resizeActivePane(delta: CGFloat) {
+        guard let tab = store.activeSession?.activeTab,
+              let pane = tab.activePane else { return }
+        tab.layout.resizeSplit(containing: pane, delta: delta)
     }
 
     private func removeWindowModeMonitor() {

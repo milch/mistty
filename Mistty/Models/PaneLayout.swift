@@ -6,7 +6,7 @@ enum NavigationDirection {
 
 indirect enum PaneLayoutNode {
     case leaf(MisttyPane)
-    case split(SplitDirection, PaneLayoutNode, PaneLayoutNode)
+    case split(SplitDirection, PaneLayoutNode, PaneLayoutNode, CGFloat)
 }
 
 @MainActor
@@ -26,7 +26,7 @@ struct PaneLayout {
         switch node {
         case .leaf(let pane):
             return [pane]
-        case .split(_, let a, let b):
+        case .split(_, let a, let b, _):
             return collectLeaves(a) + collectLeaves(b)
         }
     }
@@ -53,14 +53,14 @@ struct PaneLayout {
             return nil // Remove this leaf
         case .leaf:
             return node // Not the target, keep it
-        case .split(let dir, let a, let b):
+        case .split(let dir, let a, let b, let ratio):
             let newA = removeNode(a, target: target)
             let newB = removeNode(b, target: target)
             switch (newA, newB) {
             case (nil, nil): return nil
             case (nil, let remaining): return remaining
             case (let remaining, nil): return remaining
-            case (let left?, let right?): return .split(dir, left, right)
+            case (let left?, let right?): return .split(dir, left, right, ratio)
             }
         }
     }
@@ -79,15 +79,45 @@ struct PaneLayout {
     ) -> PaneLayoutNode {
         switch node {
         case .leaf(let p) where p.id == target:
-            return .split(direction, .leaf(p), .leaf(newPane))
+            return .split(direction, .leaf(p), .leaf(newPane), 0.5)
         case .leaf:
             return node
-        case .split(let dir, let a, let b):
+        case .split(let dir, let a, let b, let ratio):
             return .split(
                 dir,
                 insertSplit(a, target: target, direction: direction, newPane: newPane),
-                insertSplit(b, target: target, direction: direction, newPane: newPane)
+                insertSplit(b, target: target, direction: direction, newPane: newPane),
+                ratio
             )
+        }
+    }
+
+    // MARK: - Resize
+
+    mutating func resizeSplit(containing pane: MisttyPane, delta: CGFloat) {
+        root = Self.adjustRatio(root, target: pane.id, delta: delta)
+    }
+
+    private static func adjustRatio(_ node: PaneLayoutNode, target: UUID, delta: CGFloat) -> PaneLayoutNode {
+        switch node {
+        case .leaf:
+            return node
+        case .split(let dir, let a, let b, let ratio):
+            let aContains = collectLeaves(a).contains { $0.id == target }
+            if aContains {
+                if case .leaf(let p) = a, p.id == target {
+                    return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
+                }
+                return .split(dir, adjustRatio(a, target: target, delta: delta), b, ratio)
+            }
+            let bContains = collectLeaves(b).contains { $0.id == target }
+            if bContains {
+                if case .leaf(let p) = b, p.id == target {
+                    return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
+                }
+                return .split(dir, a, adjustRatio(b, target: target, delta: delta), ratio)
+            }
+            return node
         }
     }
 
@@ -104,7 +134,7 @@ struct PaneLayout {
         switch node {
         case .leaf(let p):
             return p.id == target ? [] : nil
-        case .split(_, let a, let b):
+        case .split(_, let a, let b, _):
             if let path = findPath(a, target: target) {
                 return [.left] + path
             }
@@ -133,14 +163,14 @@ struct PaneLayout {
         var nodes: [(PaneLayoutNode, PathStep)] = []
         var current = root
         for step in path {
-            guard case .split(_, let a, let b) = current else { break }
+            guard case .split(_, let a, let b, _) = current else { break }
             nodes.append((current, step))
             current = (step == .left) ? a : b
         }
 
         // Walk backwards looking for a matching split where we came from the correct side
         for (node, step) in nodes.reversed() {
-            guard case .split(let dir, let a, let b) = node else { continue }
+            guard case .split(let dir, let a, let b, _) = node else { continue }
             if dir == splitDir && step == fromSide {
                 let otherSubtree = (step == .left) ? b : a
                 return (direction == .left || direction == .up)
@@ -154,14 +184,14 @@ struct PaneLayout {
     private static func firstLeaf(_ node: PaneLayoutNode) -> MisttyPane? {
         switch node {
         case .leaf(let p): return p
-        case .split(_, let a, _): return firstLeaf(a)
+        case .split(_, let a, _, _): return firstLeaf(a)
         }
     }
 
     private static func lastLeaf(_ node: PaneLayoutNode) -> MisttyPane? {
         switch node {
         case .leaf(let p): return p
-        case .split(_, _, let b): return lastLeaf(b)
+        case .split(_, _, let b, _): return lastLeaf(b)
         }
     }
 }

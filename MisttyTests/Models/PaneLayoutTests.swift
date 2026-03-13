@@ -28,7 +28,7 @@ final class PaneLayoutTests: XCTestCase {
         let pane = MisttyPane()
         var layout = PaneLayout(pane: pane)
         layout.split(pane: pane, direction: .vertical)
-        if case .split(let dir, _, _) = layout.root {
+        if case .split(let dir, _, _, _) = layout.root {
             XCTAssertEqual(dir, .vertical)
         } else {
             XCTFail("Expected split at root")
@@ -74,6 +74,30 @@ final class PaneLayoutTests: XCTestCase {
 
         let up = layout.adjacentPane(from: panes[1], direction: .up)
         XCTAssertEqual(up?.id, panes[0].id)
+    }
+
+    func test_splitRatio() {
+        let pane1 = MisttyPane()
+        var layout = PaneLayout(pane: pane1)
+        layout.split(pane: pane1, direction: .horizontal)
+        if case .split(_, _, _, let ratio) = layout.root {
+            XCTAssertEqual(ratio, 0.5, accuracy: 0.001)
+        } else {
+            XCTFail("Expected split node")
+        }
+    }
+
+    func test_resizeSplit() {
+        let pane1 = MisttyPane()
+        var layout = PaneLayout(pane: pane1)
+        layout.split(pane: pane1, direction: .horizontal)
+        let panes = layout.leaves
+        layout.resizeSplit(containing: panes[0], delta: 0.1)
+        if case .split(_, _, _, let ratio) = layout.root {
+            XCTAssertEqual(ratio, 0.6, accuracy: 0.001)
+        } else {
+            XCTFail("Expected split node")
+        }
     }
 
     func test_tabIntegration_splitUpdatesLayout() {
