@@ -207,10 +207,30 @@ struct ContentView: View {
                 store.activeSession?.activeTab?.isWindowModeActive = false
                 removeWindowModeMonitor()
                 return nil
+            case 123: // Left arrow
+                navigatePane(.left)
+                return nil
+            case 124: // Right arrow
+                navigatePane(.right)
+                return nil
+            case 126: // Up arrow
+                navigatePane(.up)
+                return nil
+            case 125: // Down arrow
+                navigatePane(.down)
+                return nil
             default:
                 return event
             }
         }
+    }
+
+    private func navigatePane(_ direction: NavigationDirection) {
+        guard let tab = store.activeSession?.activeTab,
+              let current = tab.activePane,
+              let target = tab.layout.adjacentPane(from: current, direction: direction) else { return }
+        tab.activePane = target
+        target.surfaceView.window?.makeFirstResponder(target.surfaceView)
     }
 
     private func removeWindowModeMonitor() {

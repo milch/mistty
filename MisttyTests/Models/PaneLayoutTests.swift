@@ -44,6 +44,38 @@ final class PaneLayoutTests: XCTestCase {
         XCTAssertEqual(layout.leaves.count, 3)
     }
 
+    func test_adjacentPaneHorizontal() {
+        let pane1 = MisttyPane()
+        var layout = PaneLayout(pane: pane1)
+        layout.split(pane: pane1, direction: .horizontal)
+        let panes = layout.leaves
+
+        // Right of first pane should be second pane
+        let right = layout.adjacentPane(from: panes[0], direction: .right)
+        XCTAssertEqual(right?.id, panes[1].id)
+
+        // Left of second pane should be first pane
+        let left = layout.adjacentPane(from: panes[1], direction: .left)
+        XCTAssertEqual(left?.id, panes[0].id)
+
+        // Left of first pane should be nil (edge)
+        let none = layout.adjacentPane(from: panes[0], direction: .left)
+        XCTAssertNil(none)
+    }
+
+    func test_adjacentPaneVertical() {
+        let pane1 = MisttyPane()
+        var layout = PaneLayout(pane: pane1)
+        layout.split(pane: pane1, direction: .vertical)
+        let panes = layout.leaves
+
+        let down = layout.adjacentPane(from: panes[0], direction: .down)
+        XCTAssertEqual(down?.id, panes[1].id)
+
+        let up = layout.adjacentPane(from: panes[1], direction: .up)
+        XCTAssertEqual(up?.id, panes[0].id)
+    }
+
     func test_tabIntegration_splitUpdatesLayout() {
         let tab = MisttyTab()
         XCTAssertEqual(tab.layout.leaves.count, 1)
