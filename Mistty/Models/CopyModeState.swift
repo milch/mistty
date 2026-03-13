@@ -22,6 +22,12 @@ struct CopyModeState {
   mutating func moveRight() { cursorCol = min(cols - 1, cursorCol + 1) }
   mutating func moveToLineStart() { cursorCol = 0 }
   mutating func moveToLineEnd() { cursorCol = cols - 1 }
+  mutating func moveWordForward() {
+    cursorCol = min(cols - 1, cursorCol + 5)
+  }
+  mutating func moveWordBackward() {
+    cursorCol = max(0, cursorCol - 5)
+  }
   mutating func moveToTop() {
     cursorRow = 0
     cursorCol = 0

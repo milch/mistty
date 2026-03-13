@@ -393,6 +393,8 @@ struct ContentView: View {
       case "$": state.moveToLineEnd()
       case "G": state.moveToBottom()
       case "g": state.moveToTop()
+      case "w": state.moveWordForward()
+      case "b": state.moveWordBackward()
       case "v": state.toggleSelection()
       case "y":
         yankSelection()

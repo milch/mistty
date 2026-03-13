@@ -37,6 +37,34 @@ final class CopyModeStateTests: XCTestCase {
     XCTAssertNotNil(state.selectionStart)
   }
 
+  func test_moveWordForward() {
+    var state = CopyModeState(rows: 24, cols: 80)
+    state.cursorCol = 0
+    state.moveWordForward()
+    XCTAssertEqual(state.cursorCol, 5)
+  }
+
+  func test_moveWordBackward() {
+    var state = CopyModeState(rows: 24, cols: 80)
+    state.cursorCol = 10
+    state.moveWordBackward()
+    XCTAssertEqual(state.cursorCol, 5)
+  }
+
+  func test_moveWordForwardClampsToEnd() {
+    var state = CopyModeState(rows: 24, cols: 80)
+    state.cursorCol = 78
+    state.moveWordForward()
+    XCTAssertEqual(state.cursorCol, 79)
+  }
+
+  func test_moveWordBackwardClampsToStart() {
+    var state = CopyModeState(rows: 24, cols: 80)
+    state.cursorCol = 3
+    state.moveWordBackward()
+    XCTAssertEqual(state.cursorCol, 0)
+  }
+
   func test_homeAndEnd() {
     var state = CopyModeState(rows: 24, cols: 80)
     state.cursorCol = 40
