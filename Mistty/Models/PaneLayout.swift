@@ -122,7 +122,9 @@ struct PaneLayout {
 
   // MARK: - Resize
 
-  mutating func resizeSplit(containing pane: MisttyPane, delta: CGFloat, along direction: SplitDirection? = nil) {
+  mutating func resizeSplit(
+    containing pane: MisttyPane, delta: CGFloat, along direction: SplitDirection? = nil
+  ) {
     root = Self.adjustRatio(root, target: pane.id, delta: delta, along: direction)
   }
 
