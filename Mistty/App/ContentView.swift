@@ -387,6 +387,11 @@ struct ContentView: View {
         return nil
       }
 
+      // Pass through system shortcuts (Cmd+Q, Cmd+W, etc.)
+      if event.modifierFlags.contains(.command) && !state.isSearching {
+        return event
+      }
+
       // Search mode: keys go to query
       if state.isSearching {
         if event.keyCode == 36 {  // Return — confirm search
