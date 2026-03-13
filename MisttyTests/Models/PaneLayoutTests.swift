@@ -136,6 +136,36 @@ final class PaneLayoutTests: XCTestCase {
     }
   }
 
+  func test_removePaneFromTwoPaneSplit() {
+    let pane1 = MisttyPane()
+    var layout = PaneLayout(pane: pane1)
+    layout.split(pane: pane1, direction: .horizontal)
+    let panes = layout.leaves
+    XCTAssertEqual(panes.count, 2)
+
+    layout.remove(pane: panes[1])
+    XCTAssertEqual(layout.leaves.count, 1)
+    XCTAssertEqual(layout.leaves[0].id, pane1.id)
+    XCTAssertFalse(layout.isEmpty)
+  }
+
+  func test_removeLastPane() {
+    let pane1 = MisttyPane()
+    var layout = PaneLayout(pane: pane1)
+    layout.remove(pane: pane1)
+    XCTAssertTrue(layout.isEmpty)
+    XCTAssertTrue(layout.leaves.isEmpty)
+  }
+
+  func test_removeNonExistentPane() {
+    let pane1 = MisttyPane()
+    let pane2 = MisttyPane()
+    var layout = PaneLayout(pane: pane1)
+    layout.remove(pane: pane2)
+    XCTAssertEqual(layout.leaves.count, 1)
+    XCTAssertFalse(layout.isEmpty)
+  }
+
   func test_tabIntegration_splitUpdatesLayout() {
     let tab = MisttyTab()
     XCTAssertEqual(tab.layout.leaves.count, 1)
