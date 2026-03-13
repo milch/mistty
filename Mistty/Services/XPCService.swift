@@ -421,7 +421,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 return
             }
             let definition = PopupDefinition(name: name, command: exec, width: width, height: height, closeOnExit: closeOnExit)
-            session.togglePopup(definition: definition)
+            session.openPopup(definition: definition)
             guard let popup = session.activePopup else {
                 reply(nil, MisttyXPC.error(.operationFailed, "Failed to create popup"))
                 return

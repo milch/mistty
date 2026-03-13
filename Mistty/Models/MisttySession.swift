@@ -72,6 +72,25 @@ final class MisttySession: Identifiable {
     activePopup = popup
   }
 
+  func openPopup(definition: PopupDefinition) {
+    if let existing = popups.first(where: { $0.definition.name == definition.name }) {
+      if !existing.isVisible {
+        activePopup?.isVisible = false
+        existing.isVisible = true
+        activePopup = existing
+      }
+      return
+    }
+    // Create new popup
+    activePopup?.isVisible = false
+    let pane = MisttyPane(id: paneIDGenerator())
+    pane.directory = directory
+    pane.command = definition.command
+    let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
+    popups.append(popup)
+    activePopup = popup
+  }
+
   func closePopup(_ popup: PopupState) {
     popups.removeAll { $0.id == popup.id }
     if activePopup?.id == popup.id { activePopup = nil }
