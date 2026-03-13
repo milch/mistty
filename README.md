@@ -11,6 +11,33 @@ A macOS terminal emulator built on [libghostty](https://github.com/ghostty-org/g
 - **Configurable** — XDG-compliant config at `~/.config/mistty/config.toml`
 - **Native macOS** — SwiftUI interface, system integration
 
+## CLI Control
+
+Mistty includes a CLI tool for scripting and automation:
+
+```bash
+# Install
+just install-cli
+
+# Sessions
+mistty-cli session list
+mistty-cli session create --name "project" --directory ~/code
+
+# Tabs
+mistty-cli tab create --session 1 --name "editor"
+mistty-cli tab list --session 1
+
+# Panes
+mistty-cli pane active
+mistty-cli pane create --tab 1 --direction horizontal
+mistty-cli pane send-keys "echo hello"
+mistty-cli pane run-command "npm test"
+
+# JSON output (auto-detected when piped, or force with --json)
+mistty-cli session list | jq .
+mistty-cli session list --json
+```
+
 ## Prerequisites
 
 - macOS 14 (Sonoma) or later

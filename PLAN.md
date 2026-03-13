@@ -50,7 +50,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ## Features (v1)
 
-- CLI control support - create new windows, sessions, panes, and so on
+- CLI control support - create new windows, sessions, panes, and so on [done]
   - Could use AppleScript or some other macOS IPC mechanism
 - Popup support - open a new pane that fills the screen and starts with a specific launch command
   - Configurable width/height based on screen size
