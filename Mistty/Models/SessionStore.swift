@@ -16,6 +16,7 @@ final class SessionStore {
   private var nextTabId = 1
   private var nextPaneId = 1
   private var nextWindowId = 1
+  private var nextPopupId = 1
   private(set) var trackedWindows: [TrackedWindow] = []
 
   private func generateSessionID() -> Int {
@@ -56,6 +57,13 @@ final class SessionStore {
           return 0
         }
         return self.generatePaneID()
+      },
+      popupIDGenerator: { [weak self] in
+        guard let self else {
+          assertionFailure("SessionStore was deallocated while sessions still exist")
+          return 0
+        }
+        return self.generatePopupID()
       }
     )
     sessions.append(session)
@@ -66,6 +74,12 @@ final class SessionStore {
   func closeSession(_ session: MisttySession) {
     sessions.removeAll { $0.id == session.id }
     if activeSession?.id == session.id { activeSession = sessions.last }
+  }
+
+  private func generatePopupID() -> Int {
+    let id = nextPopupId
+    nextPopupId += 1
+    return id
   }
 
   // MARK: - Window registry
@@ -114,6 +128,15 @@ final class SessionStore {
         if let pane = tab.panes.first(where: { $0.id == id }) {
           return (session, tab, pane)
         }
+      }
+    }
+    return nil
+  }
+
+  func popup(byId id: Int) -> (session: MisttySession, popup: PopupState)? {
+    for session in sessions {
+      if let popup = session.popups.first(where: { $0.id == id }) {
+        return (session, popup)
       }
     }
     return nil

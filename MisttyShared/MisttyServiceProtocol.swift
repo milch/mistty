@@ -39,4 +39,11 @@ import Foundation
     func getWindow(id: Int, reply: @escaping (Data?, Error?) -> Void)
     func closeWindow(id: Int, reply: @escaping (Data?, Error?) -> Void)
     func focusWindow(id: Int, reply: @escaping (Data?, Error?) -> Void)
+
+    // MARK: - Popups
+
+    func openPopup(sessionId: Int, name: String, exec: String, width: Double, height: Double, closeOnExit: Bool, reply: @escaping (Data?, Error?) -> Void)
+    func closePopup(popupId: Int, reply: @escaping (Data?, Error?) -> Void)
+    func togglePopup(sessionId: Int, name: String, reply: @escaping (Data?, Error?) -> Void)
+    func listPopups(sessionId: Int, reply: @escaping (Data?, Error?) -> Void)
 }

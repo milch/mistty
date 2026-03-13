@@ -7,6 +7,7 @@ struct MisttyConfig: Sendable, Equatable {
   var cursorStyle: String = "block"
   var scrollbackLines: Int = 10000
   var sidebarVisible: Bool = true
+  var popups: [PopupDefinition] = []
 
   static let `default` = MisttyConfig()
 
@@ -18,6 +19,19 @@ struct MisttyConfig: Sendable, Equatable {
     if let cursor = table["cursor_style"]?.string { config.cursorStyle = cursor }
     if let scrollback = table["scrollback_lines"]?.int { config.scrollbackLines = scrollback }
     if let sidebar = table["sidebar_visible"]?.bool { config.sidebarVisible = sidebar }
+    if let popupArray = table["popup"]?.array {
+      config.popups = popupArray.compactMap { entry -> PopupDefinition? in
+        guard let t = entry.table else { return nil }
+        return PopupDefinition(
+          name: t["name"]?.string ?? "",
+          command: t["command"]?.string ?? "",
+          shortcut: t["shortcut"]?.string,
+          width: max(0.1, min(1.0, t["width"]?.double ?? 0.8)),
+          height: max(0.1, min(1.0, t["height"]?.double ?? 0.8)),
+          closeOnExit: t["close_on_exit"]?.bool ?? true
+        )
+      }
+    }
     return config
   }
 
@@ -47,6 +61,18 @@ struct MisttyConfig: Sendable, Equatable {
     lines.append("cursor_style = \"\(cursorStyle)\"")
     lines.append("scrollback_lines = \(scrollbackLines)")
     lines.append("sidebar_visible = \(sidebarVisible)")
+    for popup in popups {
+      lines.append("")
+      lines.append("[[popup]]")
+      lines.append("name = \"\(popup.name)\"")
+      lines.append("command = \"\(popup.command)\"")
+      if let shortcut = popup.shortcut {
+        lines.append("shortcut = \"\(shortcut)\"")
+      }
+      lines.append("width = \(popup.width)")
+      lines.append("height = \(popup.height)")
+      lines.append("close_on_exit = \(popup.closeOnExit)")
+    }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
   }
 }

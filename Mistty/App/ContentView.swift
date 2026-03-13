@@ -14,6 +14,66 @@ struct ContentView: View {
   @State private var copyModeMonitor: Any?
 
   var body: some View {
+    contentWithOverlays
+      .onReceive(NotificationCenter.default.publisher(for: .misttyPopupToggle)) { notification in
+        handlePopupToggle(notification)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyClosePane)) { _ in
+        handleClosePane()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyWindowMode)) { _ in
+        handleWindowMode()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyCopyMode)) { _ in
+        handleCopyMode()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
+        handleCloseTab()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .ghosttySetTitle)) { notification in
+        handleSetTitle(notification)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .ghosttyRingBell)) { notification in
+        handleRingBell(notification)
+      }
+      .onChange(of: store.activeSession?.activeTab?.id) { _, _ in
+        store.activeSession?.activeTab?.hasBell = false
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .ghosttyCloseSurface)) { notification in
+        handleCloseSurface(notification)
+      }
+  }
+
+  private var contentWithOverlays: some View {
+    mainContent
+      .overlay { sessionManagerOverlay }
+      .overlay { popupOverlay }
+      .onChange(of: showingSessionManager) { _, isShowing in
+        if isShowing {
+          let vm = SessionManagerViewModel(store: store)
+          sessionManagerVM = vm
+          installKeyMonitor(vm: vm)
+        } else {
+          removeKeyMonitor()
+          sessionManagerVM = nil
+        }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyNewTab)) { _ in
+        store.activeSession?.addTab()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
+        store.activeSession?.activeTab?.splitActivePane(direction: .horizontal)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
+        store.activeSession?.activeTab?.splitActivePane(direction: .vertical)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
+        showingSessionManager = true
+      }
+  }
+
+  @ViewBuilder
+  private var mainContent: some View {
     HStack(spacing: 0) {
       if sidebarVisible {
         SidebarView(
@@ -75,7 +135,6 @@ struct ContentView: View {
     }
     .onDisappear {
       DispatchQueue.main.async { [store] in
-        // Unregister any windows that are no longer visible
         for tracked in store.trackedWindows where !tracked.window.isVisible {
           store.unregisterWindow(tracked.window)
         }
@@ -87,111 +146,45 @@ struct ContentView: View {
       store.activeSession?.activeTab?.copyModeState = nil
       showingSessionManager = false
     }
-    .overlay {
-      if showingSessionManager, let vm = sessionManagerVM {
-        Color.black.opacity(0.3)
-          .ignoresSafeArea()
-          .onTapGesture { showingSessionManager = false }
+  }
 
-        SessionManagerView(
-          vm: vm,
-          isPresented: $showingSessionManager
+  @ViewBuilder
+  private var sessionManagerOverlay: some View {
+    if showingSessionManager, let vm = sessionManagerVM {
+      Color.black.opacity(0.3)
+        .ignoresSafeArea()
+        .onTapGesture { showingSessionManager = false }
+
+      SessionManagerView(
+        vm: vm,
+        isPresented: $showingSessionManager
+      )
+    }
+  }
+
+  @ViewBuilder
+  private var popupOverlay: some View {
+    if let session = store.activeSession,
+       let popup = session.activePopup,
+       popup.isVisible
+    {
+      GeometryReader { geometry in
+        PopupOverlayView(
+          popup: popup,
+          onDismiss: {
+            session.hideActivePopup()
+            returnFocusToActivePane()
+          },
+          onClose: {
+            session.closePopup(popup)
+            returnFocusToActivePane()
+          }
         )
-      }
-    }
-    .onChange(of: showingSessionManager) { _, isShowing in
-      if isShowing {
-        let vm = SessionManagerViewModel(store: store)
-        sessionManagerVM = vm
-        installKeyMonitor(vm: vm)
-      } else {
-        removeKeyMonitor()
-        sessionManagerVM = nil
-      }
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttyNewTab)) { _ in
-      store.activeSession?.addTab()
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
-      store.activeSession?.activeTab?.splitActivePane(direction: .horizontal)
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
-      store.activeSession?.activeTab?.splitActivePane(direction: .vertical)
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
-      showingSessionManager = true
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttyClosePane)) { _ in
-      guard let tab = store.activeSession?.activeTab,
-        let pane = tab.activePane
-      else { return }
-      closePane(pane)
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttyWindowMode)) { _ in
-      guard let tab = store.activeSession?.activeTab else { return }
-      tab.isWindowModeActive.toggle()
-      if tab.isWindowModeActive {
-        installWindowModeMonitor()
-      } else {
-        removeWindowModeMonitor()
-      }
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttyCopyMode)) { _ in
-      guard let tab = store.activeSession?.activeTab else { return }
-      if tab.isCopyModeActive {
-        exitCopyMode()
-      } else {
-        enterCopyMode()
-      }
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
-      guard let session = store.activeSession,
-        let tab = session.activeTab
-      else { return }
-      session.closeTab(tab)
-      if session.tabs.isEmpty {
-        store.closeSession(session)
-      }
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .ghosttySetTitle)) { notification in
-      guard let paneID = notification.userInfo?["paneID"] as? Int,
-        let title = notification.userInfo?["title"] as? String
-      else { return }
-      // Find the tab containing this pane and update its title
-      for session in store.sessions {
-        for tab in session.tabs {
-          if tab.panes.contains(where: { $0.id == paneID }) {
-            tab.title = title
-            return
-          }
-        }
-      }
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .ghosttyRingBell)) { notification in
-      guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
-      for session in store.sessions {
-        for tab in session.tabs {
-          if tab.panes.contains(where: { $0.id == paneID }),
-            !(store.activeSession?.id == session.id && session.activeTab?.id == tab.id)
-          {
-            tab.hasBell = true
-          }
-        }
-      }
-    }
-    .onChange(of: store.activeSession?.activeTab?.id) { _, _ in
-      store.activeSession?.activeTab?.hasBell = false
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .ghosttyCloseSurface)) { notification in
-      guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
-      // Find and close the pane whose shell exited
-      for session in store.sessions {
-        for tab in session.tabs {
-          if let pane = tab.panes.first(where: { $0.id == paneID }) {
-            closePaneInTab(pane, tab: tab, session: session)
-            return
-          }
-        }
+        .frame(
+          width: geometry.size.width * popup.definition.width,
+          height: geometry.size.height * popup.definition.height
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
   }
@@ -203,6 +196,14 @@ struct ContentView: View {
     closePaneInTab(pane, tab: tab, session: session)
   }
 
+  private func returnFocusToActivePane() {
+    if let pane = store.activeSession?.activeTab?.activePane {
+      DispatchQueue.main.async {
+        pane.surfaceView.window?.makeFirstResponder(pane.surfaceView)
+      }
+    }
+  }
+
   private func closePaneInTab(_ pane: MisttyPane, tab: MisttyTab, session: MisttySession) {
     tab.closePane(pane)
     if tab.panes.isEmpty {
@@ -212,6 +213,123 @@ struct ContentView: View {
       }
     }
   }
+
+  // MARK: - Notification Handlers
+
+  private func handlePopupToggle(_ notification: Notification) {
+    guard let session = store.activeSession,
+          let name = notification.userInfo?["name"] as? String
+    else { return }
+    let config = MisttyConfig.load()
+    guard let definition = config.popups.first(where: { $0.name == name }) else { return }
+    session.togglePopup(definition: definition)
+    if let popup = session.activePopup, popup.isVisible {
+      DispatchQueue.main.async {
+        popup.pane.surfaceView.window?.makeFirstResponder(popup.pane.surfaceView)
+      }
+    }
+  }
+
+  private func handleClosePane() {
+    if let session = store.activeSession,
+       let popup = session.activePopup,
+       popup.isVisible
+    {
+      session.closePopup(popup)
+      returnFocusToActivePane()
+      return
+    }
+    guard let tab = store.activeSession?.activeTab,
+      let pane = tab.activePane
+    else { return }
+    closePane(pane)
+  }
+
+  private func handleWindowMode() {
+    guard let tab = store.activeSession?.activeTab else { return }
+    tab.isWindowModeActive.toggle()
+    if tab.isWindowModeActive {
+      installWindowModeMonitor()
+    } else {
+      removeWindowModeMonitor()
+    }
+  }
+
+  private func handleCopyMode() {
+    guard let tab = store.activeSession?.activeTab else { return }
+    if tab.isCopyModeActive {
+      exitCopyMode()
+    } else {
+      enterCopyMode()
+    }
+  }
+
+  private func handleCloseTab() {
+    guard let session = store.activeSession,
+      let tab = session.activeTab
+    else { return }
+    session.closeTab(tab)
+    if session.tabs.isEmpty {
+      store.closeSession(session)
+    }
+  }
+
+  private func handleSetTitle(_ notification: Notification) {
+    guard let paneID = notification.userInfo?["paneID"] as? Int,
+      let title = notification.userInfo?["title"] as? String
+    else { return }
+    for session in store.sessions {
+      for tab in session.tabs {
+        if tab.panes.contains(where: { $0.id == paneID }) {
+          tab.title = title
+          return
+        }
+      }
+    }
+  }
+
+  private func handleRingBell(_ notification: Notification) {
+    guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
+    for session in store.sessions {
+      for tab in session.tabs {
+        if tab.panes.contains(where: { $0.id == paneID }),
+          !(store.activeSession?.id == session.id && session.activeTab?.id == tab.id)
+        {
+          tab.hasBell = true
+        }
+      }
+    }
+  }
+
+  private func handleCloseSurface(_ notification: Notification) {
+    guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
+    // Check if this is a popup pane
+    for session in store.sessions {
+      if let popup = session.popups.first(where: { $0.pane.id == paneID }) {
+        if popup.definition.closeOnExit {
+          session.closePopup(popup)
+        } else {
+          popup.isVisible = false
+          if session.activePopup?.id == popup.id {
+            session.activePopup = nil
+          }
+        }
+        returnFocusToActivePane()
+        return
+      }
+    }
+    // Find and close the pane whose shell exited
+    for session in store.sessions {
+      for tab in session.tabs {
+        if let pane = tab.panes.first(where: { $0.id == paneID }) {
+          closePaneInTab(pane, tab: tab, session: session)
+          return
+        }
+      }
+    }
+  }
+
+  // MARK: - Key Monitors
 
   private func installKeyMonitor(vm: SessionManagerViewModel) {
     eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in

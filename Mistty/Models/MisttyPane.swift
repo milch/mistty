@@ -7,6 +7,9 @@ final class MisttyPane: Identifiable {
   let id: Int
   var directory: URL?
   var command: String?
+  /// When true, use ghostty's command field (which forces wait-after-command).
+  /// When false, send the command as initial input so the shell exits naturally.
+  var useCommandField: Bool = true
 
   init(id: Int) {
     self.id = id
@@ -17,7 +20,12 @@ final class MisttyPane: Identifiable {
   /// for the lifetime of the pane, surviving SwiftUI view rebuilds.
   @ObservationIgnored
   lazy var surfaceView: TerminalSurfaceView = {
-    let view = TerminalSurfaceView(frame: .zero, workingDirectory: directory, command: command)
+    let view = TerminalSurfaceView(
+      frame: .zero,
+      workingDirectory: directory,
+      command: useCommandField ? command : nil,
+      initialInput: useCommandField ? nil : command
+    )
     view.pane = self
     return view
   }()
