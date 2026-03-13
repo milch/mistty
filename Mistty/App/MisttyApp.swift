@@ -53,6 +53,13 @@ struct MisttyApp: App {
                     NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Rename Tab") {
+                    NotificationCenter.default.post(name: .misttyRenameTab, object: nil)
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
             }
         }
     }
@@ -65,4 +72,5 @@ extension Notification.Name {
     static let misttySessionManager = Notification.Name("misttySessionManager")
     static let misttyClosePane = Notification.Name("misttyClosePane")
     static let misttyCloseTab = Notification.Name("misttyCloseTab")
+    static let misttyRenameTab = Notification.Name("misttyRenameTab")
 }

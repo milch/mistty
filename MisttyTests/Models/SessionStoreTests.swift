@@ -68,4 +68,12 @@ final class SessionStoreTests: XCTestCase {
         tab.hasBell = true
         XCTAssertTrue(tab.hasBell)
     }
+
+    func test_tabCustomTitle() {
+        let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+        let tab = session.tabs[0]
+        XCTAssertEqual(tab.displayTitle, "Shell")
+        tab.customTitle = "My Tab"
+        XCTAssertEqual(tab.displayTitle, "My Tab")
+    }
 }

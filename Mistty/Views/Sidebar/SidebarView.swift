@@ -57,7 +57,7 @@ struct SessionRowView: View {
                             .fill(Color.orange)
                             .frame(width: 6, height: 6)
                     }
-                    Text(tab.title)
+                    Text(tab.displayTitle)
                         .font(.system(size: 12))
                     Spacer()
                 }

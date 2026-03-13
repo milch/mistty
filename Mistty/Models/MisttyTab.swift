@@ -5,6 +5,11 @@ import Foundation
 final class MisttyTab: Identifiable {
     let id = UUID()
     var title: String = "Shell"
+    var customTitle: String?
+
+    var displayTitle: String {
+        customTitle ?? title
+    }
     let directory: URL?
     private(set) var panes: [MisttyPane] = []
     var activePane: MisttyPane?

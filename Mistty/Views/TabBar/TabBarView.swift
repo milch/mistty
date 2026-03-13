@@ -36,6 +36,9 @@ struct TabBarItem: View {
     let isActive: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
+    @State private var isEditing = false
+    @State private var editText = ""
+    @FocusState private var editFocused: Bool
 
     var body: some View {
         HStack(spacing: 4) {
@@ -44,9 +47,26 @@ struct TabBarItem: View {
                     .fill(Color.orange)
                     .frame(width: 6, height: 6)
             }
-            Text(tab.title)
+
+            if isEditing {
+                TextField("Tab name", text: $editText, onCommit: {
+                    tab.customTitle = editText.isEmpty ? nil : editText
+                    isEditing = false
+                })
+                .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .lineLimit(1)
+                .focused($editFocused)
+                .frame(maxWidth: 120)
+                .onAppear { editFocused = true }
+            } else {
+                Text(tab.displayTitle)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) {
+                        editText = tab.displayTitle
+                        isEditing = true
+                    }
+            }
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
@@ -60,5 +80,11 @@ struct TabBarItem: View {
         .background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
         .cornerRadius(6)
         .onTapGesture { onSelect() }
+        .onReceive(NotificationCenter.default.publisher(for: .misttyRenameTab)) { _ in
+            if isActive {
+                editText = tab.displayTitle
+                isEditing = true
+            }
+        }
     }
 }
