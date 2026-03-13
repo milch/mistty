@@ -308,11 +308,46 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
             } else {
                 targetPane = self.store.pane(byId: paneId)?.pane
             }
-            guard targetPane != nil else {
+            guard let pane = targetPane else {
                 reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
                 return
             }
-            reply(nil, MisttyXPC.error(.operationFailed, "Not yet implemented: requires ghostty surface integration"))
+            guard let surface = pane.surfaceView.surface else {
+                reply(nil, MisttyXPC.error(.operationFailed, "Pane has no active surface"))
+                return
+            }
+
+            let size = ghostty_surface_size(surface)
+            let rows = Int(size.rows)
+            let cols = Int(size.columns)
+
+            // Read the entire visible viewport as a single selection
+            var sel = ghostty_selection_s()
+            sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
+            sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
+            sel.top_left.x = 0
+            sel.top_left.y = 0
+            sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
+            sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
+            sel.bottom_right.x = UInt32(cols - 1)
+            sel.bottom_right.y = UInt32(rows - 1)
+            sel.rectangle = false
+
+            var text = ghostty_text_s()
+            guard ghostty_surface_read_text(surface, sel, &text) else {
+                reply(nil, MisttyXPC.error(.operationFailed, "Failed to read text from surface"))
+                return
+            }
+            defer { ghostty_surface_free_text(surface, &text) }
+
+            let content: String
+            if let ptr = text.text {
+                content = String(cString: ptr)
+            } else {
+                content = ""
+            }
+
+            reply(self.encode(["text": content]), nil)
         }
     }
 

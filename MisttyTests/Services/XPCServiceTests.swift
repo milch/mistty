@@ -308,6 +308,46 @@ final class XPCServiceTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2)
     }
 
+    // MARK: - GetText Tests
+
+    func testGetTextResolvesPane() async throws {
+        let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+        let paneId = session.activeTab!.activePane!.id
+
+        let expectation = XCTestExpectation(description: "get text")
+        service.getText(paneId: paneId) { data, error in
+            if let error = error as? NSError {
+                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+            }
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
+    func testGetTextPaneNotFound() async throws {
+        let expectation = XCTestExpectation(description: "get text not found")
+        service.getText(paneId: 999) { data, error in
+            XCTAssertNotNil(error)
+            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
+    func testGetTextActivePane() async throws {
+        let _ = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+
+        let expectation = XCTestExpectation(description: "get text active")
+        service.getText(paneId: 0) { data, error in
+            // Resolves active pane, surface nil → operationFailed
+            if let error = error as? NSError {
+                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+            }
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
     func testFocusPane() async throws {
         let session = store.createSession(name: "proj", directory: URL(fileURLWithPath: "/tmp"))
         let tab = session.tabs[0]
