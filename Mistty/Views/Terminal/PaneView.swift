@@ -39,9 +39,18 @@ struct PaneView: View {
       .overlay {
         if let state = copyModeState {
           GeometryReader { geo in
-            let cellW = geo.size.width / CGFloat(state.cols)
-            let cellH = geo.size.height / CGFloat(state.rows)
-            CopyModeOverlay(state: state, cellWidth: cellW, cellHeight: cellH)
+            let metrics = pane.surfaceView.gridMetrics()
+            let cellW = metrics?.cellWidth ?? geo.size.width / CGFloat(state.cols)
+            let cellH = metrics?.cellHeight ?? geo.size.height / CGFloat(state.rows)
+            let offX = metrics?.offsetX ?? 0
+            let offY = metrics?.offsetY ?? 0
+            CopyModeOverlay(
+              state: state,
+              cellWidth: cellW,
+              cellHeight: cellH,
+              gridOffsetX: offX,
+              gridOffsetY: offY
+            )
           }
         }
       }

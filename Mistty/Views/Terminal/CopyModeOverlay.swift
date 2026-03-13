@@ -4,6 +4,8 @@ struct CopyModeOverlay: View {
   let state: CopyModeState
   let cellWidth: CGFloat
   let cellHeight: CGFloat
+  var gridOffsetX: CGFloat = 0
+  var gridOffsetY: CGFloat = 0
 
   var body: some View {
     ZStack(alignment: .topLeading) {
@@ -15,6 +17,7 @@ struct CopyModeOverlay: View {
           cellWidth: cellWidth,
           cellHeight: cellHeight
         )
+        .offset(x: gridOffsetX, y: gridOffsetY)
       }
 
       // Cursor
@@ -22,8 +25,8 @@ struct CopyModeOverlay: View {
         .fill(Color.yellow.opacity(0.7))
         .frame(width: cellWidth, height: cellHeight)
         .offset(
-          x: CGFloat(state.cursorCol) * cellWidth,
-          y: CGFloat(state.cursorRow) * cellHeight
+          x: gridOffsetX + CGFloat(state.cursorCol) * cellWidth,
+          y: gridOffsetY + CGFloat(state.cursorRow) * cellHeight
         )
 
       // Mode indicator

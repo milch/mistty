@@ -71,6 +71,30 @@ final class TerminalSurfaceView: NSView {
     return true
   }
 
+  // MARK: - Grid Metrics
+
+  struct GridMetrics {
+    var cellWidth: CGFloat
+    var cellHeight: CGFloat
+    var offsetX: CGFloat
+    var offsetY: CGFloat
+  }
+
+  /// Returns cell dimensions in points and the grid's top-left offset within the view.
+  func gridMetrics() -> GridMetrics? {
+    guard let surface else { return nil }
+    let size = ghostty_surface_size(surface)
+    guard size.cell_width_px > 0, size.cell_height_px > 0 else { return nil }
+    let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+    let cellW = CGFloat(size.cell_width_px) / scale
+    let cellH = CGFloat(size.cell_height_px) / scale
+    let gridW = cellW * CGFloat(size.columns)
+    let gridH = cellH * CGFloat(size.rows)
+    let offsetX = (frame.width - gridW) / 2
+    let offsetY = (frame.height - gridH) / 2
+    return GridMetrics(cellWidth: cellW, cellHeight: cellH, offsetX: max(0, offsetX), offsetY: max(0, offsetY))
+  }
+
   // MARK: - Layout
 
   override func setFrameSize(_ newSize: NSSize) {
