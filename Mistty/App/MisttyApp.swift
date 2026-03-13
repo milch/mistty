@@ -154,16 +154,22 @@ struct MisttyApp: App {
     }
   }
 
-  private func parseShortcutKey(_ shortcut: String?) -> KeyEquivalent? {
+  /// Normalize shortcut string: lowercase, accept both "+" and "-" as separators.
+  private func shortcutParts(_ shortcut: String?) -> [Substring]? {
     guard let shortcut else { return nil }
-    let parts = shortcut.lowercased().split(separator: "+")
-    guard let last = parts.last, last.count == 1, let char = last.first else { return nil }
+    let normalized = shortcut.lowercased().replacing("-", with: "+")
+    let parts = normalized.split(separator: "+")
+    return parts.isEmpty ? nil : parts
+  }
+
+  private func parseShortcutKey(_ shortcut: String?) -> KeyEquivalent? {
+    guard let parts = shortcutParts(shortcut),
+          let last = parts.last, last.count == 1, let char = last.first else { return nil }
     return KeyEquivalent(char)
   }
 
   private func parseShortcutModifiers(_ shortcut: String?) -> EventModifiers? {
-    guard let shortcut else { return nil }
-    let parts = shortcut.lowercased().split(separator: "+")
+    guard let parts = shortcutParts(shortcut) else { return nil }
     var modifiers: EventModifiers = []
     for part in parts.dropLast() {
       switch part {
