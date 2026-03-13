@@ -46,6 +46,24 @@ struct CopyModeState {
     }
   }
 
+  mutating func startSearch() {
+    isSearching = true
+    searchQuery = ""
+  }
+
+  mutating func cancelSearch() {
+    isSearching = false
+    searchQuery = ""
+  }
+
+  mutating func appendSearchChar(_ char: Character) {
+    searchQuery.append(char)
+  }
+
+  mutating func deleteSearchChar() {
+    _ = searchQuery.popLast()
+  }
+
   var selectionRange: (start: (row: Int, col: Int), end: (row: Int, col: Int))? {
     guard isSelecting, let start = selectionStart else { return nil }
     return (start, (cursorRow, cursorCol))

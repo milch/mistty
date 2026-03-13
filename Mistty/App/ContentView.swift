@@ -376,13 +376,39 @@ struct ContentView: View {
     copyModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       guard var state = store.activeSession?.activeTab?.copyModeState else { return event }
 
-      switch event.keyCode {
-      case 53:  // Escape
+      // Escape always exits (search or copy mode)
+      if event.keyCode == 53 {
+        if state.isSearching {
+          state.cancelSearch()
+          store.activeSession?.activeTab?.copyModeState = state
+          return nil
+        }
         exitCopyMode()
         return nil
-      default: break
       }
 
+      // Search mode: keys go to query
+      if state.isSearching {
+        if event.keyCode == 36 {  // Return — confirm search
+          state.isSearching = false
+          store.activeSession?.activeTab?.copyModeState = state
+          return nil
+        }
+        if event.keyCode == 51 {  // Backspace
+          state.deleteSearchChar()
+          store.activeSession?.activeTab?.copyModeState = state
+          return nil
+        }
+        if let chars = event.characters {
+          for char in chars {
+            state.appendSearchChar(char)
+          }
+        }
+        store.activeSession?.activeTab?.copyModeState = state
+        return nil
+      }
+
+      // Normal copy mode keys
       guard let chars = event.characters else { return event }
       switch chars {
       case "h": state.moveLeft()
@@ -393,9 +419,10 @@ struct ContentView: View {
       case "$": state.moveToLineEnd()
       case "G": state.moveToBottom()
       case "g": state.moveToTop()
+      case "v": state.toggleSelection()
       case "w": state.moveWordForward()
       case "b": state.moveWordBackward()
-      case "v": state.toggleSelection()
+      case "/": state.startSearch()
       case "y":
         yankSelection()
         exitCopyMode()

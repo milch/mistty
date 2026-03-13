@@ -30,12 +30,21 @@ struct CopyModeOverlay: View {
       VStack {
         Spacer()
         HStack {
-          Text(state.isSelecting ? "-- VISUAL --" : "-- COPY --")
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(Color.orange.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+          if state.isSearching {
+            Text("/\(state.searchQuery)█")
+              .font(.system(size: 11, weight: .bold, design: .monospaced))
+              .foregroundStyle(.white)
+              .padding(.horizontal, 8)
+              .padding(.vertical, 2)
+              .background(Color.blue.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+          } else {
+            Text(state.isSelecting ? "-- VISUAL --" : "-- COPY --")
+              .font(.system(size: 11, weight: .bold, design: .monospaced))
+              .foregroundStyle(.white)
+              .padding(.horizontal, 8)
+              .padding(.vertical, 2)
+              .background(Color.orange.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+          }
           Spacer()
         }
         .padding(4)
