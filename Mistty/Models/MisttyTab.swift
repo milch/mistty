@@ -27,6 +27,13 @@ final class MisttyTab: Identifiable {
         activePane = pane
     }
 
+    init(existingPane pane: MisttyPane) {
+        self.directory = pane.directory
+        layout = PaneLayout(pane: pane)
+        panes = [pane]
+        activePane = pane
+    }
+
     func splitActivePane(direction: SplitDirection) {
         guard let activePane else { return }
         layout.split(pane: activePane, direction: direction, directory: directory)

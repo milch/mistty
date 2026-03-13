@@ -251,10 +251,23 @@ struct ContentView: View {
             case 6: // z — zoom toggle
                 toggleZoom()
                 return nil
+            case 11: // b — break pane to new tab
+                breakPaneToTab()
+                return nil
             default:
                 return event
             }
         }
+    }
+
+    private func breakPaneToTab() {
+        guard let session = store.activeSession,
+              let tab = session.activeTab,
+              let pane = tab.activePane,
+              tab.panes.count > 1 else { return }  // Don't break if it's the only pane
+        tab.closePane(pane)
+        if tab.panes.isEmpty { session.closeTab(tab) }
+        session.addTabWithPane(pane)
     }
 
     private func toggleZoom() {

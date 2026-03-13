@@ -21,6 +21,12 @@ final class MisttySession: Identifiable {
         activeTab = tab
     }
 
+    func addTabWithPane(_ pane: MisttyPane) {
+        let tab = MisttyTab(existingPane: pane)
+        tabs.append(tab)
+        activeTab = tab
+    }
+
     func closeTab(_ tab: MisttyTab) {
         tabs.removeAll { $0.id == tab.id }
         if activeTab?.id == tab.id { activeTab = tabs.last }
