@@ -4,6 +4,7 @@ struct PaneView: View {
   let pane: MisttyPane
   let isActive: Bool
   var isWindowModeActive: Bool = false
+  var isZoomed: Bool = false
   var copyModeState: CopyModeState?
   var onClose: (() -> Void)?
   var onSelect: (() -> Void)?
@@ -27,12 +28,31 @@ struct PaneView: View {
       }
       .overlay {
         if isActive && isWindowModeActive {
-          RoundedRectangle(cornerRadius: 2)
-            .stroke(Color.orange, lineWidth: 2)
-            .allowsHitTesting(false)
+          ZStack {
+            RoundedRectangle(cornerRadius: 2)
+              .stroke(Color.orange, lineWidth: 2)
+            VStack {
+              Spacer()
+              WindowModeHints()
+                .padding(6)
+            }
+          }
+          .allowsHitTesting(false)
         } else if isActive {
           RoundedRectangle(cornerRadius: 2)
             .stroke(Color.accentColor, lineWidth: 1)
+            .allowsHitTesting(false)
+        }
+      }
+      .overlay(alignment: .topLeading) {
+        if isZoomed {
+          Text("⊕ ZOOMED")
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(Color.orange.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+            .padding(6)
             .allowsHitTesting(false)
         }
       }

@@ -139,26 +139,21 @@ struct PaneLayout {
       return node
     case .split(let dir, let a, let b, let ratio):
       let aContains = collectLeaves(a).contains { $0.id == target }
-      if aContains {
-        if case .leaf(let p) = a, p.id == target {
-          if direction == nil || direction == dir {
-            return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
-          }
-          return node
-        }
-        return .split(dir, adjustRatio(a, target: target, delta: delta, along: direction), b, ratio)
-      }
       let bContains = collectLeaves(b).contains { $0.id == target }
-      if bContains {
-        if case .leaf(let p) = b, p.id == target {
-          if direction == nil || direction == dir {
-            return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
-          }
-          return node
-        }
+      guard aContains || bContains else { return node }
+
+      // If this split matches the requested direction, adjust its ratio.
+      // Positive delta moves the divider right/down (increases ratio = more space for side A).
+      if direction == nil || direction == dir {
+        return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
+      }
+
+      // Direction doesn't match this split — recurse into the subtree containing the target
+      if aContains {
+        return .split(dir, adjustRatio(a, target: target, delta: delta, along: direction), b, ratio)
+      } else {
         return .split(dir, a, adjustRatio(b, target: target, delta: delta, along: direction), ratio)
       }
-      return node
     }
   }
 
@@ -228,6 +223,26 @@ struct PaneLayout {
       }
     }
     return nil
+  }
+
+  // MARK: - Swap Panes
+
+  @discardableResult
+  mutating func swapPane(_ pane: MisttyPane, direction: NavigationDirection) -> MisttyPane? {
+    guard let target = adjacentPane(from: pane, direction: direction) else { return nil }
+    root = Self.swapLeaves(root, pane1: pane, pane2: target)
+    return target
+  }
+
+  private static func swapLeaves(_ node: PaneLayoutNode, pane1: MisttyPane, pane2: MisttyPane) -> PaneLayoutNode {
+    switch node {
+    case .leaf(let p):
+      if p.id == pane1.id { return .leaf(pane2) }
+      if p.id == pane2.id { return .leaf(pane1) }
+      return node
+    case .split(let dir, let a, let b, let ratio):
+      return .split(dir, swapLeaves(a, pane1: pane1, pane2: pane2), swapLeaves(b, pane1: pane1, pane2: pane2), ratio)
+    }
   }
 
   private static func firstLeaf(_ node: PaneLayoutNode) -> MisttyPane? {

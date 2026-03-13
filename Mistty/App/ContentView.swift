@@ -36,6 +36,7 @@ struct ContentView: View {
                 pane: zoomedPane,
                 isActive: true,
                 isWindowModeActive: tab.isWindowModeActive,
+                isZoomed: true,
                 copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
                 onClose: { closePane(zoomedPane) },
                 onSelect: {}
@@ -269,16 +270,16 @@ struct ContentView: View {
         removeWindowModeMonitor()
         return nil
       case 123:  // Left arrow
-        navigatePane(.left)
+        swapActivePane(.left)
         return nil
       case 124:  // Right arrow
-        navigatePane(.right)
+        swapActivePane(.right)
         return nil
       case 126:  // Up arrow
-        navigatePane(.up)
+        swapActivePane(.up)
         return nil
       case 125:  // Down arrow
-        navigatePane(.down)
+        swapActivePane(.down)
         return nil
       case 6:  // z — zoom toggle
         toggleZoom()
@@ -315,13 +316,11 @@ struct ContentView: View {
     }
   }
 
-  private func navigatePane(_ direction: NavigationDirection) {
+  private func swapActivePane(_ direction: NavigationDirection) {
     guard let tab = store.activeSession?.activeTab,
-      let current = tab.activePane,
-      let target = tab.layout.adjacentPane(from: current, direction: direction)
+      let current = tab.activePane
     else { return }
-    tab.activePane = target
-    target.surfaceView.window?.makeFirstResponder(target.surfaceView)
+    tab.layout.swapPane(current, direction: direction)
   }
 
   private func rotateActivePane() {
