@@ -8,3 +8,4 @@ DerivedData/
 result
 result-*
 .direnv/
+.worktrees/
