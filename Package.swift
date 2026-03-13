@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/LebJe/TOMLKit", from: "0.6.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
     ],
     targets: [
         .target(name: "MisttyShared", path: "MisttyShared"),
@@ -32,6 +33,14 @@ let package = Package(
         .binaryTarget(
             name: "GhosttyKit",
             path: "vendor/ghostty/macos/GhosttyKit.xcframework"
+        ),
+        .executableTarget(
+            name: "MisttyCLI",
+            dependencies: [
+                "MisttyShared",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "MisttyCLI"
         ),
         .testTarget(
             name: "MisttyTests",
