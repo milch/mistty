@@ -129,12 +129,52 @@ struct MisttyApp: App {
           NotificationCenter.default.post(name: .misttyRenameTab, object: nil)
         }
         .keyboardShortcut("r", modifiers: [.command, .shift])
+
+        Divider()
+
+        ForEach(Array(MisttyConfig.load().popups.enumerated()), id: \.offset) { _, popup in
+          if let key = parseShortcutKey(popup.shortcut),
+             let modifiers = parseShortcutModifiers(popup.shortcut)
+          {
+            Button("Toggle \(popup.name)") {
+              NotificationCenter.default.post(
+                name: .misttyPopupToggle,
+                object: nil,
+                userInfo: ["name": popup.name]
+              )
+            }
+            .keyboardShortcut(key, modifiers: modifiers)
+          }
+        }
       }
     }
 
     Settings {
       SettingsView()
     }
+  }
+
+  private func parseShortcutKey(_ shortcut: String?) -> KeyEquivalent? {
+    guard let shortcut else { return nil }
+    let parts = shortcut.lowercased().split(separator: "+")
+    guard let last = parts.last, last.count == 1, let char = last.first else { return nil }
+    return KeyEquivalent(char)
+  }
+
+  private func parseShortcutModifiers(_ shortcut: String?) -> EventModifiers? {
+    guard let shortcut else { return nil }
+    let parts = shortcut.lowercased().split(separator: "+")
+    var modifiers: EventModifiers = []
+    for part in parts.dropLast() {
+      switch part {
+      case "cmd", "command": modifiers.insert(.command)
+      case "shift": modifiers.insert(.shift)
+      case "opt", "option", "alt": modifiers.insert(.option)
+      case "ctrl", "control": modifiers.insert(.control)
+      default: break
+      }
+    }
+    return modifiers.isEmpty ? nil : modifiers
   }
 }
 
@@ -148,4 +188,5 @@ extension Notification.Name {
   static let misttyRenameTab = Notification.Name("misttyRenameTab")
   static let misttyWindowMode = Notification.Name("misttyWindowMode")
   static let misttyCopyMode = Notification.Name("misttyCopyMode")
+  static let misttyPopupToggle = Notification.Name("misttyPopupToggle")
 }
