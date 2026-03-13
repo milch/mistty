@@ -62,6 +62,10 @@ struct MisttyApp: App {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
             }
         }
+
+        Settings {
+            SettingsView()
+        }
     }
 }
 
