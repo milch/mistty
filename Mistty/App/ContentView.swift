@@ -254,6 +254,9 @@ struct ContentView: View {
             case 11: // b — break pane to new tab
                 breakPaneToTab()
                 return nil
+            case 15: // r — rotate split direction
+                rotateActivePane()
+                return nil
             default:
                 return event
             }
@@ -285,6 +288,12 @@ struct ContentView: View {
               let target = tab.layout.adjacentPane(from: current, direction: direction) else { return }
         tab.activePane = target
         target.surfaceView.window?.makeFirstResponder(target.surfaceView)
+    }
+
+    private func rotateActivePane() {
+        guard let tab = store.activeSession?.activeTab,
+              let pane = tab.activePane else { return }
+        tab.layout.rotateDirection(containing: pane)
     }
 
     private func resizeActivePane(delta: CGFloat) {

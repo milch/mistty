@@ -100,6 +100,18 @@ final class PaneLayoutTests: XCTestCase {
         }
     }
 
+    func test_rotateSplit() {
+        let pane1 = MisttyPane()
+        var layout = PaneLayout(pane: pane1)
+        layout.split(pane: pane1, direction: .horizontal)
+        layout.rotateDirection(containing: pane1)
+        if case .split(let dir, _, _, _) = layout.root {
+            XCTAssertEqual(dir, .vertical)
+        } else {
+            XCTFail("Expected split")
+        }
+    }
+
     func test_tabIntegration_splitUpdatesLayout() {
         let tab = MisttyTab()
         XCTAssertEqual(tab.layout.leaves.count, 1)

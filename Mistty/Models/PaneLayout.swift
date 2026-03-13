@@ -92,6 +92,34 @@ struct PaneLayout {
         }
     }
 
+    // MARK: - Rotate
+
+    mutating func rotateDirection(containing pane: MisttyPane) {
+        root = Self.rotate(root, target: pane.id)
+    }
+
+    private static func rotate(_ node: PaneLayoutNode, target: UUID) -> PaneLayoutNode {
+        switch node {
+        case .leaf:
+            return node
+        case .split(let dir, let a, let b, let ratio):
+            // Check if target is a direct leaf child of this split
+            let isDirectChild: Bool
+            switch (a, b) {
+            case (.leaf(let p), _) where p.id == target: isDirectChild = true
+            case (_, .leaf(let p)) where p.id == target: isDirectChild = true
+            default: isDirectChild = false
+            }
+
+            if isDirectChild {
+                return .split(dir.toggled, a, b, ratio)
+            }
+
+            // Recurse
+            return .split(dir, rotate(a, target: target), rotate(b, target: target), ratio)
+        }
+    }
+
     // MARK: - Resize
 
     mutating func resizeSplit(containing pane: MisttyPane, delta: CGFloat) {
