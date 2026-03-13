@@ -8,6 +8,7 @@ final class MisttyTab: Identifiable {
     let directory: URL?
     private(set) var panes: [MisttyPane] = []
     var activePane: MisttyPane?
+    var hasBell = false
     var layout: PaneLayout
 
     init(directory: URL? = nil) {

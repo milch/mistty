@@ -47,6 +47,21 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
          GHOSTTY_ACTION_MOUSE_VISIBILITY:
         return true
 
+    case GHOSTTY_ACTION_RING_BELL:
+        if target.tag == GHOSTTY_TARGET_SURFACE {
+            let surface = target.target.surface
+            DispatchQueue.main.async {
+                guard let userdata = ghostty_surface_userdata(surface) else { return }
+                let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+                NotificationCenter.default.post(
+                    name: .ghosttyRingBell,
+                    object: nil,
+                    userInfo: ["paneID": view.pane?.id as Any]
+                )
+            }
+        }
+        return true
+
     default:
         return false
     }
@@ -96,6 +111,7 @@ private let closeSurfaceCallback: ghostty_runtime_close_surface_cb = { userdata,
 extension Notification.Name {
     static let ghosttySetTitle = Notification.Name("ghosttySetTitle")
     static let ghosttyCloseSurface = Notification.Name("ghosttyCloseSurface")
+    static let ghosttyRingBell = Notification.Name("ghosttyRingBell")
 }
 
 // MARK: - GhosttyAppManager

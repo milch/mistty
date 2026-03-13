@@ -104,6 +104,20 @@ struct ContentView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .ghosttyRingBell)) { notification in
+            guard let paneID = notification.userInfo?["paneID"] as? UUID else { return }
+            for session in store.sessions {
+                for tab in session.tabs {
+                    if tab.panes.contains(where: { $0.id == paneID }),
+                       !(store.activeSession?.id == session.id && session.activeTab?.id == tab.id) {
+                        tab.hasBell = true
+                    }
+                }
+            }
+        }
+        .onChange(of: store.activeSession?.activeTab?.id) { _, _ in
+            store.activeSession?.activeTab?.hasBell = false
+        }
         .onReceive(NotificationCenter.default.publisher(for: .ghosttyCloseSurface)) { notification in
             guard let paneID = notification.userInfo?["paneID"] as? UUID else { return }
             // Find and close the pane whose shell exited

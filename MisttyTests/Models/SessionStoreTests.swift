@@ -60,4 +60,12 @@ final class SessionStoreTests: XCTestCase {
         tab.splitActivePane(direction: .vertical)
         XCTAssertEqual(tab.panes.count, 2)
     }
+
+    func test_tabBellFlag() {
+        let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+        let tab = session.tabs[0]
+        XCTAssertFalse(tab.hasBell)
+        tab.hasBell = true
+        XCTAssertTrue(tab.hasBell)
+    }
 }
