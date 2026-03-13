@@ -140,7 +140,7 @@ struct ContentView: View {
       }
     }
     .onReceive(NotificationCenter.default.publisher(for: .ghosttySetTitle)) { notification in
-      guard let paneID = notification.userInfo?["paneID"] as? UUID,
+      guard let paneID = notification.userInfo?["paneID"] as? Int,
         let title = notification.userInfo?["title"] as? String
       else { return }
       // Find the tab containing this pane and update its title
@@ -154,7 +154,7 @@ struct ContentView: View {
       }
     }
     .onReceive(NotificationCenter.default.publisher(for: .ghosttyRingBell)) { notification in
-      guard let paneID = notification.userInfo?["paneID"] as? UUID else { return }
+      guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
       for session in store.sessions {
         for tab in session.tabs {
           if tab.panes.contains(where: { $0.id == paneID }),
@@ -169,7 +169,7 @@ struct ContentView: View {
       store.activeSession?.activeTab?.hasBell = false
     }
     .onReceive(NotificationCenter.default.publisher(for: .ghosttyCloseSurface)) { notification in
-      guard let paneID = notification.userInfo?["paneID"] as? UUID else { return }
+      guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
       // Find and close the pane whose shell exited
       for session in store.sessions {
         for tab in session.tabs {

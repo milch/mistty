@@ -4,31 +4,45 @@ import XCTest
 
 @MainActor
 final class PaneLayoutTests: XCTestCase {
+  private var nextPaneId = 1
+
+  private func makePane() -> MisttyPane {
+    let pane = MisttyPane(id: nextPaneId)
+    nextPaneId += 1
+    return pane
+  }
+
+  override func setUp() async throws {
+    await MainActor.run {
+      nextPaneId = 1
+    }
+  }
+
   func test_singlePaneHasOneLeaf() {
-    let pane = MisttyPane()
+    let pane = makePane()
     let layout = PaneLayout(pane: pane)
     XCTAssertEqual(layout.leaves.count, 1)
     XCTAssertEqual(layout.leaves[0].id, pane.id)
   }
 
   func test_splitAddsSecondLeaf() {
-    let pane = MisttyPane()
+    let pane = makePane()
     var layout = PaneLayout(pane: pane)
-    layout.split(pane: pane, direction: .horizontal)
+    layout.split(pane: pane, direction: .horizontal, newPane: makePane())
     XCTAssertEqual(layout.leaves.count, 2)
   }
 
   func test_splitPreservesOriginalPane() {
-    let pane = MisttyPane()
+    let pane = makePane()
     var layout = PaneLayout(pane: pane)
-    layout.split(pane: pane, direction: .horizontal)
+    layout.split(pane: pane, direction: .horizontal, newPane: makePane())
     XCTAssertTrue(layout.leaves.contains(where: { $0.id == pane.id }))
   }
 
   func test_splitDirectionIsRecorded() {
-    let pane = MisttyPane()
+    let pane = makePane()
     var layout = PaneLayout(pane: pane)
-    layout.split(pane: pane, direction: .vertical)
+    layout.split(pane: pane, direction: .vertical, newPane: makePane())
     if case .split(let dir, _, _, _) = layout.root {
       XCTAssertEqual(dir, .vertical)
     } else {
@@ -37,18 +51,18 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_nestedSplit() {
-    let pane = MisttyPane()
+    let pane = makePane()
     var layout = PaneLayout(pane: pane)
-    layout.split(pane: pane, direction: .horizontal)
+    layout.split(pane: pane, direction: .horizontal, newPane: makePane())
     let secondPane = layout.leaves.first(where: { $0.id != pane.id })!
-    layout.split(pane: secondPane, direction: .vertical)
+    layout.split(pane: secondPane, direction: .vertical, newPane: makePane())
     XCTAssertEqual(layout.leaves.count, 3)
   }
 
   func test_adjacentPaneHorizontal() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
-    layout.split(pane: pane1, direction: .horizontal)
+    layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
     let panes = layout.leaves
 
     // Right of first pane should be second pane
@@ -65,9 +79,9 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_adjacentPaneVertical() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
-    layout.split(pane: pane1, direction: .vertical)
+    layout.split(pane: pane1, direction: .vertical, newPane: makePane())
     let panes = layout.leaves
 
     let down = layout.adjacentPane(from: panes[0], direction: .down)
@@ -78,9 +92,9 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_splitRatio() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
-    layout.split(pane: pane1, direction: .horizontal)
+    layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
     if case .split(_, _, _, let ratio) = layout.root {
       XCTAssertEqual(ratio, 0.5, accuracy: 0.001)
     } else {
@@ -89,9 +103,9 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_resizeSplit() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
-    layout.split(pane: pane1, direction: .horizontal)
+    layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
     let panes = layout.leaves
     layout.resizeSplit(containing: panes[0], delta: 0.1)
     if case .split(_, _, _, let ratio) = layout.root {
@@ -102,9 +116,9 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_rotateSplit() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
-    layout.split(pane: pane1, direction: .horizontal)
+    layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
     layout.rotateDirection(containing: pane1)
     if case .split(let dir, _, _, _) = layout.root {
       XCTAssertEqual(dir, .vertical)
@@ -114,9 +128,9 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_resizeSplitDirectionAware() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
-    layout.split(pane: pane1, direction: .vertical)
+    layout.split(pane: pane1, direction: .vertical, newPane: makePane())
     let panes = layout.leaves
 
     // Get initial ratio
@@ -137,9 +151,9 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_removePaneFromTwoPaneSplit() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
-    layout.split(pane: pane1, direction: .horizontal)
+    layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
     let panes = layout.leaves
     XCTAssertEqual(panes.count, 2)
 
@@ -150,7 +164,7 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_removeLastPane() {
-    let pane1 = MisttyPane()
+    let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.remove(pane: pane1)
     XCTAssertTrue(layout.isEmpty)
@@ -158,8 +172,8 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_removeNonExistentPane() {
-    let pane1 = MisttyPane()
-    let pane2 = MisttyPane()
+    let pane1 = makePane()
+    let pane2 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.remove(pane: pane2)
     XCTAssertEqual(layout.leaves.count, 1)
@@ -167,7 +181,9 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   func test_tabIntegration_splitUpdatesLayout() {
-    let tab = MisttyTab()
+    let store = SessionStore()
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let tab = session.tabs[0]
     XCTAssertEqual(tab.layout.leaves.count, 1)
     tab.splitActivePane(direction: .horizontal)
     XCTAssertEqual(tab.layout.leaves.count, 2)

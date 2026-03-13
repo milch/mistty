@@ -3,7 +3,7 @@ import Foundation
 @Observable
 @MainActor
 final class MisttyTab: Identifiable {
-  let id = UUID()
+  let id: Int
   var title: String = "Shell"
   var customTitle: String?
 
@@ -20,17 +20,25 @@ final class MisttyTab: Identifiable {
   var zoomedPane: MisttyPane?
   var layout: PaneLayout
 
-  init(directory: URL? = nil) {
+  /// Closure that generates the next unique pane ID.
+  @ObservationIgnored
+  var paneIDGenerator: () -> Int
+
+  init(id: Int, directory: URL? = nil, paneIDGenerator: @escaping () -> Int) {
+    self.id = id
     self.directory = directory
-    let pane = MisttyPane()
+    self.paneIDGenerator = paneIDGenerator
+    let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = directory
     layout = PaneLayout(pane: pane)
     panes = [pane]
     activePane = pane
   }
 
-  init(existingPane pane: MisttyPane) {
+  init(id: Int, existingPane pane: MisttyPane, paneIDGenerator: @escaping () -> Int) {
+    self.id = id
     self.directory = pane.directory
+    self.paneIDGenerator = paneIDGenerator
     layout = PaneLayout(pane: pane)
     panes = [pane]
     activePane = pane
@@ -38,7 +46,9 @@ final class MisttyTab: Identifiable {
 
   func splitActivePane(direction: SplitDirection) {
     guard let activePane else { return }
-    layout.split(pane: activePane, direction: direction, directory: directory)
+    let newPane = MisttyPane(id: paneIDGenerator())
+    newPane.directory = directory
+    layout.split(pane: activePane, direction: direction, newPane: newPane)
     panes = layout.leaves
     self.activePane = layout.leaves.last
   }

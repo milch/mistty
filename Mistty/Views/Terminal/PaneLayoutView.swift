@@ -5,7 +5,7 @@ struct PaneLayoutView: View {
   let activePane: MisttyPane?
   var isWindowModeActive: Bool = false
   var copyModeState: CopyModeState?
-  var copyModePaneID: UUID?
+  var copyModePaneID: Int?
   var onClosePane: ((MisttyPane) -> Void)?
   var onSelectPane: ((MisttyPane) -> Void)?
 

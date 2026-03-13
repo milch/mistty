@@ -47,7 +47,7 @@ struct PaneLayout {
 
   private(set) var isEmpty = false
 
-  private static func removeNode(_ node: PaneLayoutNode, target: UUID) -> PaneLayoutNode? {
+  private static func removeNode(_ node: PaneLayoutNode, target: Int) -> PaneLayoutNode? {
     switch node {
     case .leaf(let p) where p.id == target:
       return nil  // Remove this leaf
@@ -65,15 +65,13 @@ struct PaneLayout {
     }
   }
 
-  mutating func split(pane: MisttyPane, direction: SplitDirection, directory: URL? = nil) {
-    let newPane = MisttyPane()
-    newPane.directory = directory
+  mutating func split(pane: MisttyPane, direction: SplitDirection, newPane: MisttyPane) {
     root = Self.insertSplit(root, target: pane.id, direction: direction, newPane: newPane)
   }
 
   private static func insertSplit(
     _ node: PaneLayoutNode,
-    target: UUID,
+    target: Int,
     direction: SplitDirection,
     newPane: MisttyPane
   ) -> PaneLayoutNode {
@@ -98,7 +96,7 @@ struct PaneLayout {
     root = Self.rotate(root, target: pane.id)
   }
 
-  private static func rotate(_ node: PaneLayoutNode, target: UUID) -> PaneLayoutNode {
+  private static func rotate(_ node: PaneLayoutNode, target: Int) -> PaneLayoutNode {
     switch node {
     case .leaf:
       return node
@@ -130,7 +128,7 @@ struct PaneLayout {
 
   private static func adjustRatio(
     _ node: PaneLayoutNode,
-    target: UUID,
+    target: Int,
     delta: CGFloat,
     along direction: SplitDirection?
   ) -> PaneLayoutNode {
@@ -166,7 +164,7 @@ struct PaneLayout {
 
   private enum PathStep { case left, right }
 
-  private static func findPath(_ node: PaneLayoutNode, target: UUID) -> [PathStep]? {
+  private static func findPath(_ node: PaneLayoutNode, target: Int) -> [PathStep]? {
     switch node {
     case .leaf(let p):
       return p.id == target ? [] : nil

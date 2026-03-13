@@ -4,8 +4,12 @@ import Foundation
 @Observable
 @MainActor
 final class MisttyPane: Identifiable {
-  let id = UUID()
+  let id: Int
   var directory: URL?
+
+  init(id: Int) {
+    self.id = id
+  }
 
   /// The persistent terminal surface view for this pane.
   /// Created lazily on first access so the ghostty surface lives

@@ -3,26 +3,35 @@ import Foundation
 @Observable
 @MainActor
 final class MisttySession: Identifiable {
-  let id = UUID()
+  let id: Int
   var name: String
   let directory: URL
   private(set) var tabs: [MisttyTab] = []
   var activeTab: MisttyTab?
 
-  init(name: String, directory: URL) {
+  /// Closures that generate the next unique tab and pane IDs.
+  @ObservationIgnored
+  var tabIDGenerator: () -> Int
+  @ObservationIgnored
+  var paneIDGenerator: () -> Int
+
+  init(id: Int, name: String, directory: URL, tabIDGenerator: @escaping () -> Int, paneIDGenerator: @escaping () -> Int) {
+    self.id = id
     self.name = name
     self.directory = directory
+    self.tabIDGenerator = tabIDGenerator
+    self.paneIDGenerator = paneIDGenerator
     addTab()
   }
 
   func addTab() {
-    let tab = MisttyTab(directory: directory)
+    let tab = MisttyTab(id: tabIDGenerator(), directory: directory, paneIDGenerator: paneIDGenerator)
     tabs.append(tab)
     activeTab = tab
   }
 
   func addTabWithPane(_ pane: MisttyPane) {
-    let tab = MisttyTab(existingPane: pane)
+    let tab = MisttyTab(id: tabIDGenerator(), existingPane: pane, paneIDGenerator: paneIDGenerator)
     tabs.append(tab)
     activeTab = tab
   }
