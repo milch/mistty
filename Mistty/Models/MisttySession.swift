@@ -11,9 +11,9 @@ final class MisttySession: Identifiable {
 
   /// Closures that generate the next unique tab and pane IDs.
   @ObservationIgnored
-  var tabIDGenerator: () -> Int
+  private(set) var tabIDGenerator: () -> Int
   @ObservationIgnored
-  var paneIDGenerator: () -> Int
+  private(set) var paneIDGenerator: () -> Int
 
   init(id: Int, name: String, directory: URL, tabIDGenerator: @escaping () -> Int, paneIDGenerator: @escaping () -> Int) {
     self.id = id

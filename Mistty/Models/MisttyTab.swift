@@ -22,7 +22,7 @@ final class MisttyTab: Identifiable {
 
   /// Closure that generates the next unique pane ID.
   @ObservationIgnored
-  var paneIDGenerator: () -> Int
+  private(set) var paneIDGenerator: () -> Int
 
   init(id: Int, directory: URL? = nil, paneIDGenerator: @escaping () -> Int) {
     self.id = id

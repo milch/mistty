@@ -95,4 +95,15 @@ final class SessionStoreTests: XCTestCase {
     tab.zoomedPane = tab.panes[0]
     XCTAssertNotNil(tab.zoomedPane)
   }
+
+  func test_idsAreSequential() {
+    let s1 = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
+    let s2 = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))
+    XCTAssertEqual(s1.id, 1)
+    XCTAssertEqual(s2.id, 2)
+    XCTAssertEqual(s1.tabs[0].id, 1)
+    XCTAssertEqual(s2.tabs[0].id, 2)
+    XCTAssertEqual(s1.tabs[0].panes[0].id, 1)
+    XCTAssertEqual(s2.tabs[0].panes[0].id, 2)
+  }
 }

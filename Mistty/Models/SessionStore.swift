@@ -10,19 +10,19 @@ final class SessionStore {
   private var nextTabId = 1
   private var nextPaneId = 1
 
-  func generateSessionID() -> Int {
+  private func generateSessionID() -> Int {
     let id = nextSessionId
     nextSessionId += 1
     return id
   }
 
-  func generateTabID() -> Int {
+  private func generateTabID() -> Int {
     let id = nextTabId
     nextTabId += 1
     return id
   }
 
-  func generatePaneID() -> Int {
+  private func generatePaneID() -> Int {
     let id = nextPaneId
     nextPaneId += 1
     return id
@@ -34,8 +34,20 @@ final class SessionStore {
       id: generateSessionID(),
       name: name,
       directory: directory,
-      tabIDGenerator: { [weak self] in self?.generateTabID() ?? 0 },
-      paneIDGenerator: { [weak self] in self?.generatePaneID() ?? 0 }
+      tabIDGenerator: { [weak self] in
+        guard let self else {
+          assertionFailure("SessionStore was deallocated while sessions still exist")
+          return 0
+        }
+        return self.generateTabID()
+      },
+      paneIDGenerator: { [weak self] in
+        guard let self else {
+          assertionFailure("SessionStore was deallocated while sessions still exist")
+          return 0
+        }
+        return self.generatePaneID()
+      }
     )
     sessions.append(session)
     activeSession = session
