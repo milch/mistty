@@ -8,10 +8,12 @@ let package = Package(
         .package(url: "https://github.com/LebJe/TOMLKit", from: "0.6.0"),
     ],
     targets: [
+        .target(name: "MisttyShared", path: "MisttyShared"),
         .executableTarget(
             name: "Mistty",
             dependencies: [
                 "GhosttyKit",
+                "MisttyShared",
                 .product(name: "TOMLKit", package: "TOMLKit"),
             ],
             path: "Mistty",
