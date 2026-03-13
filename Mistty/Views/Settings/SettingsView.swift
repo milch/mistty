@@ -75,7 +75,7 @@ struct SettingsView: View {
       }
     }
     .formStyle(.grouped)
-    .frame(width: 400)
+    .frame(width: 550, height: 500)
     .padding()
     .onChange(of: config.fontSize) { _, _ in saveConfig() }
     .onChange(of: config.fontFamily) { _, _ in saveConfig() }
