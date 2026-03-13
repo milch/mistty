@@ -63,6 +63,14 @@ struct ContentView: View {
         }
       }
     }
+    .onDisappear {
+      removeKeyMonitor()
+      removeWindowModeMonitor()
+      removeCopyModeMonitor()
+      store.activeSession?.activeTab?.isWindowModeActive = false
+      store.activeSession?.activeTab?.copyModeState = nil
+      showingSessionManager = false
+    }
     .overlay {
       if showingSessionManager, let vm = sessionManagerVM {
         Color.black.opacity(0.3)
@@ -231,6 +239,9 @@ struct ContentView: View {
   }
 
   private func installWindowModeMonitor() {
+    if store.activeSession?.activeTab?.isCopyModeActive == true {
+      exitCopyMode()
+    }
     windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       // Cmd+Arrow to resize
       if event.modifierFlags.contains(.command) {
@@ -337,6 +348,10 @@ struct ContentView: View {
 
   private func enterCopyMode() {
     guard let tab = store.activeSession?.activeTab else { return }
+    if tab.isWindowModeActive {
+      tab.isWindowModeActive = false
+      removeWindowModeMonitor()
+    }
     // TODO: get actual terminal dimensions from ghostty
     tab.copyModeState = CopyModeState(rows: 24, cols: 80)
     installCopyModeMonitor()
