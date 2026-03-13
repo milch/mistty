@@ -58,4 +58,37 @@ final class SessionStore {
     sessions.removeAll { $0.id == session.id }
     if activeSession?.id == session.id { activeSession = sessions.last }
   }
+
+  // MARK: - Lookup helpers
+
+  func session(byId id: Int) -> MisttySession? {
+    sessions.first { $0.id == id }
+  }
+
+  func tab(byId id: Int) -> (session: MisttySession, tab: MisttyTab)? {
+    for session in sessions {
+      if let tab = session.tabs.first(where: { $0.id == id }) {
+        return (session, tab)
+      }
+    }
+    return nil
+  }
+
+  func pane(byId id: Int) -> (session: MisttySession, tab: MisttyTab, pane: MisttyPane)? {
+    for session in sessions {
+      for tab in session.tabs {
+        if let pane = tab.panes.first(where: { $0.id == id }) {
+          return (session, tab, pane)
+        }
+      }
+    }
+    return nil
+  }
+
+  func activePaneInfo() -> (session: MisttySession, tab: MisttyTab, pane: MisttyPane)? {
+    guard let session = activeSession,
+          let tab = session.activeTab,
+          let pane = tab.activePane else { return nil }
+    return (session, tab, pane)
+  }
 }

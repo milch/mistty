@@ -35,7 +35,7 @@ let package = Package(
         ),
         .testTarget(
             name: "MisttyTests",
-            dependencies: ["Mistty"],
+            dependencies: ["Mistty", "MisttyShared"],
             path: "MisttyTests"
         )
     ]

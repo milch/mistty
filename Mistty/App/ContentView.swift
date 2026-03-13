@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyKit
+import MisttyShared
 import SwiftUI
 
 struct ContentView: View {
@@ -11,6 +12,7 @@ struct ContentView: View {
   @State private var eventMonitor: Any?
   @State private var windowModeMonitor: Any?
   @State private var copyModeMonitor: Any?
+  @State private var xpcListener: MisttyXPCListener?
 
   var body: some View {
     HStack(spacing: 0) {
@@ -63,6 +65,14 @@ struct ContentView: View {
           }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+      }
+    }
+    .onAppear {
+      if xpcListener == nil {
+        let service = MisttyXPCService(store: store)
+        let listener = MisttyXPCListener(service: service)
+        listener.start()
+        xpcListener = listener
       }
     }
     .onDisappear {
