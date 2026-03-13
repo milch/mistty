@@ -14,6 +14,8 @@ final class MisttyTab: Identifiable {
     private(set) var panes: [MisttyPane] = []
     var activePane: MisttyPane?
     var hasBell = false
+    var isWindowModeActive = false
+    var zoomedPane: MisttyPane?
     var layout: PaneLayout
 
     init(directory: URL? = nil) {

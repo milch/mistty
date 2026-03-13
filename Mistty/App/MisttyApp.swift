@@ -54,6 +54,11 @@ struct MisttyApp: App {
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
 
+                Button("Window Mode") {
+                    NotificationCenter.default.post(name: .misttyWindowMode, object: nil)
+                }
+                .keyboardShortcut("x", modifiers: .command)
+
                 Divider()
 
                 Button("Rename Tab") {
@@ -77,4 +82,5 @@ extension Notification.Name {
     static let misttyClosePane = Notification.Name("misttyClosePane")
     static let misttyCloseTab = Notification.Name("misttyCloseTab")
     static let misttyRenameTab = Notification.Name("misttyRenameTab")
+    static let misttyWindowMode = Notification.Name("misttyWindowMode")
 }

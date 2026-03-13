@@ -76,4 +76,20 @@ final class SessionStoreTests: XCTestCase {
         tab.customTitle = "My Tab"
         XCTAssertEqual(tab.displayTitle, "My Tab")
     }
+
+    func test_windowModeToggle() {
+        let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+        let tab = session.tabs[0]
+        XCTAssertFalse(tab.isWindowModeActive)
+        tab.isWindowModeActive = true
+        XCTAssertTrue(tab.isWindowModeActive)
+    }
+
+    func test_zoomedPaneToggle() {
+        let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+        let tab = session.tabs[0]
+        XCTAssertNil(tab.zoomedPane)
+        tab.zoomedPane = tab.panes[0]
+        XCTAssertNotNil(tab.zoomedPane)
+    }
 }

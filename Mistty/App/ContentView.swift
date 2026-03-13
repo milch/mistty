@@ -8,6 +8,7 @@ struct ContentView: View {
     @State var showingSessionManager = false
     @State private var sessionManagerVM: SessionManagerViewModel?
     @State private var eventMonitor: Any?
+    @State private var windowModeMonitor: Any?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -82,6 +83,15 @@ struct ContentView: View {
             guard let tab = store.activeSession?.activeTab,
                   let pane = tab.activePane else { return }
             closePane(pane)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .misttyWindowMode)) { _ in
+            guard let tab = store.activeSession?.activeTab else { return }
+            tab.isWindowModeActive.toggle()
+            if tab.isWindowModeActive {
+                installWindowModeMonitor()
+            } else {
+                removeWindowModeMonitor()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
             guard let session = store.activeSession,
@@ -186,6 +196,26 @@ struct ContentView: View {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
+        }
+    }
+
+    private func installWindowModeMonitor() {
+        windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            switch event.keyCode {
+            case 53: // Escape — exit window mode
+                store.activeSession?.activeTab?.isWindowModeActive = false
+                removeWindowModeMonitor()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeWindowModeMonitor() {
+        if let monitor = windowModeMonitor {
+            NSEvent.removeMonitor(monitor)
+            windowModeMonitor = nil
         }
     }
 }
