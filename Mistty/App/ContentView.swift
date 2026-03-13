@@ -26,13 +26,23 @@ struct ContentView: View {
                     VStack(spacing: 0) {
                         TabBarView(session: session)
                         Divider()
-                        PaneLayoutView(
-                            node: tab.layout.root,
-                            activePane: tab.activePane,
-                            isWindowModeActive: tab.isWindowModeActive,
-                            onClosePane: { pane in closePane(pane) },
-                            onSelectPane: { pane in tab.activePane = pane }
-                        )
+                        if let zoomedPane = tab.zoomedPane {
+                            PaneView(
+                                pane: zoomedPane,
+                                isActive: true,
+                                isWindowModeActive: tab.isWindowModeActive,
+                                onClose: { closePane(zoomedPane) },
+                                onSelect: {}
+                            )
+                        } else {
+                            PaneLayoutView(
+                                node: tab.layout.root,
+                                activePane: tab.activePane,
+                                isWindowModeActive: tab.isWindowModeActive,
+                                onClosePane: { pane in closePane(pane) },
+                                onSelectPane: { pane in tab.activePane = pane }
+                            )
+                        }
                     }
                 } else {
                     VStack(spacing: 12) {
@@ -238,9 +248,21 @@ struct ContentView: View {
             case 125: // Down arrow
                 navigatePane(.down)
                 return nil
+            case 6: // z — zoom toggle
+                toggleZoom()
+                return nil
             default:
                 return event
             }
+        }
+    }
+
+    private func toggleZoom() {
+        guard let tab = store.activeSession?.activeTab else { return }
+        if tab.zoomedPane != nil {
+            tab.zoomedPane = nil
+        } else {
+            tab.zoomedPane = tab.activePane
         }
     }
 
