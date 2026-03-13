@@ -1,3 +1,4 @@
+import Foundation
 import GhosttyKit
 import SwiftUI
 
@@ -7,6 +8,54 @@ struct MisttyApp: App {
 
   init() {
     _ = GhosttyAppManager.shared
+    installXPCServiceIfNeeded()
+  }
+
+  /// Installs the launchd plist for the CLI XPC Mach service if it doesn't already exist.
+  private func installXPCServiceIfNeeded() {
+    let label = "com.mistty.cli-service"
+    let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/LaunchAgents")
+    let plistURL = launchAgentsDir.appendingPathComponent("\(label).plist")
+
+    guard !FileManager.default.fileExists(atPath: plistURL.path) else { return }
+
+    // Resolve the current app's executable path
+    let executablePath = Bundle.main.executablePath ?? ProcessInfo.processInfo.arguments.first ?? "/usr/local/bin/mistty-cli"
+
+    let plistContent = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+          <key>Label</key>
+          <string>\(label)</string>
+          <key>MachServices</key>
+          <dict>
+              <key>\(label)</key>
+              <true/>
+          </dict>
+          <key>ProgramArguments</key>
+          <array>
+              <string>\(executablePath)</string>
+          </array>
+          <key>RunAtLoad</key>
+          <false/>
+      </dict>
+      </plist>
+      """
+
+    do {
+      try FileManager.default.createDirectory(at: launchAgentsDir, withIntermediateDirectories: true)
+      try plistContent.write(to: plistURL, atomically: true, encoding: .utf8)
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+      process.arguments = ["load", plistURL.path]
+      try process.run()
+      process.waitUntilExit()
+    } catch {
+      print("Warning: failed to install XPC service plist: \(error)")
+    }
   }
 
   var body: some Scene {

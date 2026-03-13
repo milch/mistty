@@ -11,6 +11,22 @@ build:
 build-release: build-libghostty
     swift build -c release
 
+# Build the CLI tool
+build-cli:
+    swift build --target MisttyCLI
+
+# Build CLI in release mode
+build-cli-release:
+    swift build --target MisttyCLI -c release
+
+# Install CLI to /usr/local/bin
+install-cli: build-cli-release
+    cp .build/release/MisttyCLI /usr/local/bin/mistty-cli
+
+# Uninstall CLI
+uninstall-cli:
+    rm -f /usr/local/bin/mistty-cli
+
 # Package as .app bundle (debug)
 bundle: build
     #!/usr/bin/env bash
@@ -19,6 +35,8 @@ bundle: build
     rm -rf "$APP"
     mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     cp .build/debug/Mistty "$APP/Contents/MacOS/Mistty"
+    swift build --target MisttyCLI
+    cp .build/debug/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
@@ -31,6 +49,8 @@ bundle-release: build-release
     rm -rf "$APP"
     mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     cp .build/release/Mistty "$APP/Contents/MacOS/Mistty"
+    swift build --target MisttyCLI -c release
+    cp .build/release/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
