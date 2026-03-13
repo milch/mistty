@@ -88,10 +88,10 @@ struct ContentView: View {
     .onReceive(NotificationCenter.default.publisher(for: .misttyNewTab)) { _ in
       store.activeSession?.addTab()
     }
-    .onReceive(NotificationCenter.default.publisher(for: .mistrySplitHorizontal)) { _ in
+    .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
       store.activeSession?.activeTab?.splitActivePane(direction: .horizontal)
     }
-    .onReceive(NotificationCenter.default.publisher(for: .mistrySplitVertical)) { _ in
+    .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
       store.activeSession?.activeTab?.splitActivePane(direction: .vertical)
     }
     .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
