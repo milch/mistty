@@ -61,6 +61,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     func createSession(name: String, directory: String?, exec: String?, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
+            // TODO: exec parameter — launch specified command in the first pane
             let dir = URL(fileURLWithPath: directory ?? FileManager.default.homeDirectoryForCurrentUser.path)
             let session = self.store.createSession(name: name, directory: dir)
             reply(self.encode(self.sessionResponse(session)), nil)
@@ -103,6 +104,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     func createTab(sessionId: Int, name: String?, exec: String?, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in
+            // TODO: exec parameter — launch specified command in the first pane
             guard let session = self.store.session(byId: sessionId) else {
                 reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
                 return
@@ -239,10 +241,20 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(id) not found"))
                 return
             }
-            let splitDir: SplitDirection = direction == "horizontal" ? .horizontal : .vertical
             let delta = CGFloat(amount) / 100.0
-            tab.layout.resizeSplit(containing: pane, delta: delta, along: splitDir)
-            reply(self.encode(self.paneResponse(pane)), nil)
+            let splitDir: SplitDirection?
+            let sign: CGFloat
+            switch direction {
+            case "left":  splitDir = .horizontal; sign = -1.0
+            case "right": splitDir = .horizontal; sign = 1.0
+            case "up":    splitDir = .vertical;   sign = -1.0
+            case "down":  splitDir = .vertical;   sign = 1.0
+            default:
+                reply(nil, MisttyXPC.error(.invalidArgument, "Invalid direction: \(direction). Use left, right, up, or down"))
+                return
+            }
+            tab.layout.resizeSplit(containing: pane, delta: delta * sign, along: splitDir)
+            reply(Data("{}".utf8), nil)
         }
     }
 
@@ -270,10 +282,8 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
                 return
             }
-            // TODO: ghostty integration — call ghostty_surface_text(pane.surfaceView.surface, ptr, len)
-            // For now, return success as the ghostty surface isn't available in tests.
             _ = pane
-            reply(self.encode([String: String]()), nil)
+            reply(nil, MisttyXPC.error(.operationFailed, "Not yet implemented: requires ghostty surface integration"))
         }
     }
 
@@ -290,9 +300,8 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
                 return
             }
-            // TODO: ghostty integration — call ghostty_surface_text with command + "\n"
             _ = pane
-            reply(self.encode([String: String]()), nil)
+            reply(nil, MisttyXPC.error(.operationFailed, "Not yet implemented: requires ghostty surface integration"))
         }
     }
 
@@ -309,8 +318,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
                 return
             }
-            // TODO: ghostty API needed to extract terminal text
-            reply(self.encode(["text": ""]), nil)
+            reply(nil, MisttyXPC.error(.operationFailed, "Not yet implemented: requires ghostty surface integration"))
         }
     }
 

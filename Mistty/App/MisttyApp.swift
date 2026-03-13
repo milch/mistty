@@ -4,6 +4,8 @@ import SwiftUI
 
 @main
 struct MisttyApp: App {
+  @State private var store = SessionStore()
+  @State private var xpcListener: MisttyXPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
 
   init() {
@@ -60,7 +62,15 @@ struct MisttyApp: App {
 
   var body: some Scene {
     WindowGroup {
-      ContentView()
+      ContentView(store: store)
+        .onAppear {
+          if xpcListener == nil {
+            let service = MisttyXPCService(store: store)
+            let listener = MisttyXPCListener(service: service)
+            listener.start()
+            xpcListener = listener
+          }
+        }
     }
     .commands {
       CommandGroup(after: .toolbar) {
