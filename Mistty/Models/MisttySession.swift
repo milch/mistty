@@ -62,11 +62,14 @@ final class MisttySession: Identifiable {
       return
     }
 
-    // Create new popup
+    // Create new popup — use current pane's directory if available
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
-    pane.directory = directory
+    pane.directory = activeTab?.activePane?.directory ?? directory
     pane.command = definition.command
+    if definition.closeOnExit {
+      pane.waitAfterCommand = false
+    }
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup
@@ -81,11 +84,14 @@ final class MisttySession: Identifiable {
       }
       return
     }
-    // Create new popup
+    // Create new popup — use current pane's directory if available
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
-    pane.directory = directory
+    pane.directory = activeTab?.activePane?.directory ?? directory
     pane.command = definition.command
+    if definition.closeOnExit {
+      pane.waitAfterCommand = false
+    }
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup

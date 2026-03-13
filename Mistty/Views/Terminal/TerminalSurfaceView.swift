@@ -14,7 +14,11 @@ final class TerminalSurfaceView: NSView {
   /// Stores the command string to keep it alive for the C pointer.
   private var commandString: String?
 
-  init(frame: NSRect, workingDirectory: URL? = nil, command: String? = nil) {
+  /// Whether ghostty should wait for a keypress after the command exits.
+  private var waitAfterCommand: Bool
+
+  init(frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, waitAfterCommand: Bool = true) {
+    self.waitAfterCommand = waitAfterCommand
     super.init(frame: frame)
     wantsLayer = true
 
@@ -41,6 +45,10 @@ final class TerminalSurfaceView: NSView {
 
     // Store command string
     self.commandString = command
+
+    // Override ghostty's default of wait_after_command=true when a command is set.
+    // Popups with closeOnExit need the surface to close immediately.
+    cfg.wait_after_command = waitAfterCommand
 
     // Both C pointers from withCString are only valid inside the closure,
     // so we nest them to ensure they're alive when ghostty_surface_new is called.

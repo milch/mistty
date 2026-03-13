@@ -7,6 +7,7 @@ final class MisttyPane: Identifiable {
   let id: Int
   var directory: URL?
   var command: String?
+  var waitAfterCommand: Bool = true
 
   init(id: Int) {
     self.id = id
@@ -17,7 +18,7 @@ final class MisttyPane: Identifiable {
   /// for the lifetime of the pane, surviving SwiftUI view rebuilds.
   @ObservationIgnored
   lazy var surfaceView: TerminalSurfaceView = {
-    let view = TerminalSurfaceView(frame: .zero, workingDirectory: directory, command: command)
+    let view = TerminalSurfaceView(frame: .zero, workingDirectory: directory, command: command, waitAfterCommand: waitAfterCommand)
     view.pane = self
     return view
   }()
