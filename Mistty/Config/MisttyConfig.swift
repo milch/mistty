@@ -87,6 +87,13 @@ struct MisttyConfig: Sendable, Equatable {
     return (try? parse(contents)) ?? .default
   }
 
+  /// Escape a string for safe TOML serialization.
+  private func tomlEscape(_ value: String) -> String {
+    value
+      .replacingOccurrences(of: "\\", with: "\\\\")
+      .replacingOccurrences(of: "\"", with: "\\\"")
+  }
+
   func save() throws {
     let configURL = FileManager.default
       .homeDirectoryForCurrentUser
@@ -118,17 +125,17 @@ struct MisttyConfig: Sendable, Equatable {
     if ssh.defaultCommand != "ssh" || !ssh.hosts.isEmpty {
       lines.append("")
       lines.append("[ssh]")
-      lines.append("default_command = \"\(ssh.defaultCommand)\"")
+      lines.append("default_command = \"\(tomlEscape(ssh.defaultCommand))\"")
       for host in ssh.hosts {
         lines.append("")
         lines.append("[[ssh.host]]")
         if let hostname = host.hostname {
-          lines.append("hostname = \"\(hostname)\"")
+          lines.append("hostname = \"\(tomlEscape(hostname))\"")
         }
         if let regex = host.regex {
-          lines.append("regex = \"\(regex)\"")
+          lines.append("regex = \"\(tomlEscape(regex))\"")
         }
-        lines.append("command = \"\(host.command)\"")
+        lines.append("command = \"\(tomlEscape(host.command))\"")
       }
     }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)

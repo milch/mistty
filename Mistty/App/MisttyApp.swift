@@ -153,13 +153,13 @@ struct MisttyApp: App {
         }
         .keyboardShortcut("[", modifiers: .command)
 
-        Button("Next Session") {
-          NotificationCenter.default.post(name: .misttyNextSession, object: nil)
+        Button("Previous Session") {
+          NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
         }
         .keyboardShortcut(.upArrow, modifiers: [.command, .shift])
 
-        Button("Previous Session") {
-          NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
+        Button("Next Session") {
+          NotificationCenter.default.post(name: .misttyNextSession, object: nil)
         }
         .keyboardShortcut(.downArrow, modifiers: [.command, .shift])
 
