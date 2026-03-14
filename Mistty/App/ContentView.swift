@@ -14,6 +14,29 @@ struct ContentView: View {
   @State private var copyModeMonitor: Any?
 
   var body: some View {
+    contentWithNotifications
+      .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) { notification in
+        guard let session = store.activeSession,
+              let index = notification.userInfo?["index"] as? Int,
+              index < session.tabs.count
+        else { return }
+        session.activeTab = session.tabs[index]
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyNextTab)) { _ in
+        store.activeSession?.nextTab()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyPrevTab)) { _ in
+        store.activeSession?.prevTab()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyNextSession)) { _ in
+        store.nextSession()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyPrevSession)) { _ in
+        store.prevSession()
+      }
+  }
+
+  private var contentWithNotifications: some View {
     contentWithOverlays
       .onReceive(NotificationCenter.default.publisher(for: .misttyPopupToggle)) { notification in
         handlePopupToggle(notification)

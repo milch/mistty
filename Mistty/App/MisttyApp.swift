@@ -132,6 +132,39 @@ struct MisttyApp: App {
 
         Divider()
 
+        ForEach(1...9, id: \.self) { index in
+          Button("Focus Tab \(index)") {
+            NotificationCenter.default.post(
+              name: .misttyFocusTabByIndex,
+              object: nil,
+              userInfo: ["index": index - 1]
+            )
+          }
+          .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
+        }
+
+        Button("Next Tab") {
+          NotificationCenter.default.post(name: .misttyNextTab, object: nil)
+        }
+        .keyboardShortcut("]", modifiers: .command)
+
+        Button("Previous Tab") {
+          NotificationCenter.default.post(name: .misttyPrevTab, object: nil)
+        }
+        .keyboardShortcut("[", modifiers: .command)
+
+        Button("Next Session") {
+          NotificationCenter.default.post(name: .misttyNextSession, object: nil)
+        }
+        .keyboardShortcut(.upArrow, modifiers: [.command, .shift])
+
+        Button("Previous Session") {
+          NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
+        }
+        .keyboardShortcut(.downArrow, modifiers: [.command, .shift])
+
+        Divider()
+
         ForEach(Array(MisttyConfig.load().popups.enumerated()), id: \.offset) { _, popup in
           if let key = parseShortcutKey(popup.shortcut),
              let modifiers = parseShortcutModifiers(popup.shortcut)
@@ -195,4 +228,9 @@ extension Notification.Name {
   static let misttyWindowMode = Notification.Name("misttyWindowMode")
   static let misttyCopyMode = Notification.Name("misttyCopyMode")
   static let misttyPopupToggle = Notification.Name("misttyPopupToggle")
+  static let misttyFocusTabByIndex = Notification.Name("misttyFocusTabByIndex")
+  static let misttyNextTab = Notification.Name("misttyNextTab")
+  static let misttyPrevTab = Notification.Name("misttyPrevTab")
+  static let misttyNextSession = Notification.Name("misttyNextSession")
+  static let misttyPrevSession = Notification.Name("misttyPrevSession")
 }

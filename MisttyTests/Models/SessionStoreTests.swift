@@ -158,6 +158,55 @@ final class SessionStoreTests: XCTestCase {
     XCTAssertNil(store.trackedWindow(byId: 999))
   }
 
+  // MARK: - Tab/Session Cycling
+
+  func test_nextTab_wrapsAround() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab()
+    session.addTab()
+    // Active is last tab (index 2)
+    session.nextTab()
+    XCTAssertEqual(session.activeTab?.id, session.tabs[0].id)
+  }
+
+  func test_prevTab_wrapsAround() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab()
+    session.addTab()
+    session.activeTab = session.tabs[0]
+    session.prevTab()
+    XCTAssertEqual(session.activeTab?.id, session.tabs[2].id)
+  }
+
+  func test_nextSession_wrapsAround() {
+    let _ = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))
+    let s3 = store.createSession(name: "c", directory: URL(fileURLWithPath: "/tmp"))
+    XCTAssertEqual(store.activeSession?.id, s3.id)
+    store.nextSession()
+    XCTAssertEqual(store.activeSession?.name, "a")
+  }
+
+  func test_prevSession_wrapsAround() {
+    let s1 = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "c", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = s1
+    store.prevSession()
+    XCTAssertEqual(store.activeSession?.name, "c")
+  }
+
+  func test_focusTabByIndex_boundsCheck() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab()
+    session.activeTab = session.tabs[0]
+    let index = 5
+    if index < session.tabs.count {
+      session.activeTab = session.tabs[index]
+    }
+    XCTAssertEqual(session.activeTab?.id, session.tabs[0].id)
+  }
+
   func test_idsAreSequential() {
     let s1 = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
     let s2 = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))

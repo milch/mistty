@@ -142,6 +142,22 @@ final class SessionStore {
     return nil
   }
 
+  func nextSession() {
+    guard let current = activeSession,
+          let index = sessions.firstIndex(where: { $0.id == current.id }),
+          sessions.count > 1
+    else { return }
+    activeSession = sessions[(index + 1) % sessions.count]
+  }
+
+  func prevSession() {
+    guard let current = activeSession,
+          let index = sessions.firstIndex(where: { $0.id == current.id }),
+          sessions.count > 1
+    else { return }
+    activeSession = sessions[(index - 1 + sessions.count) % sessions.count]
+  }
+
   func activePaneInfo() -> (session: MisttySession, tab: MisttyTab, pane: MisttyPane)? {
     guard let session = activeSession,
           let tab = session.activeTab,
