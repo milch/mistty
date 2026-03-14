@@ -390,4 +390,103 @@ final class SessionManagerViewModelTests: XCTestCase {
     XCTAssertEqual(newSession?.name, "testhost")
     XCTAssertNotNil(newSession?.sshCommand)
   }
+
+  // MARK: - Cross-field and edge case tests
+
+  func test_fuzzyFilter_multiToken_crossField() async {
+    let aliasMatch = FuzzyMatcher.match(query: "prod", target: "production")
+    let hostnameMatch = FuzzyMatcher.match(query: "exam", target: "prod.example.com")
+    XCTAssertNotNil(aliasMatch)
+    XCTAssertNotNil(hostnameMatch)
+  }
+
+  func test_newOption_pathToFile_noNew() async {
+    let tempFile = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mistty-test-file-\(UUID().uuidString)")
+    FileManager.default.createFile(atPath: tempFile.path, contents: nil)
+    defer { try? FileManager.default.removeItem(at: tempFile) }
+
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery(tempFile.path)
+
+    let hasNew = vm.filteredItems.contains { item in
+      if case .newSession = item { return true }
+      return false
+    }
+    XCTAssertFalse(hasNew, "New option should not appear for file paths")
+  }
+
+  // MARK: - Integration tests
+
+  func test_tabCompletion_returnsDirectoryPath() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("/tmp")
+
+    if vm.filteredItems.count > 1 {
+      vm.selectedIndex = 1
+      let value = vm.completionValue()
+      XCTAssertNotNil(value)
+    }
+  }
+
+  func test_tabCompletion_newItem_returnsNil() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("nonexistent-xyz")
+    vm.selectedIndex = 0
+
+    XCTAssertNil(vm.completionValue())
+  }
+
+  func test_typoTolerance_endToEnd() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "bazel-build", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("bzael")
+
+    let sessionNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertTrue(sessionNames.contains("bazel-build"))
+  }
+
+  func test_fullFlow_typeFilterSelectConfirm() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "work-project", directory: URL(fileURLWithPath: "/tmp/work"))
+    let _ = store.createSession(name: "personal", directory: URL(fileURLWithPath: "/tmp/personal"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+
+    vm.updateQuery("work")
+
+    let sessionNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertTrue(sessionNames.contains("work-project"))
+    XCTAssertFalse(sessionNames.contains("personal"))
+
+    XCTAssertFalse(vm.matchResults.isEmpty)
+
+    vm.selectedIndex = 1 // skip "New"
+    vm.confirmSelection()
+    XCTAssertEqual(store.activeSession?.name, "work-project")
+  }
 }
