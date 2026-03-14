@@ -44,4 +44,36 @@ final class FuzzyMatcherTests: XCTestCase {
     let result = FuzzyMatcher.match(query: "foobarextralongquery", target: "foo")
     XCTAssertNil(result)
   }
+
+  // MARK: - Scoring heuristics
+
+  func test_prefixMatchScoresHigher() {
+    let prefix = FuzzyMatcher.match(query: "pro", target: "project")!
+    let middle = FuzzyMatcher.match(query: "pro", target: "my-project")!
+    XCTAssertGreaterThan(prefix.score, middle.score)
+  }
+
+  func test_wordBoundaryScoresHigher() {
+    let boundary = FuzzyMatcher.match(query: "pro", target: "my-project")!
+    let scattered = FuzzyMatcher.match(query: "pro", target: "xpxrxoxx")!
+    XCTAssertGreaterThan(boundary.score, scattered.score)
+  }
+
+  func test_consecutiveMatchScoresHigher() {
+    let consecutive = FuzzyMatcher.match(query: "abc", target: "xabcx")!
+    let scattered = FuzzyMatcher.match(query: "abc", target: "xaxbxcx")!
+    XCTAssertGreaterThan(consecutive.score, scattered.score)
+  }
+
+  func test_shorterTargetScoresHigher() {
+    let short = FuzzyMatcher.match(query: "foo", target: "foobar")!
+    let long = FuzzyMatcher.match(query: "foo", target: "foo-and-a-very-long-suffix")!
+    XCTAssertGreaterThan(short.score, long.score)
+  }
+
+  func test_pathBoundaryMatching() {
+    let result = FuzzyMatcher.match(query: "proj", target: "~/Developer/project")!
+    // "~/Developer/" is 13 chars, so 'p' in 'project' is at index 13
+    XCTAssertTrue(result.matchedIndices.contains(13)) // 'p' after last '/'
+  }
 }
