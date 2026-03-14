@@ -500,18 +500,20 @@ struct ContentView: View {
   private func joinPaneToTab(targetIndex: Int) {
     guard let session = store.activeSession,
           let sourceTab = session.activeTab,
-          let pane = sourceTab.activePane,
-          sourceTab.panes.count > 1
+          let pane = sourceTab.activePane
     else { return }
     let targetTabs = session.tabs.filter { $0.id != sourceTab.id }
     guard targetIndex < targetTabs.count else { return }
     let targetTab = targetTabs[targetIndex]
+
+    // Exit window mode before modifying tabs
+    sourceTab.windowModeState = .inactive
+    removeWindowModeMonitor()
+
     sourceTab.closePane(pane)
     if sourceTab.panes.isEmpty { session.closeTab(sourceTab) }
     targetTab.addExistingPane(pane, direction: .horizontal)
     session.activeTab = targetTab
-    session.activeTab?.windowModeState = .inactive
-    removeWindowModeMonitor()
   }
 
   private func breakPaneToTab() {
