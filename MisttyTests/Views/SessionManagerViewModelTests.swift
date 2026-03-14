@@ -207,4 +207,187 @@ final class SessionManagerViewModelTests: XCTestCase {
     XCTAssertEqual(sessionNames.count, 1)
     XCTAssertTrue(sessionNames.contains("alpha"))
   }
+
+  // MARK: - "New" option tests
+
+  func test_newOption_plainText_appearsAtTop() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "existing", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("proj")
+
+    guard case .newSession = vm.filteredItems.first else {
+      XCTFail("First item should be newSession")
+      return
+    }
+  }
+
+  func test_newOption_notSelectedByDefault() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "project", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("proj")
+
+    XCTAssertEqual(vm.selectedIndex, 1)
+  }
+
+  func test_newOption_becomesDefaultWhenOnlyItem() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("nonexistent-unique-query-xyz")
+
+    XCTAssertEqual(vm.filteredItems.count, 1)
+    XCTAssertEqual(vm.selectedIndex, 0)
+    guard case .newSession = vm.filteredItems.first else {
+      XCTFail("Only item should be newSession")
+      return
+    }
+  }
+
+  func test_newOption_notShownWhenQueryEmpty() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("")
+
+    let hasNew = vm.filteredItems.contains { item in
+      if case .newSession = item { return true }
+      return false
+    }
+    XCTAssertFalse(hasNew)
+  }
+
+  func test_newOption_pathLike_existingDir() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("/tmp")
+
+    guard case .newSession(_, let dir, let createDir, _) = vm.filteredItems.first else {
+      XCTFail("First item should be newSession")
+      return
+    }
+    XCTAssertEqual(dir.path, "/tmp")
+    XCTAssertFalse(createDir)
+  }
+
+  func test_newOption_pathLike_parentExists_createDir() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("/tmp/nonexistent-mistty-test-dir-\(UUID().uuidString)")
+
+    guard case .newSession(_, _, let createDir, _) = vm.filteredItems.first else {
+      XCTFail("First item should be newSession")
+      return
+    }
+    XCTAssertTrue(createDir)
+  }
+
+  func test_newOption_pathLike_parentNotExists_noNew() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("/nonexistent-parent-\(UUID().uuidString)/child")
+
+    let hasNew = vm.filteredItems.contains { item in
+      if case .newSession = item { return true }
+      return false
+    }
+    XCTAssertFalse(hasNew)
+  }
+
+  func test_newOption_ssh() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("ssh myhost")
+
+    guard case .newSession(_, _, _, let sshCmd) = vm.filteredItems.first else {
+      XCTFail("First item should be newSession")
+      return
+    }
+    XCTAssertNotNil(sshCmd)
+    XCTAssertTrue(sshCmd!.contains("myhost"))
+  }
+
+  func test_newOption_ssh_noHostname_noNew() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("ssh ")
+
+    let hasNewSSH = vm.filteredItems.contains { item in
+      if case .newSession(_, _, _, let cmd) = item, cmd != nil { return true }
+      return false
+    }
+    XCTAssertFalse(hasNewSSH)
+  }
+
+  // MARK: - confirmSelection with modifiers
+
+  func test_confirmSelection_newSession_plainText() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("myproject")
+    vm.selectedIndex = 0
+    vm.confirmSelection(modifierFlags: [])
+
+    XCTAssertEqual(store.activeSession?.name, "myproject")
+  }
+
+  func test_confirmSelection_newSession_cmdOverridesToHome() async {
+    let store = SessionStore()
+    let s1 = store.createSession(name: "current", directory: URL(fileURLWithPath: "/tmp/somedir"))
+    store.activeSession = s1
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("newproj")
+    vm.selectedIndex = 0
+    vm.confirmSelection(modifierFlags: .command)
+
+    let newSession = store.sessions.last
+    XCTAssertEqual(newSession?.name, "newproj")
+    XCTAssertEqual(newSession?.directory, FileManager.default.homeDirectoryForCurrentUser)
+  }
+
+  func test_confirmSelection_newSession_ssh() async {
+    let store = SessionStore()
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("ssh testhost")
+    vm.selectedIndex = 0
+    vm.confirmSelection(modifierFlags: [])
+
+    let newSession = store.sessions.last
+    XCTAssertEqual(newSession?.name, "testhost")
+    XCTAssertNotNil(newSession?.sshCommand)
+  }
 }

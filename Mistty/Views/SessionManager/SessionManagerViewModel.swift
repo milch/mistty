@@ -208,7 +208,14 @@ final class SessionManagerViewModel {
       matchResults[s.item.id] = s.result
     }
 
-    selectedIndex = 0
+    // Prepend "New" option
+    if let newItem = resolveNewOption(query: query) {
+      filteredItems.insert(newItem, at: 0)
+      // Select first real match (index 1) if available, otherwise select "New" (index 0)
+      selectedIndex = filteredItems.count > 1 ? 1 : 0
+    } else {
+      selectedIndex = 0
+    }
   }
 
   func moveUp() { selectedIndex = max(0, selectedIndex - 1) }
@@ -223,17 +230,72 @@ final class SessionManagerViewModel {
     }
   }
 
-  func confirmSelection() {
+  private func resolveNewOption(query: String) -> SessionManagerItem? {
+    let tokens = query.split(separator: " ").map(String.init)
+    guard !tokens.isEmpty else { return nil }
+
+    let fm = FileManager.default
+
+    // SSH-like: starts with "ssh "
+    if tokens.first?.lowercased() == "ssh" {
+      let hostname = query.drop(while: { $0 != " " }).dropFirst()
+        .trimmingCharacters(in: .whitespaces)
+      guard !hostname.isEmpty else { return nil }
+
+      let config = MisttyConfig.load()
+      let command = config.ssh.resolveCommand(for: hostname)
+      let fullCommand = "\(command) \(hostname)"
+      return .newSession(
+        query: query,
+        directory: fm.homeDirectoryForCurrentUser,
+        createDirectory: false,
+        sshCommand: fullCommand
+      )
+    }
+
+    // Path-like: contains "/" or starts with "~"
+    if query.contains("/") || query.hasPrefix("~") {
+      let expanded = (query as NSString).expandingTildeInPath
+      let url = URL(fileURLWithPath: expanded).standardized
+
+      var isDir: ObjCBool = false
+      if fm.fileExists(atPath: url.path, isDirectory: &isDir) {
+        if !isDir.boolValue { return nil } // points to a file
+        return .newSession(query: query, directory: url, createDirectory: false, sshCommand: nil)
+      }
+
+      // Check parent exists
+      let parent = url.deletingLastPathComponent()
+      var parentIsDir: ObjCBool = false
+      if fm.fileExists(atPath: parent.path, isDirectory: &parentIsDir), parentIsDir.boolValue {
+        return .newSession(query: query, directory: url, createDirectory: true, sshCommand: nil)
+      }
+
+      return nil // parent doesn't exist
+    }
+
+    // Plain text: create session with query as name in active pane's CWD
+    let directory = store.activeSession?.activeTab?.activePane?.directory
+      ?? store.activeSession?.directory
+      ?? fm.homeDirectoryForCurrentUser
+    return .newSession(query: query, directory: directory, createDirectory: false, sshCommand: nil)
+  }
+
+  func confirmSelection(modifierFlags: NSEvent.ModifierFlags = []) {
     guard selectedIndex < filteredItems.count else { return }
     let item = filteredItems[selectedIndex]
+
     if let key = item.frecencyKey {
       frecencyService.recordAccess(for: key)
     }
+
     switch item {
     case .runningSession(let session):
       store.activeSession = session
+
     case .directory(let url):
       store.createSession(name: url.lastPathComponent, directory: url)
+
     case .sshHost(let host):
       let config = MisttyConfig.load()
       let command = config.ssh.resolveCommand(for: host.alias)
@@ -244,8 +306,41 @@ final class SessionManagerViewModel {
         exec: fullCommand
       )
       session.sshCommand = fullCommand
-    case .newSession:
-      break // Full handling added in Task 8
+
+    case .newSession(let query, var directory, let createDir, let sshCommand):
+      let fm = FileManager.default
+
+      // Cmd modifier overrides to home
+      if modifierFlags.contains(.command) {
+        directory = fm.homeDirectoryForCurrentUser
+      }
+
+      if let sshCommand {
+        let hostname = query.drop(while: { $0 != " " }).dropFirst()
+          .trimmingCharacters(in: .whitespaces)
+        let session = store.createSession(
+          name: hostname,
+          directory: fm.homeDirectoryForCurrentUser,
+          exec: sshCommand
+        )
+        session.sshCommand = sshCommand
+      } else {
+        // Create directory if needed (use withIntermediateDirectories: true
+        // to handle race condition where directory was created between filter and confirm)
+        if createDir {
+          try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        let name = query.contains("/") || query.hasPrefix("~")
+          ? directory.lastPathComponent : query
+        store.createSession(name: name, directory: directory)
+      }
+
+      // Record frecency for the new session
+      let sessionName = sshCommand != nil
+        ? query.drop(while: { $0 != " " }).dropFirst().trimmingCharacters(in: .whitespaces)
+        : (query.contains("/") || query.hasPrefix("~") ? directory.lastPathComponent : query)
+      frecencyService.recordAccess(for: "session:\(sessionName)")
     }
   }
 }
