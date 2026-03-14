@@ -115,6 +115,9 @@ struct ContentView: View {
           VStack(spacing: 0) {
             TabBarView(session: session)
             Divider()
+            let joinPickTabNames = session.tabs
+              .filter { $0.id != tab.id }
+              .map { $0.displayTitle }
             if let zoomedPane = tab.zoomedPane {
               PaneView(
                 pane: zoomedPane,
@@ -122,6 +125,8 @@ struct ContentView: View {
                 isWindowModeActive: tab.isWindowModeActive,
                 isZoomed: true,
                 copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
+                windowModeState: tab.windowModeState,
+                joinPickTabNames: joinPickTabNames,
                 onClose: { closePane(zoomedPane) },
                 onSelect: {}
               )
@@ -132,6 +137,8 @@ struct ContentView: View {
                 isWindowModeActive: tab.isWindowModeActive,
                 copyModeState: tab.copyModeState,
                 copyModePaneID: tab.activePane?.id,
+                windowModeState: tab.windowModeState,
+                joinPickTabNames: joinPickTabNames,
                 onClosePane: { pane in closePane(pane) },
                 onSelectPane: { pane in tab.activePane = pane }
               )
@@ -165,7 +172,7 @@ struct ContentView: View {
       removeKeyMonitor()
       removeWindowModeMonitor()
       removeCopyModeMonitor()
-      store.activeSession?.activeTab?.isWindowModeActive = false
+      store.activeSession?.activeTab?.windowModeState = .inactive
       store.activeSession?.activeTab?.copyModeState = nil
       showingSessionManager = false
     }
@@ -270,11 +277,12 @@ struct ContentView: View {
 
   private func handleWindowMode() {
     guard let tab = store.activeSession?.activeTab else { return }
-    tab.isWindowModeActive.toggle()
     if tab.isWindowModeActive {
-      installWindowModeMonitor()
-    } else {
+      tab.windowModeState = .inactive
       removeWindowModeMonitor()
+    } else {
+      tab.windowModeState = .normal
+      installWindowModeMonitor()
     }
   }
 
@@ -400,6 +408,19 @@ struct ContentView: View {
       exitCopyMode()
     }
     windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      // Join-pick mode: number keys select target tab
+      if store.activeSession?.activeTab?.windowModeState == .joinPick {
+        if event.keyCode == 53 {  // Escape — back to normal window mode
+          store.activeSession?.activeTab?.windowModeState = .normal
+          return nil
+        }
+        if let chars = event.characters, let num = Int(chars), num >= 1, num <= 9 {
+          joinPaneToTab(targetIndex: num - 1)
+          return nil
+        }
+        return nil  // Consume all other keys in join-pick mode
+      }
+
       // Cmd+Arrow to resize
       if event.modifierFlags.contains(.command) {
         switch event.keyCode {
@@ -421,7 +442,7 @@ struct ContentView: View {
 
       switch event.keyCode {
       case 53:  // Escape — exit window mode
-        store.activeSession?.activeTab?.isWindowModeActive = false
+        store.activeSession?.activeTab?.windowModeState = .inactive
         removeWindowModeMonitor()
         return nil
       case 123:  // Left arrow
@@ -445,10 +466,31 @@ struct ContentView: View {
       case 15:  // r — rotate split direction
         rotateActivePane()
         return nil
+      case 46:  // m — join pane to tab
+        guard let tab = store.activeSession?.activeTab else { return nil }
+        tab.windowModeState = .joinPick
+        return nil
       default:
         return event
       }
     }
+  }
+
+  private func joinPaneToTab(targetIndex: Int) {
+    guard let session = store.activeSession,
+          let sourceTab = session.activeTab,
+          let pane = sourceTab.activePane,
+          sourceTab.panes.count > 1
+    else { return }
+    let targetTabs = session.tabs.filter { $0.id != sourceTab.id }
+    guard targetIndex < targetTabs.count else { return }
+    let targetTab = targetTabs[targetIndex]
+    sourceTab.closePane(pane)
+    if sourceTab.panes.isEmpty { session.closeTab(sourceTab) }
+    targetTab.addExistingPane(pane, direction: .horizontal)
+    session.activeTab = targetTab
+    session.activeTab?.windowModeState = .inactive
+    removeWindowModeMonitor()
   }
 
   private func breakPaneToTab() {
@@ -504,7 +546,7 @@ struct ContentView: View {
   private func enterCopyMode() {
     guard let tab = store.activeSession?.activeTab else { return }
     if tab.isWindowModeActive {
-      tab.isWindowModeActive = false
+      tab.windowModeState = .inactive
       removeWindowModeMonitor()
     }
 

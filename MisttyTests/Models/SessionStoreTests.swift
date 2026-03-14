@@ -85,8 +85,39 @@ final class SessionStoreTests: XCTestCase {
     let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
     let tab = session.tabs[0]
     XCTAssertFalse(tab.isWindowModeActive)
-    tab.isWindowModeActive = true
+    tab.windowModeState = .normal
     XCTAssertTrue(tab.isWindowModeActive)
+  }
+
+  func test_windowModeState() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let tab = session.tabs[0]
+    XCTAssertEqual(tab.windowModeState, .inactive)
+    tab.windowModeState = .normal
+    XCTAssertTrue(tab.isWindowModeActive)
+    tab.windowModeState = .joinPick
+    XCTAssertTrue(tab.isWindowModeActive)
+    tab.windowModeState = .inactive
+    XCTAssertFalse(tab.isWindowModeActive)
+  }
+
+  func test_addExistingPane() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let tab1 = session.tabs[0]
+    tab1.splitActivePane(direction: .horizontal)
+    XCTAssertEqual(tab1.panes.count, 2)
+
+    session.addTab()
+    let tab2 = session.tabs[1]
+    XCTAssertEqual(tab2.panes.count, 1)
+
+    let paneToMove = tab1.panes[0]
+    tab1.closePane(paneToMove)
+    tab2.addExistingPane(paneToMove, direction: .horizontal)
+
+    XCTAssertEqual(tab1.panes.count, 1)
+    XCTAssertEqual(tab2.panes.count, 2)
+    XCTAssertTrue(tab2.panes.contains(where: { $0.id == paneToMove.id }))
   }
 
   func test_zoomedPaneToggle() {
