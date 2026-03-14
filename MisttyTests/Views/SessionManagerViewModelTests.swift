@@ -37,6 +37,38 @@ final class SessionManagerViewModelTests: XCTestCase {
     XCTAssertEqual(session.name, "dev-box")
   }
 
+  func test_newSessionItem_plainText_properties() {
+    let item = SessionManagerItem.newSession(
+      query: "proj",
+      directory: URL(fileURLWithPath: "/tmp/current"),
+      createDirectory: false,
+      sshCommand: nil
+    )
+    XCTAssertEqual(item.id, "new-session")
+    XCTAssertEqual(item.displayName, "New session: proj")
+    XCTAssertTrue(item.subtitle!.contains("/tmp/current"))
+  }
+
+  func test_newSessionItem_createDirectory_properties() {
+    let item = SessionManagerItem.newSession(
+      query: "~/Developer/newproj",
+      directory: URL(fileURLWithPath: "/Users/test/Developer/newproj"),
+      createDirectory: true,
+      sshCommand: nil
+    )
+    XCTAssertTrue(item.displayName.contains("create directory"))
+  }
+
+  func test_newSessionItem_ssh_properties() {
+    let item = SessionManagerItem.newSession(
+      query: "ssh myhost",
+      directory: FileManager.default.homeDirectoryForCurrentUser,
+      createDirectory: false,
+      sshCommand: "ssh myhost"
+    )
+    XCTAssertEqual(item.displayName, "New SSH session: myhost")
+  }
+
   func test_frecencySorting() async {
     let store = SessionStore()
     let tempURL = FileManager.default.temporaryDirectory

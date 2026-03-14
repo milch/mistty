@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -5,12 +6,14 @@ enum SessionManagerItem {
   case runningSession(MisttySession)
   case directory(URL)
   case sshHost(SSHHost)
+  case newSession(query: String, directory: URL, createDirectory: Bool, sshCommand: String?)
 
   var id: String {
     switch self {
     case .runningSession(let s): return "session-\(s.id)"
     case .directory(let u): return "dir-\(u.path)"
     case .sshHost(let h): return "ssh-\(h.alias)"
+    case .newSession: return "new-session"
     }
   }
 
@@ -19,6 +22,17 @@ enum SessionManagerItem {
     case .runningSession(let s): return "▶ \(s.name)"
     case .directory(let u): return u.lastPathComponent
     case .sshHost(let h): return "⌁ \(h.alias)"
+    case .newSession(let query, let directory, let createDir, let sshCommand):
+      if sshCommand != nil {
+        let hostname = query.drop(while: { $0 != " " }).dropFirst().trimmingCharacters(in: .whitespaces)
+        return "New SSH session: \(hostname)"
+      } else if createDir {
+        return "New session + create directory: \(directory.path)"
+      } else {
+        let name = query.contains("/") || query.hasPrefix("~")
+          ? directory.lastPathComponent : query
+        return "New session: \(name)"
+      }
     }
   }
 
@@ -27,14 +41,20 @@ enum SessionManagerItem {
     case .runningSession: return nil
     case .directory(let u): return u.path
     case .sshHost(let h): return h.hostname
+    case .newSession(_, let directory, _, let sshCommand):
+      if sshCommand != nil {
+        return sshCommand
+      }
+      return "\(directory.path) (\u{2318} for ~)"
     }
   }
 
-  var frecencyKey: String {
+  var frecencyKey: String? {
     switch self {
     case .runningSession(let s): return "session:\(s.name)"
     case .directory(let u): return "dir:\(u.path)"
     case .sshHost(let h): return "ssh:\(h.alias)"
+    case .newSession: return nil
     }
   }
 }
@@ -59,7 +79,6 @@ final class SessionManagerViewModel {
     let dirs = await ZoxideService.recentDirectories()
     let sshHosts = SSHConfigService.loadHosts()
 
-    // Directories that already have active sessions
     let activeDirectories = Set(store.sessions.map { $0.directory.standardizedFileURL })
 
     var items: [SessionManagerItem] = []
@@ -73,8 +92,8 @@ final class SessionManagerViewModel {
     items += sshHosts.map { .sshHost($0) }
 
     allItems = items.sorted { a, b in
-      let scoreA = frecencyService.score(for: a.frecencyKey)
-      let scoreB = frecencyService.score(for: b.frecencyKey)
+      let scoreA = a.frecencyKey.map { frecencyService.score(for: $0) } ?? 0
+      let scoreB = b.frecencyKey.map { frecencyService.score(for: $0) } ?? 0
       if scoreA != scoreB { return scoreA > scoreB }
       return categoryOrder(a) < categoryOrder(b)
     }
@@ -105,13 +124,16 @@ final class SessionManagerViewModel {
     case .runningSession: return 0
     case .directory: return 1
     case .sshHost: return 2
+    case .newSession: return -1
     }
   }
 
   func confirmSelection() {
     guard selectedIndex < filteredItems.count else { return }
     let item = filteredItems[selectedIndex]
-    frecencyService.recordAccess(for: item.frecencyKey)
+    if let key = item.frecencyKey {
+      frecencyService.recordAccess(for: key)
+    }
     switch item {
     case .runningSession(let session):
       store.activeSession = session
@@ -127,6 +149,8 @@ final class SessionManagerViewModel {
         exec: fullCommand
       )
       session.sshCommand = fullCommand
+    case .newSession:
+      break // Full handling added in Task 8
     }
   }
 }
