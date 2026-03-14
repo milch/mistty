@@ -76,4 +76,46 @@ final class FuzzyMatcherTests: XCTestCase {
     // "~/Developer/" is 13 chars, so 'p' in 'project' is at index 13
     XCTAssertTrue(result.matchedIndices.contains(13)) // 'p' after last '/'
   }
+
+  // MARK: - Typo tolerance
+
+  func test_transposition_bzael_matches_bazel() {
+    let result = FuzzyMatcher.match(query: "bzael", target: "bazel")
+    XCTAssertNotNil(result)
+  }
+
+  func test_singleCharTypo_baxel_matches_bazel() {
+    let result = FuzzyMatcher.match(query: "baxel", target: "bazel")
+    XCTAssertNotNil(result)
+  }
+
+  func test_shortQuery_noTypoTolerance() {
+    // Query length 1-3: no edits allowed
+    let result = FuzzyMatcher.match(query: "bz", target: "ab")
+    XCTAssertNil(result)
+  }
+
+  func test_typoMatch_scoredLowerThanStrict() {
+    let strict = FuzzyMatcher.match(query: "bazel", target: "bazel-build")!
+    let typo = FuzzyMatcher.match(query: "bzael", target: "bazel-build")!
+    XCTAssertGreaterThan(strict.score, typo.score)
+  }
+
+  func test_twoEdits_longQuery() {
+    // Query length 7+: 2 edits allowed
+    let result = FuzzyMatcher.match(query: "proejct", target: "project")
+    XCTAssertNotNil(result)
+  }
+
+  func test_tooManyEdits_returns_nil() {
+    // Query length 4-6: max 1 edit. Too many edits = nil
+    let result = FuzzyMatcher.match(query: "abcde", target: "edcba")
+    XCTAssertNil(result)
+  }
+
+  func test_typoMatch_indices_cover_window() {
+    let result = FuzzyMatcher.match(query: "bzael", target: "xxbazelxx")!
+    // Should highlight the "bazel" window (indices 2-6)
+    XCTAssertEqual(result.matchedIndices.sorted(), [2, 3, 4, 5, 6])
+  }
 }
