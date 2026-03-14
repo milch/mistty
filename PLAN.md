@@ -87,12 +87,26 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
     - Actually move through scrollback - current copy mode implementation only covers the contents of the screen
     - Search hit highlighting
     - ? support
+    - Copy mode improvement, "yank mode":
+      - Press y to enter yank mode while in copy mode
+      - Automatically highlight visible links, file paths, hashes, numbers, etc.
+      - They receive a non-movement shortcut label next to them, e.g. "a"
+      - Pressing the label copies the text to the system clipboard
+      - Specifically for links and file paths, there is a slight variant - if entering "yank mode" by pressing `o` instead of `y`, it instead automatically runs `open` on the item
+- Keyboard shortcut configuration
+  - Many of the keyboard shortcuts are hardcoded right now, make them configurable
 - UI improvements
   - Better minimal tab bar design
   - Sidebar should highlight the current session & current tab
+  - Instead of showing process title + directory for the tab name in the sidebar, let's only show the CWD (of the currently active pane) for the session and the process title or renamed name for the tab
   - Tab bar should only show when there is more than 1 tab
   - Session manager icons (SFSymbols?) indicating the type of each row
   - macOS title bar should be hidden
   - Double clicking on the tab title should allow rename
   - Hiding/showing the sidebar should be animated (slide in/out)
   - Sidebar should show process icons for common processes (can use whatever nvim-mini/mini.icons does for filetype and common terminal icons)
+  - mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown view over the terminal (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
+    - supports rendering mermaid diagrams & images
+    - Obsidian markdown support
+    - hitting "e" opens the file in $EDITOR for editing, closing the file goes back to the markdown view and shows the updated render
+    - Excalidraw rendering support?
