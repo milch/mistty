@@ -53,7 +53,9 @@ final class SessionManagerViewModel {
     let activeDirectories = Set(store.sessions.map { $0.directory.standardizedFileURL })
 
     var items: [SessionManagerItem] = []
-    items += store.sessions.map { .runningSession($0) }
+    items += store.sessions
+      .filter { $0.id != store.activeSession?.id }
+      .map { .runningSession($0) }
     items +=
       dirs
       .filter { !activeDirectories.contains($0.standardizedFileURL) }
