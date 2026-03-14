@@ -224,14 +224,26 @@ struct PaneCommand: ParsableCommand {
     struct Focus: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Focus a pane")
 
-        @Argument(help: "Pane ID")
-        var id: Int
+        @Argument(help: "Pane ID (omit when using --direction)")
+        var id: Int?
+
+        @Option(name: .long, help: "Focus direction (left, right, up, down)")
+        var direction: String?
+
+        @Option(name: .long, help: "Session ID for direction-based focus (0 = active)")
+        var session: Int = 0
 
         @Flag(name: .long, help: "Output as JSON")
         var json = false
 
         @Flag(name: .long, help: "Output as human-readable text")
         var human = false
+
+        func validate() throws {
+            if id == nil && direction == nil {
+                throw ValidationError("Provide either a pane ID or --direction")
+            }
+        }
 
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
@@ -240,11 +252,21 @@ struct PaneCommand: ParsableCommand {
             let proxy = try client.connect()
 
             let semaphore = DispatchSemaphore(value: 0)
+            var resultData: Data?
             var resultError: Error?
 
-            proxy.focusPane(id: id) { _, error in
-                resultError = error
-                semaphore.signal()
+            if let direction {
+                proxy.focusPaneByDirection(direction: direction, sessionId: session) { data, error in
+                    resultData = data
+                    resultError = error
+                    semaphore.signal()
+                }
+            } else if let id {
+                proxy.focusPane(id: id) { data, error in
+                    resultData = data
+                    resultError = error
+                    semaphore.signal()
+                }
             }
             semaphore.wait()
 
@@ -253,7 +275,21 @@ struct PaneCommand: ParsableCommand {
                 Foundation.exit(1)
             }
 
-            formatter.printSuccess("Pane \(id) focused")
+            if let data = resultData {
+                switch format {
+                case .json:
+                    formatter.printJSON(data)
+                case .human:
+                    if let pane = try? JSONDecoder().decode(PaneResponse.self, from: data) {
+                        formatter.printSingle([
+                            ("ID", "\(pane.id)"),
+                            ("Directory", pane.directory ?? "-"),
+                        ])
+                    }
+                }
+            } else {
+                formatter.printSuccess("Pane focused")
+            }
         }
     }
 

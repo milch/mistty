@@ -243,6 +243,46 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         }
     }
 
+    func focusPaneByDirection(direction: String, sessionId: Int, reply: @escaping (Data?, Error?) -> Void) {
+        let reply = Reply(handler: reply)
+        Task { @MainActor in
+            let session: MisttySession?
+            if sessionId == 0 {
+                session = self.store.activeSession
+            } else {
+                session = self.store.session(byId: sessionId)
+            }
+            guard let session else {
+                reply(nil, MisttyXPC.error(.entityNotFound, "Session not found"))
+                return
+            }
+            guard let tab = session.activeTab,
+                  let pane = tab.activePane else {
+                reply(nil, MisttyXPC.error(.entityNotFound, "No active pane"))
+                return
+            }
+
+            let navDirection: NavigationDirection
+            switch direction {
+            case "left": navDirection = .left
+            case "right": navDirection = .right
+            case "up": navDirection = .up
+            case "down": navDirection = .down
+            default:
+                reply(nil, MisttyXPC.error(.invalidArgument, "Invalid direction: \(direction). Use left, right, up, or down"))
+                return
+            }
+
+            guard let target = tab.layout.adjacentPane(from: pane, direction: navDirection) else {
+                reply(nil, MisttyXPC.error(.operationFailed, "No pane in direction \(direction)"))
+                return
+            }
+
+            tab.activePane = target
+            reply(self.encode(self.paneResponse(target)), nil)
+        }
+    }
+
     func resizePane(id: Int, direction: String, amount: Int, reply: @escaping (Data?, Error?) -> Void) {
         let reply = Reply(handler: reply)
         Task { @MainActor in

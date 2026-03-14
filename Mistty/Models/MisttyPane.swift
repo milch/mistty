@@ -11,6 +11,14 @@ final class MisttyPane: Identifiable {
   /// When false, send the command as initial input so the shell exits naturally.
   var useCommandField: Bool = true
 
+  var processTitle: String?
+
+  var isRunningNeovim: Bool {
+    guard let title = processTitle?.lowercased() else { return false }
+    let neovimNames = ["nvim", "neovim", "vim"]
+    return neovimNames.contains(where: { title == $0 || title.hasPrefix($0 + " ") })
+  }
+
   init(id: Int) {
     self.id = id
   }

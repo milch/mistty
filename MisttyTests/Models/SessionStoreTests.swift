@@ -238,6 +238,37 @@ final class SessionStoreTests: XCTestCase {
     XCTAssertEqual(session.activeTab?.id, session.tabs[0].id)
   }
 
+  func test_paneProcessTitle() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let pane = session.tabs[0].panes[0]
+    XCTAssertNil(pane.processTitle)
+    pane.processTitle = "nvim"
+    XCTAssertEqual(pane.processTitle, "nvim")
+  }
+
+  func test_isRunningNeovim() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let pane = session.tabs[0].panes[0]
+
+    pane.processTitle = "zsh"
+    XCTAssertFalse(pane.isRunningNeovim)
+
+    pane.processTitle = "nvim"
+    XCTAssertTrue(pane.isRunningNeovim)
+
+    pane.processTitle = "nvim ."
+    XCTAssertTrue(pane.isRunningNeovim)
+
+    pane.processTitle = "vim"
+    XCTAssertTrue(pane.isRunningNeovim)
+
+    pane.processTitle = "vimtutor"
+    XCTAssertFalse(pane.isRunningNeovim)
+
+    pane.processTitle = nil
+    XCTAssertFalse(pane.isRunningNeovim)
+  }
+
   func test_idsAreSequential() {
     let s1 = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
     let s2 = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))

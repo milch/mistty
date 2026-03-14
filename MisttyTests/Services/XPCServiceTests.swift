@@ -348,6 +348,38 @@ final class XPCServiceTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2)
     }
 
+    func testFocusPaneByDirection() async throws {
+        let session = store.createSession(name: "proj", directory: URL(fileURLWithPath: "/tmp"))
+        let tab = session.tabs[0]
+        tab.splitActivePane(direction: .horizontal)
+        let leftPane = tab.panes[0]
+        let rightPane = tab.panes[1]
+        XCTAssertEqual(tab.activePane?.id, rightPane.id)
+
+        let expectation = XCTestExpectation(description: "focus by direction")
+        service.focusPaneByDirection(direction: "left", sessionId: session.id) { data, error in
+            XCTAssertNil(error)
+            XCTAssertNotNil(data)
+            let response = try! JSONDecoder().decode(PaneResponse.self, from: data!)
+            XCTAssertEqual(response.id, leftPane.id)
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+        XCTAssertEqual(tab.activePane?.id, leftPane.id)
+    }
+
+    func testFocusPaneByDirectionInvalid() async throws {
+        let _ = store.createSession(name: "proj", directory: URL(fileURLWithPath: "/tmp"))
+
+        let expectation = XCTestExpectation(description: "focus by direction invalid")
+        service.focusPaneByDirection(direction: "diagonal", sessionId: 0) { data, error in
+            XCTAssertNotNil(error)
+            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.invalidArgument.rawValue)
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 2)
+    }
+
     func testFocusPane() async throws {
         let session = store.createSession(name: "proj", directory: URL(fileURLWithPath: "/tmp"))
         let tab = session.tabs[0]

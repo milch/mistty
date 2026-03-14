@@ -12,6 +12,7 @@ struct ContentView: View {
   @State private var eventMonitor: Any?
   @State private var windowModeMonitor: Any?
   @State private var copyModeMonitor: Any?
+  @State private var ctrlNavMonitor: Any?
 
   var body: some View {
     contentWithNotifications
@@ -184,6 +185,9 @@ struct ContentView: View {
           _ = store.registerWindow(window)
         }
       }
+      if ctrlNavMonitor == nil {
+        installCtrlNavMonitor()
+      }
     }
     .onDisappear {
       DispatchQueue.main.async { [store] in
@@ -194,6 +198,7 @@ struct ContentView: View {
       removeKeyMonitor()
       removeWindowModeMonitor()
       removeCopyModeMonitor()
+      removeCtrlNavMonitor()
       store.activeSession?.activeTab?.windowModeState = .inactive
       store.activeSession?.activeTab?.copyModeState = nil
       showingSessionManager = false
@@ -333,7 +338,8 @@ struct ContentView: View {
     else { return }
     for session in store.sessions {
       for tab in session.tabs {
-        if tab.panes.contains(where: { $0.id == paneID }) {
+        if let pane = tab.panes.first(where: { $0.id == paneID }) {
+          pane.processTitle = title
           tab.title = title
           return
         }
@@ -673,6 +679,55 @@ struct ContentView: View {
     if let monitor = copyModeMonitor {
       NSEvent.removeMonitor(monitor)
       copyModeMonitor = nil
+    }
+  }
+
+  // MARK: - Ctrl Nav Monitor
+
+  private func installCtrlNavMonitor() {
+    ctrlNavMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      guard event.modifierFlags.contains(.control),
+            let chars = event.charactersIgnoringModifiers?.lowercased()
+      else { return event }
+
+      let direction: NavigationDirection
+      switch chars {
+      case "h": direction = .left
+      case "j": direction = .down
+      case "k": direction = .up
+      case "l": direction = .right
+      default: return event
+      }
+
+      // Don't intercept if session manager, window mode, or copy mode is active
+      guard !showingSessionManager,
+            store.activeSession?.activeTab?.isWindowModeActive != true,
+            store.activeSession?.activeTab?.isCopyModeActive != true
+      else { return event }
+
+      guard let tab = store.activeSession?.activeTab,
+            let pane = tab.activePane
+      else { return event }
+
+      // If running neovim, let the keypress through for smart-splits
+      if pane.isRunningNeovim { return event }
+
+      // Navigate between MistTY panes — only consume if navigation succeeds
+      if let target = tab.layout.adjacentPane(from: pane, direction: direction) {
+        tab.activePane = target
+        DispatchQueue.main.async {
+          target.surfaceView.window?.makeFirstResponder(target.surfaceView)
+        }
+        return nil  // Consume the event
+      }
+      return event  // No adjacent pane, pass through to terminal
+    }
+  }
+
+  private func removeCtrlNavMonitor() {
+    if let monitor = ctrlNavMonitor {
+      NSEvent.removeMonitor(monitor)
+      ctrlNavMonitor = nil
     }
   }
 
