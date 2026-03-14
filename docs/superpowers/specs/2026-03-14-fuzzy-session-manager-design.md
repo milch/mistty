@@ -236,4 +236,24 @@ Each item row renders its display name and subtitle with matched characters high
 | `Mistty/Views/SessionManager/SessionManagerView.swift` | Match highlighting, "New" row styling, Tab/Right Arrow handling, modifier flag passing |
 | `Mistty/Views/SessionManager/FocusableTextField.swift` | Override `control(_:textView:doCommandBy:)` for Tab/Right Arrow interception |
 | `MisttyTests/Services/FuzzyMatcherTests.swift` | Fuzzy matcher unit tests |
+| `MisttyTests/Services/FuzzyMatcherBenchmarkTests.swift` | Performance benchmarks |
 | `MisttyTests/Views/SessionManagerViewModelTests.swift` | Updated filter/selection tests |
+
+## Benchmark Tests
+
+Performance benchmarks for the fuzzy matcher using Swift's `XCTest` `measure` blocks. These establish baselines and guard against regressions, especially if SIMD optimizations are added later.
+
+### Benchmarks to Include
+
+1. **Single match, short target** — match a 4-char query against a 20-char target (e.g. path basename). Measures per-match overhead.
+2. **Single match, long target** — match a 4-char query against a 100-char target (e.g. full file path). Measures scaling with target length.
+3. **Batch match, realistic dataset** — match a query against 500 items (simulating a large zoxide history). Measures end-to-end filter time.
+4. **Multi-token batch** — match a 2-token query against 500 items. Measures the cost of AND logic with multiple passes.
+5. **Typo-tolerant fallback** — match a typo'd query against 500 items where most require the edit-distance fallback. Measures the sliding window cost.
+6. **Worst case: no matches** — match a query that matches nothing against 500 items. Measures full scan with no early exits.
+
+### Performance Targets
+
+- Single match (short target): < 10 microseconds
+- Batch of 500 items: < 5 milliseconds
+- These targets ensure the matcher feels instant on every keystroke. If any benchmark exceeds these, consider the prefiltering and SIMD techniques from the frizbee reference.
