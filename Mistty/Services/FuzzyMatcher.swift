@@ -17,70 +17,128 @@ struct FuzzyMatcher {
 
     let queryLower = Array(query.lowercased())
     let targetLower = Array(target.lowercased())
-    let targetChars = Array(target)
 
     guard queryLower.count <= targetLower.count + maxAllowedEdits(queryLength: queryLower.count) else { return nil }
 
-    // Try strict ordered match first
-    if let result = strictMatch(query: queryLower, target: targetLower, targetLength: targetChars.count) {
+    // Prefilter: check all query chars exist in target (fast reject)
+    var charCounts: [Character: Int] = [:]
+    for c in targetLower { charCounts[c, default: 0] += 1 }
+    for c in queryLower {
+      if let count = charCounts[c], count > 0 {
+        charCounts[c] = count - 1
+      } else {
+        // Missing character — strict match impossible, try typo fallback
+        return typoMatch(query: queryLower, target: targetLower, targetLength: targetLower.count)
+      }
+    }
+
+    // Try strict ordered match
+    if let result = strictMatch(query: queryLower, target: targetLower, targetLength: targetLower.count) {
       return result
     }
 
     // Try typo-tolerant fallback
-    return typoMatch(query: queryLower, target: targetLower, targetLength: targetChars.count)
+    return typoMatch(query: queryLower, target: targetLower, targetLength: targetLower.count)
   }
 
+  /// Two-pass greedy algorithm (like fzf):
+  /// Pass 1: scan left-to-right to find the rightmost valid subsequence match
+  /// Pass 2: scan right-to-left from the end of pass 1 to find the tightest window
+  /// Then score the matched positions within that window
   private static func strictMatch(query: [Character], target: [Character], targetLength: Int) -> FuzzyMatch? {
-    var bestScore = -Double.infinity
-    var bestIndices: [Int]?
+    let qLen = query.count
+    let tLen = target.count
 
-    func search(qi: Int, ti: Int, indices: [Int], score: Double, prevMatchIdx: Int?) {
-      if qi == query.count {
-        let lengthBonus = 1.0 / Double(max(targetLength, 1))
-        let finalScore = score + lengthBonus
-        if finalScore > bestScore {
-          bestScore = finalScore
-          bestIndices = indices
+    // Pass 1: forward scan — find if a subsequence match exists at all
+    // and record the end position
+    var qi = 0
+    var endIdx = 0
+    for i in 0..<tLen {
+      if target[i] == query[qi] {
+        qi += 1
+        if qi == qLen {
+          endIdx = i + 1
+          break
         }
-        return
       }
+    }
+    guard qi == qLen else { return nil }
 
-      if target.count - ti < query.count - qi { return }
-
-      for i in ti..<target.count {
-        guard target[i] == query[qi] else { continue }
-
-        var bonus: Double = 0.0
-
-        if i == 0 { bonus += prefixBonus }
-
-        if i > 0 && boundaryChars.contains(target[i - 1]) {
-          bonus += wordBoundaryBonus
+    // Pass 2: backward scan from endIdx to find tightest window
+    qi = qLen - 1
+    var startIdx = endIdx - 1
+    for i in stride(from: endIdx - 1, through: 0, by: -1) {
+      if target[i] == query[qi] {
+        qi -= 1
+        if qi < 0 {
+          startIdx = i
+          break
         }
-
-        if let prev = prevMatchIdx, i == prev + 1 {
-          bonus += consecutiveBonus
-        }
-
-        search(
-          qi: qi + 1,
-          ti: i + 1,
-          indices: indices + [i],
-          score: score + 1.0 + bonus,
-          prevMatchIdx: i
-        )
       }
     }
 
-    search(qi: 0, ti: 0, indices: [], score: 0.0, prevMatchIdx: nil)
+    // Now find the best match within the window [startIdx, endIdx) using
+    // a bounded search. We also try starting from each word boundary
+    // within the target to find boundary-aligned matches.
+    var bestScore = -Double.infinity
+    var bestIndices: [Int]?
+
+    // Collect candidate start positions: the tight window start + all word boundaries
+    var startPositions = [startIdx]
+    for i in 0..<tLen {
+      if i == 0 || boundaryChars.contains(target[i - 1]) {
+        if !startPositions.contains(i) {
+          startPositions.append(i)
+        }
+      }
+    }
+
+    for sp in startPositions {
+      if let (score, indices) = greedyMatch(query: query, target: target, from: sp, targetLength: targetLength) {
+        if score > bestScore {
+          bestScore = score
+          bestIndices = indices
+        }
+      }
+    }
 
     guard let indices = bestIndices else { return nil }
 
-    let maxPossible = Double(query.count) * (1.0 + prefixBonus + wordBoundaryBonus + consecutiveBonus) + 1.0
+    let maxPossible = Double(qLen) * (1.0 + prefixBonus + wordBoundaryBonus + consecutiveBonus) + 1.0
     let normalized = min(max(bestScore / maxPossible, 0.0), 1.0)
 
     return FuzzyMatch(score: normalized, matchedIndices: indices)
   }
+
+  /// Greedy forward match from a given start position, preferring consecutive and boundary matches
+  private static func greedyMatch(query: [Character], target: [Character], from start: Int, targetLength: Int) -> (Double, [Int])? {
+    var indices: [Int] = []
+    var score: Double = 0.0
+    var qi = 0
+    var prevMatchIdx: Int? = nil
+
+    for i in start..<target.count {
+      guard qi < query.count else { break }
+      guard target[i] == query[qi] else { continue }
+
+      var bonus: Double = 0.0
+      if i == 0 { bonus += prefixBonus }
+      if i > 0 && boundaryChars.contains(target[i - 1]) { bonus += wordBoundaryBonus }
+      if let prev = prevMatchIdx, i == prev + 1 { bonus += consecutiveBonus }
+
+      score += 1.0 + bonus
+      indices.append(i)
+      prevMatchIdx = i
+      qi += 1
+    }
+
+    guard qi == query.count else { return nil }
+
+    let lengthBonus = 1.0 / Double(max(targetLength, 1))
+    return (score + lengthBonus, indices)
+  }
+
+  // MARK: - Typo tolerance
 
   private static let typoPenalty: Double = 0.3
 
