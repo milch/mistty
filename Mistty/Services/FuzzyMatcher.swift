@@ -10,8 +10,6 @@ struct FuzzyMatcher {
   private static let consecutiveBonus: Double = 8.0
   private static let wordBoundaryBonus: Double = 10.0
   private static let prefixBonus: Double = 12.0
-  private static let unmatchedPenalty: Double = -1.0
-
   private static let boundaryChars: Set<Character> = ["/", "-", "_", ".", " "]
 
   static func match(query: String, target: String) -> FuzzyMatch? {
