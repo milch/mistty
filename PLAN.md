@@ -16,97 +16,132 @@ My workflow with tmux looks like this:
 
 Furthermore, it is fully keyboard driven (any function MUST be accessible via keyboard shortcut) and configurable via config file (XDG config compliant, e.g. ~/.config/mistty/config.toml)
 
-## Features (v0)
+## TODO
 
-- Session workflow described above
-- Standard terminal functions:
-  - New tab
-  - Rename tab (shows frontmost process name by default)
-  - New split pane (horizontal/vertical)
-- Sidebar showing all open sessions, with the session's tabs nested.
-  - Tabs for each session can be collapsed by clicking on a chevron next to the session name
-  - Sidebar is collapsible with cmd+s similar to Arc. Shows on hover when collapsed
-  - Sidebar should show when there is bell activity on any tab
-- "window mode"
-  - Hit keyboard shortcut (cmd+x)
-  - Toast window pops up that allows common window management functions:
-    - Grow/shrink currently active pane with h/j/k/l (by 5 rows/columns with shift)
-    - Swap panes in direction with arrow keys
-    - Break pane with b (move pane to new tab)
-    - Merge pane with m (move pane to existing tab)
-      - Pressing m first brings up the list of open tabs to move the pane to
-      - Press 1, 2, 3, ..., to move the pane to that numbered tab
-    - o to rotate panes clockwise / O to rotate counter-clockwise
-    - Press number keys to switch standard layouts
-      1. even-horizontal
-      2. even-vertical
-      3. main-horizontal
-      4. main-vertical
-      5. tiled
-    - s to save layout for this session / r to restore layout
-- "copy mode" from tmux, i.e. after entering copy mode, users can move around the scrollback with vim keybindings and copy text
-- Native macOS UI with beautiful design, and following standard macOS paradigms
-- Preference pane for common settings. Enables configuration of
+### Window mode
+- Press number keys to switch standard layouts
+  1. even-horizontal
+  2. even-vertical
+  3. main-horizontal
+  4. main-vertical
+  5. tiled
+- s to save layout for this session / r to restore layout
 
-## Features (v1)
+### Copy mode improvements
+- Visual line mode
+- Visual block mode
+- Escaping out of visual mode should return to copy mode, not escape out of copy mode completely
+- w/W/e/E/b/B/ge/gE/gb/gB should work as expected (currently w/b are simple 5-char jumps)
+- f/F/t/T/; should work as expected
+- Actually move through scrollback - current copy mode implementation only covers the contents of the screen
+- Search hit highlighting
+- ? support (reverse search)
+- Copy mode improvement, "yank mode":
+  - Press y to enter yank mode while in copy mode
+  - Automatically highlight visible links, file paths, hashes, numbers, etc.
+  - They receive a non-movement shortcut label next to them, e.g. "a"
+  - Pressing the label copies the text to the system clipboard
+  - Specifically for links and file paths, there is a slight variant - if entering "yank mode" by pressing `o` instead of `y`, it instead automatically runs `open` on the item
 
-- CLI control support - create new windows, sessions, panes, and so on [done]
-  - Could use AppleScript or some other macOS IPC mechanism
-- Popup support - open a new pane that fills the screen and starts with a specific launch command
-  - Configurable width/height based on screen size
-  - Configurable launch command
-  - Configurable whether process exiting closes the popup
-  - Launch both via CLI or configure in preference pane: can set up several keyboard shortcuts that will launch a popup (size / command)
+### Save layouts
+- There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
+- Configurable allowlist of processes that should be relaunched when restoring a layout, e.g. nvim, claude, ssh
+
+### Ghostty config
 - Ghostty config needs to be configurable too. At least some of the options, not all - those that control the UI, for example, don't apply for mistty, but things like rendering (e.g. display colorspace) do apply
-- Save layouts
-  - There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
-  - Configurable allowlist of processes that should be relaunched when restoring a layout, e.g. nvim, claude, ssh
-- UX improvements
-  - Session manager list should be sorted by frecency
-  - Session manager typing should fuzzy-filter the list
-  - Opening a new sessions should:
-    - for directories, open a terminal in that directory. New panes in that session should start in that directory as well
-    - for ssh sessions, the first terminal should automatically ssh into that host. new panes do the same by default, unless holding opt (i.e. cmd-d opens a split that ssh's automatically, cmd-opt-d opens a new pane without ssh)
-  - Make ssh command configurable, with per-host overrides in preference panes
-    - e.g. set "et" for some hosts but not others
-  - Navigation between focused panes using Ctrl-h/j/k/l. Should support smart-splits pass through to running neovim processes so it can seamlessly navigate between mistty panes and
-  - Switch tabs using standard macOS shortcuts
-    - cmd-1/2/3, ... , to focus first tab, second tab, etc.
-    - cmd-][ to go to next/prev tab
-    - cmd-shift-up/down to move between sessions (in sidebar order)
-  - Current session should be hidden in the session manager
-  - Window mode:
-    - Support the layouts described above
-    - Support the reverse operation of "break to tab" (join to tab)
-  - Copy mode
-    - Visual line mode
-    - Visual block mode
-    - Escaping out of visual mode should return to copy mode, not escape out of copy mode completely
-    - w/W/e/E/b/B/ge/gE/gb/gB should work as expected
-    - f/F/t/T/; should work as expected
-    - Actually move through scrollback - current copy mode implementation only covers the contents of the screen
-    - Search hit highlighting
-    - ? support
-    - Copy mode improvement, "yank mode":
-      - Press y to enter yank mode while in copy mode
-      - Automatically highlight visible links, file paths, hashes, numbers, etc.
-      - They receive a non-movement shortcut label next to them, e.g. "a"
-      - Pressing the label copies the text to the system clipboard
-      - Specifically for links and file paths, there is a slight variant - if entering "yank mode" by pressing `o` instead of `y`, it instead automatically runs `open` on the item
-- Keyboard shortcut configuration
-  - Many of the keyboard shortcuts are hardcoded right now, make them configurable
-- UI improvements
-  - Better minimal tab bar design
-  - Sidebar should highlight the current session & current tab
-  - Instead of showing process title + directory for the tab name in the sidebar, let's only show the CWD (of the currently active pane) for the session and the process title or renamed name for the tab
-  - Tab bar should only show when there is more than 1 tab
-  - Session manager icons (SFSymbols?) indicating the type of each row
-  - macOS title bar should be hidden
-  - Double clicking on the tab title should allow rename
-  - Hiding/showing the sidebar should be animated (slide in/out)
-  - Sidebar should show process icons for common processes (can use whatever nvim-mini/mini.icons does for filetype and common terminal icons)
-  - mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown view over the terminal (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
-    - supports rendering mermaid diagrams & images
-    - Obsidian markdown support
-    - hitting "e" opens the file in $EDITOR for editing, closing the file goes back to the markdown view and shows the updated render
-    - Excalidraw rendering support?
+
+### Keyboard shortcut configuration
+- Many of the keyboard shortcuts are hardcoded right now, make them configurable
+
+### UI improvements
+- Better minimal tab bar design
+- Tab bar should only show when there is more than 1 tab
+- Session manager icons (SFSymbols?) indicating the type of each row (currently uses Unicode icons)
+- macOS title bar should be hidden
+- Hiding/showing the sidebar should be animated (slide in/out)
+- Sidebar should show process icons for common processes (can use whatever nvim-mini/mini.icons does for filetype and common terminal icons)
+- Instead of showing process title + directory for the tab name in the sidebar, let's only show the CWD (of the currently active pane) for the session and the process title or renamed name for the tab
+- mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown view over the terminal (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
+  - supports rendering mermaid diagrams & images
+  - Obsidian markdown support
+  - hitting "e" opens the file in $EDITOR for editing, closing the file goes back to the markdown view and shows the updated render
+  - Excalidraw rendering support?
+
+## Implemented
+
+### Session workflow
+- Session manager (cmd+j) with fuzzy find
+  - Multi-token AND matching: space-separated query tokens all must match
+  - Subsequence matching across session name, directory path, and SSH hostname
+  - Typo tolerance via transposition and character-skip scoring
+  - Match quality as primary sort key, frecency as tiebreaker
+  - Tab completion for filesystem paths (completionValue())
+  - matchResults dictionary stores per-item FuzzyMatch for highlight rendering
+- Running sessions list
+- Recent directories via zoxide (ZoxideService)
+- SSH hosts from ~/.ssh/config (SSHConfigService)
+- Frecency-based sorting (FrecencyService with time-weighted scoring)
+- Current session hidden in session manager
+
+### Standard terminal functions
+- New tab (cmd+t)
+- Rename tab (cmd+shift+r, or double-click tab title for inline edit)
+- New split pane horizontal (cmd+d) and vertical (cmd+shift+d)
+
+### Sidebar
+- Shows all open sessions with tabs nested in collapsible disclosure groups
+- Collapsible sidebar (cmd+s) with resizable drag handle
+- Bell activity indicator (orange dot) on tabs with background bell
+- Highlights current session and current tab
+
+### Window mode (cmd+x)
+- Toast popup with orange border and help overlay
+- Grow/shrink panes (cmd+arrows, 5% delta)
+- Swap panes in direction (arrow keys)
+- Break pane to new tab (b)
+- Merge/join pane to existing tab (m, then number key to pick target)
+- Rotate pane direction (r)
+
+### Copy mode
+- Enter/exit copy mode
+- Vim navigation: h/j/k/l cursor movement, 0/$ line start/end, g/G top/bottom
+- Visual mode (v) with selection highlighting
+- Search (/) with case-insensitive matching, n for next match
+- Yank selection to clipboard (y) via ghostty_surface_read_text
+- Basic word movement (w/b, simplified 5-char jumps)
+
+### CLI control (mistty-cli via XPC/Mach service)
+- Session CRUD: create, list, get, close (with --name, --directory, --exec)
+- Tab CRUD: create, list, get, close, rename
+- Pane CRUD: create, list, get, close, focus, resize, send-keys, run-command, get-text, active
+- Window CRUD: create, list, get, close, focus
+- Popup commands: open, close, toggle, list
+- JSON and human-readable output formats
+
+### Popup support
+- Configurable popup definitions in config.toml (name, command, shortcut, width, height, close_on_exit)
+- Popup overlay UI with semi-transparent backdrop, header bar, close button
+- Toggle via configurable keyboard shortcuts
+- CLI popup commands (open/close/toggle/list)
+- Popup inherits current pane's working directory
+
+### Navigation
+- Ctrl-h/j/k/l between panes with smart neovim pass-through
+- Cmd-1 through cmd-9 to focus tab by index
+- Cmd-]/cmd-[ for next/prev tab (circular)
+- Cmd-shift-up/down to cycle between sessions (circular)
+
+### SSH integration
+- SSH auto-connect for SSH session types
+- Configurable SSH command with per-host overrides in config
+- Option modifier bypasses SSH auto-connect on new panes
+
+### Config & preferences
+- Config file parsing from ~/.config/mistty/config.toml
+- Preference pane (cmd+,) for font size, cursor style, scrollback, sidebar visibility
+- Popup definition configuration
+
+### Native macOS UI
+- SwiftUI + AppKit hybrid (terminal surface is NSView, UI is SwiftUI)
+- Tab bar with horizontal scrolling, close buttons, new tab button
+- Process title display via ghostty notifications
