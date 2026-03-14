@@ -522,6 +522,10 @@ struct ContentView: View {
       let pane = tab.activePane,
       tab.panes.count > 1
     else { return }  // Don't break if it's the only pane
+
+    tab.windowModeState = .inactive
+    removeWindowModeMonitor()
+
     tab.closePane(pane)
     if tab.panes.isEmpty { session.closeTab(tab) }
     session.addTabWithPane(pane)

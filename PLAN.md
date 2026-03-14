@@ -57,6 +57,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
   - Configurable launch command
   - Configurable whether process exiting closes the popup
   - Launch both via CLI or configure in preference pane: can set up several keyboard shortcuts that will launch a popup (size / command)
+- Ghostty config needs to be configurable too. At least some of the options, not all - those that control the UI, for example, don't apply for mistty, but things like rendering (e.g. display colorspace) do apply
 - Save layouts
   - There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
   - Configurable allowlist of processes that should be relaunched when restoring a layout, e.g. nvim, claude, ssh
