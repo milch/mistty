@@ -12,8 +12,32 @@ struct ContentView: View {
   @State private var eventMonitor: Any?
   @State private var windowModeMonitor: Any?
   @State private var copyModeMonitor: Any?
+  @State private var ctrlNavMonitor: Any?
 
   var body: some View {
+    contentWithNotifications
+      .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) { notification in
+        guard let session = store.activeSession,
+              let index = notification.userInfo?["index"] as? Int,
+              index < session.tabs.count
+        else { return }
+        session.activeTab = session.tabs[index]
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyNextTab)) { _ in
+        store.activeSession?.nextTab()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyPrevTab)) { _ in
+        store.activeSession?.prevTab()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyNextSession)) { _ in
+        store.nextSession()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyPrevSession)) { _ in
+        store.prevSession()
+      }
+  }
+
+  private var contentWithNotifications: some View {
     contentWithOverlays
       .onReceive(NotificationCenter.default.publisher(for: .misttyPopupToggle)) { notification in
         handlePopupToggle(notification)
@@ -62,10 +86,10 @@ struct ContentView: View {
         store.activeSession?.addTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
-        store.activeSession?.activeTab?.splitActivePane(direction: .horizontal)
+        splitPane(direction: .horizontal)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
-        store.activeSession?.activeTab?.splitActivePane(direction: .vertical)
+        splitPane(direction: .vertical)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
         showingSessionManager = true
@@ -92,6 +116,9 @@ struct ContentView: View {
           VStack(spacing: 0) {
             TabBarView(session: session)
             Divider()
+            let joinPickTabNames = session.tabs
+              .filter { $0.id != tab.id }
+              .map { $0.displayTitle }
             if let zoomedPane = tab.zoomedPane {
               PaneView(
                 pane: zoomedPane,
@@ -99,6 +126,8 @@ struct ContentView: View {
                 isWindowModeActive: tab.isWindowModeActive,
                 isZoomed: true,
                 copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
+                windowModeState: tab.windowModeState,
+                joinPickTabNames: joinPickTabNames,
                 onClose: { closePane(zoomedPane) },
                 onSelect: {}
               )
@@ -109,6 +138,8 @@ struct ContentView: View {
                 isWindowModeActive: tab.isWindowModeActive,
                 copyModeState: tab.copyModeState,
                 copyModePaneID: tab.activePane?.id,
+                windowModeState: tab.windowModeState,
+                joinPickTabNames: joinPickTabNames,
                 onClosePane: { pane in closePane(pane) },
                 onSelectPane: { pane in tab.activePane = pane }
               )
@@ -132,6 +163,9 @@ struct ContentView: View {
           _ = store.registerWindow(window)
         }
       }
+      if ctrlNavMonitor == nil {
+        installCtrlNavMonitor()
+      }
     }
     .onDisappear {
       DispatchQueue.main.async { [store] in
@@ -142,7 +176,8 @@ struct ContentView: View {
       removeKeyMonitor()
       removeWindowModeMonitor()
       removeCopyModeMonitor()
-      store.activeSession?.activeTab?.isWindowModeActive = false
+      removeCtrlNavMonitor()
+      store.activeSession?.activeTab?.windowModeState = .inactive
       store.activeSession?.activeTab?.copyModeState = nil
       showingSessionManager = false
     }
@@ -186,6 +221,21 @@ struct ContentView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
+    }
+  }
+
+  private func splitPane(direction: SplitDirection) {
+    guard let session = store.activeSession,
+          let tab = session.activeTab else { return }
+    if let sshCommand = session.sshCommand,
+       !NSEvent.modifierFlags.contains(.option) {
+      let pane = MisttyPane(id: tab.paneIDGenerator())
+      pane.directory = session.directory
+      pane.command = sshCommand
+      pane.useCommandField = false
+      tab.addExistingPane(pane, direction: direction)
+    } else {
+      tab.splitActivePane(direction: direction)
     }
   }
 
@@ -247,11 +297,12 @@ struct ContentView: View {
 
   private func handleWindowMode() {
     guard let tab = store.activeSession?.activeTab else { return }
-    tab.isWindowModeActive.toggle()
     if tab.isWindowModeActive {
-      installWindowModeMonitor()
-    } else {
+      tab.windowModeState = .inactive
       removeWindowModeMonitor()
+    } else {
+      tab.windowModeState = .normal
+      installWindowModeMonitor()
     }
   }
 
@@ -280,7 +331,8 @@ struct ContentView: View {
     else { return }
     for session in store.sessions {
       for tab in session.tabs {
-        if tab.panes.contains(where: { $0.id == paneID }) {
+        if let pane = tab.panes.first(where: { $0.id == paneID }) {
+          pane.processTitle = title
           tab.title = title
           return
         }
@@ -377,6 +429,19 @@ struct ContentView: View {
       exitCopyMode()
     }
     windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      // Join-pick mode: number keys select target tab
+      if store.activeSession?.activeTab?.windowModeState == .joinPick {
+        if event.keyCode == 53 {  // Escape — back to normal window mode
+          store.activeSession?.activeTab?.windowModeState = .normal
+          return nil
+        }
+        if let chars = event.characters, let num = Int(chars), num >= 1, num <= 9 {
+          joinPaneToTab(targetIndex: num - 1)
+          return nil
+        }
+        return nil  // Consume all other keys in join-pick mode
+      }
+
       // Cmd+Arrow to resize
       if event.modifierFlags.contains(.command) {
         switch event.keyCode {
@@ -398,7 +463,7 @@ struct ContentView: View {
 
       switch event.keyCode {
       case 53:  // Escape — exit window mode
-        store.activeSession?.activeTab?.isWindowModeActive = false
+        store.activeSession?.activeTab?.windowModeState = .inactive
         removeWindowModeMonitor()
         return nil
       case 123:  // Left arrow
@@ -422,10 +487,33 @@ struct ContentView: View {
       case 15:  // r — rotate split direction
         rotateActivePane()
         return nil
+      case 46:  // m — join pane to tab
+        guard let tab = store.activeSession?.activeTab else { return nil }
+        tab.windowModeState = .joinPick
+        return nil
       default:
         return event
       }
     }
+  }
+
+  private func joinPaneToTab(targetIndex: Int) {
+    guard let session = store.activeSession,
+          let sourceTab = session.activeTab,
+          let pane = sourceTab.activePane
+    else { return }
+    let targetTabs = session.tabs.filter { $0.id != sourceTab.id }
+    guard targetIndex < targetTabs.count else { return }
+    let targetTab = targetTabs[targetIndex]
+
+    // Exit window mode before modifying tabs
+    sourceTab.windowModeState = .inactive
+    removeWindowModeMonitor()
+
+    sourceTab.closePane(pane)
+    if sourceTab.panes.isEmpty { session.closeTab(sourceTab) }
+    targetTab.addExistingPane(pane, direction: .horizontal)
+    session.activeTab = targetTab
   }
 
   private func breakPaneToTab() {
@@ -434,6 +522,10 @@ struct ContentView: View {
       let pane = tab.activePane,
       tab.panes.count > 1
     else { return }  // Don't break if it's the only pane
+
+    tab.windowModeState = .inactive
+    removeWindowModeMonitor()
+
     tab.closePane(pane)
     if tab.panes.isEmpty { session.closeTab(tab) }
     session.addTabWithPane(pane)
@@ -481,7 +573,7 @@ struct ContentView: View {
   private func enterCopyMode() {
     guard let tab = store.activeSession?.activeTab else { return }
     if tab.isWindowModeActive {
-      tab.isWindowModeActive = false
+      tab.windowModeState = .inactive
       removeWindowModeMonitor()
     }
 
@@ -586,6 +678,55 @@ struct ContentView: View {
     if let monitor = copyModeMonitor {
       NSEvent.removeMonitor(monitor)
       copyModeMonitor = nil
+    }
+  }
+
+  // MARK: - Ctrl Nav Monitor
+
+  private func installCtrlNavMonitor() {
+    ctrlNavMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      guard event.modifierFlags.contains(.control),
+            let chars = event.charactersIgnoringModifiers?.lowercased()
+      else { return event }
+
+      let direction: NavigationDirection
+      switch chars {
+      case "h": direction = .left
+      case "j": direction = .down
+      case "k": direction = .up
+      case "l": direction = .right
+      default: return event
+      }
+
+      // Don't intercept if session manager, window mode, or copy mode is active
+      guard !showingSessionManager,
+            store.activeSession?.activeTab?.isWindowModeActive != true,
+            store.activeSession?.activeTab?.isCopyModeActive != true
+      else { return event }
+
+      guard let tab = store.activeSession?.activeTab,
+            let pane = tab.activePane
+      else { return event }
+
+      // If running neovim, let the keypress through for smart-splits
+      if pane.isRunningNeovim { return event }
+
+      // Navigate between MistTY panes — only consume if navigation succeeds
+      if let target = tab.layout.adjacentPane(from: pane, direction: direction) {
+        tab.activePane = target
+        DispatchQueue.main.async {
+          target.surfaceView.window?.makeFirstResponder(target.surfaceView)
+        }
+        return nil  // Consume the event
+      }
+      return event  // No adjacent pane, pass through to terminal
+    }
+  }
+
+  private func removeCtrlNavMonitor() {
+    if let monitor = ctrlNavMonitor {
+      NSEvent.removeMonitor(monitor)
+      ctrlNavMonitor = nil
     }
   }
 

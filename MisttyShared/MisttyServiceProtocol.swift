@@ -23,6 +23,7 @@ import Foundation
     func getPane(id: Int, reply: @escaping (Data?, Error?) -> Void)
     func closePane(id: Int, reply: @escaping (Data?, Error?) -> Void)
     func focusPane(id: Int, reply: @escaping (Data?, Error?) -> Void)
+    func focusPaneByDirection(direction: String, sessionId: Int, reply: @escaping (Data?, Error?) -> Void)
     func resizePane(id: Int, direction: String, amount: Int, reply: @escaping (Data?, Error?) -> Void)
     func activePane(reply: @escaping (Data?, Error?) -> Void)
     /// Use paneId 0 as sentinel for "active pane".

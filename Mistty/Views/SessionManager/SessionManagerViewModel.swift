@@ -29,6 +29,14 @@ enum SessionManagerItem {
     case .sshHost(let h): return h.hostname
     }
   }
+
+  var frecencyKey: String {
+    switch self {
+    case .runningSession(let s): return "session:\(s.name)"
+    case .directory(let u): return "dir:\(u.path)"
+    case .sshHost(let h): return "ssh:\(h.alias)"
+    }
+  }
 }
 
 @Observable
@@ -40,9 +48,11 @@ final class SessionManagerViewModel {
   var selectedIndex = 0
 
   let store: SessionStore
+  private let frecencyService: FrecencyService
 
-  init(store: SessionStore) {
+  init(store: SessionStore, frecencyService: FrecencyService = FrecencyService()) {
     self.store = store
+    self.frecencyService = frecencyService
   }
 
   func load() async {
@@ -53,14 +63,21 @@ final class SessionManagerViewModel {
     let activeDirectories = Set(store.sessions.map { $0.directory.standardizedFileURL })
 
     var items: [SessionManagerItem] = []
-    items += store.sessions.map { .runningSession($0) }
+    items += store.sessions
+      .filter { $0.id != store.activeSession?.id }
+      .map { .runningSession($0) }
     items +=
       dirs
       .filter { !activeDirectories.contains($0.standardizedFileURL) }
       .map { .directory($0) }
     items += sshHosts.map { .sshHost($0) }
 
-    allItems = items
+    allItems = items.sorted { a, b in
+      let scoreA = frecencyService.score(for: a.frecencyKey)
+      let scoreB = frecencyService.score(for: b.frecencyKey)
+      if scoreA != scoreB { return scoreA > scoreB }
+      return categoryOrder(a) < categoryOrder(b)
+    }
     applyFilter()
   }
 
@@ -83,15 +100,33 @@ final class SessionManagerViewModel {
   func moveUp() { selectedIndex = max(0, selectedIndex - 1) }
   func moveDown() { selectedIndex = min(filteredItems.count - 1, selectedIndex + 1) }
 
+  private func categoryOrder(_ item: SessionManagerItem) -> Int {
+    switch item {
+    case .runningSession: return 0
+    case .directory: return 1
+    case .sshHost: return 2
+    }
+  }
+
   func confirmSelection() {
     guard selectedIndex < filteredItems.count else { return }
-    switch filteredItems[selectedIndex] {
+    let item = filteredItems[selectedIndex]
+    frecencyService.recordAccess(for: item.frecencyKey)
+    switch item {
     case .runningSession(let session):
       store.activeSession = session
     case .directory(let url):
       store.createSession(name: url.lastPathComponent, directory: url)
-    case .sshHost:
-      break  // post-MVP
+    case .sshHost(let host):
+      let config = MisttyConfig.load()
+      let command = config.ssh.resolveCommand(for: host.alias)
+      let fullCommand = "\(command) \(host.alias)"
+      let session = store.createSession(
+        name: host.alias,
+        directory: FileManager.default.homeDirectoryForCurrentUser,
+        exec: fullCommand
+      )
+      session.sshCommand = fullCommand
     }
   }
 }

@@ -6,6 +6,8 @@ struct PaneView: View {
   var isWindowModeActive: Bool = false
   var isZoomed: Bool = false
   var copyModeState: CopyModeState?
+  var windowModeState: MisttyTab.WindowModeState = .inactive
+  var joinPickTabNames: [String] = []
   var onClose: (() -> Void)?
   var onSelect: (() -> Void)?
   @State private var isHovering = false
@@ -27,13 +29,16 @@ struct PaneView: View {
         }
       }
       .overlay {
-        if isActive && isWindowModeActive {
+        if isActive && windowModeState != .inactive {
           ZStack {
             RoundedRectangle(cornerRadius: 2)
               .stroke(Color.orange, lineWidth: 2)
             VStack {
               Spacer()
-              WindowModeHints()
+              WindowModeHints(
+                isJoinPick: windowModeState == .joinPick,
+                tabNames: joinPickTabNames
+              )
                 .padding(6)
             }
           }

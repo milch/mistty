@@ -1,26 +1,57 @@
 import SwiftUI
 
 struct WindowModeHints: View {
-  private let hints: [(key: String, label: String)] = [
-    ("←↑↓→", "swap"),
-    ("⌘+arrows", "resize"),
-    ("z", "zoom"),
-    ("b", "break to tab"),
-    ("r", "rotate"),
-    ("esc", "exit"),
-  ]
+  var isJoinPick: Bool = false
+  var tabNames: [String] = []
+
+  private var normalHints: [(key: String, label: String)] {
+    [
+      ("←↑↓→", "swap"),
+      ("⌘+arrows", "resize"),
+      ("z", "zoom"),
+      ("b", "break to tab"),
+      ("m", "join to tab"),
+      ("r", "rotate"),
+      ("esc", "exit"),
+    ]
+  }
 
   var body: some View {
     HStack(spacing: 12) {
-      Text("WINDOW")
-        .fontWeight(.bold)
-      ForEach(hints, id: \.key) { hint in
+      if isJoinPick {
+        Text("JOIN TO TAB")
+          .fontWeight(.bold)
+        if tabNames.isEmpty {
+          Text("no other tabs")
+        } else {
+          ForEach(Array(tabNames.enumerated()), id: \.offset) { index, name in
+            HStack(spacing: 3) {
+              Text("\(index + 1)")
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+              Text(name)
+            }
+          }
+        }
         HStack(spacing: 3) {
-          Text(hint.key)
+          Text("esc")
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
-          Text(hint.label)
+          Text("back")
+        }
+      } else {
+        Text("WINDOW")
+          .fontWeight(.bold)
+        ForEach(normalHints, id: \.key) { hint in
+          HStack(spacing: 3) {
+            Text(hint.key)
+              .padding(.horizontal, 4)
+              .padding(.vertical, 1)
+              .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+            Text(hint.label)
+          }
         }
       }
     }

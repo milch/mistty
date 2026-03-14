@@ -1,6 +1,32 @@
 import Foundation
 import TOMLKit
 
+struct SSHHostOverride: Sendable, Equatable {
+  var hostname: String?
+  var regex: String?
+  var command: String
+
+  func matches(_ host: String) -> Bool {
+    if let hostname { return hostname == host }
+    if let regex, let re = try? Regex(regex) {
+      return host.wholeMatch(of: re) != nil
+    }
+    return false
+  }
+}
+
+struct SSHConfig: Sendable, Equatable {
+  var defaultCommand: String = "ssh"
+  var hosts: [SSHHostOverride] = []
+
+  func resolveCommand(for host: String) -> String {
+    for override in hosts {
+      if override.matches(host) { return override.command }
+    }
+    return defaultCommand
+  }
+}
+
 struct MisttyConfig: Sendable, Equatable {
   var fontSize: Int = 13
   var fontFamily: String = "monospace"
@@ -8,6 +34,7 @@ struct MisttyConfig: Sendable, Equatable {
   var scrollbackLines: Int = 10000
   var sidebarVisible: Bool = true
   var popups: [PopupDefinition] = []
+  var ssh: SSHConfig = SSHConfig()
 
   static let `default` = MisttyConfig()
 
@@ -32,6 +59,21 @@ struct MisttyConfig: Sendable, Equatable {
         )
       }
     }
+    if let sshTable = table["ssh"]?.table {
+      if let defaultCmd = sshTable["default_command"]?.string {
+        config.ssh.defaultCommand = defaultCmd
+      }
+      if let hostArray = sshTable["host"]?.array {
+        config.ssh.hosts = hostArray.compactMap { entry -> SSHHostOverride? in
+          guard let t = entry.table else { return nil }
+          return SSHHostOverride(
+            hostname: t["hostname"]?.string,
+            regex: t["regex"]?.string,
+            command: t["command"]?.string ?? config.ssh.defaultCommand
+          )
+        }
+      }
+    }
     return config
   }
 
@@ -43,6 +85,13 @@ struct MisttyConfig: Sendable, Equatable {
       return .default
     }
     return (try? parse(contents)) ?? .default
+  }
+
+  /// Escape a string for safe TOML serialization.
+  private func tomlEscape(_ value: String) -> String {
+    value
+      .replacingOccurrences(of: "\\", with: "\\\\")
+      .replacingOccurrences(of: "\"", with: "\\\"")
   }
 
   func save() throws {
@@ -72,6 +121,22 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("width = \(popup.width)")
       lines.append("height = \(popup.height)")
       lines.append("close_on_exit = \(popup.closeOnExit)")
+    }
+    if ssh.defaultCommand != "ssh" || !ssh.hosts.isEmpty {
+      lines.append("")
+      lines.append("[ssh]")
+      lines.append("default_command = \"\(tomlEscape(ssh.defaultCommand))\"")
+      for host in ssh.hosts {
+        lines.append("")
+        lines.append("[[ssh.host]]")
+        if let hostname = host.hostname {
+          lines.append("hostname = \"\(tomlEscape(hostname))\"")
+        }
+        if let regex = host.regex {
+          lines.append("regex = \"\(tomlEscape(regex))\"")
+        }
+        lines.append("command = \"\(tomlEscape(host.command))\"")
+      }
     }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
   }

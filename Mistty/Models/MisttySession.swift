@@ -6,6 +6,7 @@ final class MisttySession: Identifiable {
   let id: Int
   var name: String
   let directory: URL
+  var sshCommand: String?
   private(set) var tabs: [MisttyTab] = []
   var activeTab: MisttyTab?
 
@@ -105,5 +106,19 @@ final class MisttySession: Identifiable {
   func hideActivePopup() {
     activePopup?.isVisible = false
     activePopup = nil
+  }
+
+  func nextTab() {
+    guard let current = activeTab,
+          let index = tabs.firstIndex(where: { $0.id == current.id })
+    else { return }
+    activeTab = tabs[(index + 1) % tabs.count]
+  }
+
+  func prevTab() {
+    guard let current = activeTab,
+          let index = tabs.firstIndex(where: { $0.id == current.id })
+    else { return }
+    activeTab = tabs[(index - 1 + tabs.count) % tabs.count]
   }
 }

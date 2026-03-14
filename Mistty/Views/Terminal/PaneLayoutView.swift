@@ -6,6 +6,8 @@ struct PaneLayoutView: View {
   var isWindowModeActive: Bool = false
   var copyModeState: CopyModeState?
   var copyModePaneID: Int?
+  var windowModeState: MisttyTab.WindowModeState = .inactive
+  var joinPickTabNames: [String] = []
   var onClosePane: ((MisttyPane) -> Void)?
   var onSelectPane: ((MisttyPane) -> Void)?
 
@@ -17,6 +19,8 @@ struct PaneLayoutView: View {
         isActive: activePane?.id == pane.id,
         isWindowModeActive: isWindowModeActive,
         copyModeState: (pane.id == copyModePaneID) ? copyModeState : nil,
+        windowModeState: windowModeState,
+        joinPickTabNames: joinPickTabNames,
         onClose: { onClosePane?(pane) },
         onSelect: { onSelectPane?(pane) }
       )
@@ -27,6 +31,7 @@ struct PaneLayoutView: View {
             PaneLayoutView(
               node: a, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
+              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
               onClosePane: onClosePane, onSelectPane: onSelectPane
             )
             .frame(width: geo.size.width * ratio)
@@ -34,6 +39,7 @@ struct PaneLayoutView: View {
             PaneLayoutView(
               node: b, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
+              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
               onClosePane: onClosePane, onSelectPane: onSelectPane)
           }
         } else {
@@ -41,6 +47,7 @@ struct PaneLayoutView: View {
             PaneLayoutView(
               node: a, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
+              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
               onClosePane: onClosePane, onSelectPane: onSelectPane
             )
             .frame(height: geo.size.height * ratio)
@@ -48,6 +55,7 @@ struct PaneLayoutView: View {
             PaneLayoutView(
               node: b, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
+              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
               onClosePane: onClosePane, onSelectPane: onSelectPane)
           }
         }

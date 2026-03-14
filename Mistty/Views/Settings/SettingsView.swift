@@ -73,9 +73,69 @@ struct SettingsView: View {
           saveConfig()
         }
       }
+
+      Section("SSH") {
+        HStack {
+          Text("Default Command")
+          TextField("ssh", text: $config.ssh.defaultCommand)
+            .frame(width: 150)
+        }
+
+        ForEach(config.ssh.hosts.indices, id: \.self) { index in
+          HStack {
+            Picker("Match", selection: Binding(
+              get: { config.ssh.hosts[index].hostname != nil ? "hostname" : "regex" },
+              set: { type in
+                if type == "hostname" {
+                  config.ssh.hosts[index].hostname = config.ssh.hosts[index].regex ?? ""
+                  config.ssh.hosts[index].regex = nil
+                } else {
+                  config.ssh.hosts[index].regex = config.ssh.hosts[index].hostname ?? ""
+                  config.ssh.hosts[index].hostname = nil
+                }
+              }
+            )) {
+              Text("Hostname").tag("hostname")
+              Text("Regex").tag("regex")
+            }
+            .frame(width: 120)
+
+            if config.ssh.hosts[index].hostname != nil {
+              TextField("hostname", text: Binding(
+                get: { config.ssh.hosts[index].hostname ?? "" },
+                set: { config.ssh.hosts[index].hostname = $0 }
+              ))
+              .frame(width: 120)
+            } else {
+              TextField("pattern", text: Binding(
+                get: { config.ssh.hosts[index].regex ?? "" },
+                set: { config.ssh.hosts[index].regex = $0 }
+              ))
+              .frame(width: 120)
+            }
+
+            TextField("command", text: $config.ssh.hosts[index].command)
+              .frame(width: 80)
+
+            Button(role: .destructive) {
+              config.ssh.hosts.remove(at: index)
+              saveConfig()
+            } label: {
+              Image(systemName: "minus.circle.fill")
+                .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+          }
+        }
+
+        Button("Add Host Override") {
+          config.ssh.hosts.append(SSHHostOverride(hostname: "", command: "ssh"))
+          saveConfig()
+        }
+      }
     }
     .formStyle(.grouped)
-    .frame(width: 550, height: 500)
+    .frame(width: 550, height: 600)
     .padding()
     .onChange(of: config.fontSize) { _, _ in saveConfig() }
     .onChange(of: config.fontFamily) { _, _ in saveConfig() }
@@ -83,6 +143,7 @@ struct SettingsView: View {
     .onChange(of: config.scrollbackLines) { _, _ in saveConfig() }
     .onChange(of: config.sidebarVisible) { _, _ in saveConfig() }
     .onChange(of: config.popups) { _, _ in saveConfig() }
+    .onChange(of: config.ssh) { _, _ in saveConfig() }
   }
 
   private func saveConfig() {

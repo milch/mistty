@@ -85,8 +85,39 @@ final class SessionStoreTests: XCTestCase {
     let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
     let tab = session.tabs[0]
     XCTAssertFalse(tab.isWindowModeActive)
-    tab.isWindowModeActive = true
+    tab.windowModeState = .normal
     XCTAssertTrue(tab.isWindowModeActive)
+  }
+
+  func test_windowModeState() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let tab = session.tabs[0]
+    XCTAssertEqual(tab.windowModeState, .inactive)
+    tab.windowModeState = .normal
+    XCTAssertTrue(tab.isWindowModeActive)
+    tab.windowModeState = .joinPick
+    XCTAssertTrue(tab.isWindowModeActive)
+    tab.windowModeState = .inactive
+    XCTAssertFalse(tab.isWindowModeActive)
+  }
+
+  func test_addExistingPane() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let tab1 = session.tabs[0]
+    tab1.splitActivePane(direction: .horizontal)
+    XCTAssertEqual(tab1.panes.count, 2)
+
+    session.addTab()
+    let tab2 = session.tabs[1]
+    XCTAssertEqual(tab2.panes.count, 1)
+
+    let paneToMove = tab1.panes[0]
+    tab1.closePane(paneToMove)
+    tab2.addExistingPane(paneToMove, direction: .horizontal)
+
+    XCTAssertEqual(tab1.panes.count, 1)
+    XCTAssertEqual(tab2.panes.count, 2)
+    XCTAssertTrue(tab2.panes.contains(where: { $0.id == paneToMove.id }))
   }
 
   func test_zoomedPaneToggle() {
@@ -156,6 +187,86 @@ final class SessionStoreTests: XCTestCase {
     XCTAssertEqual(tracked?.id, id)
     XCTAssertTrue(tracked?.window === window)
     XCTAssertNil(store.trackedWindow(byId: 999))
+  }
+
+  // MARK: - Tab/Session Cycling
+
+  func test_nextTab_wrapsAround() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab()
+    session.addTab()
+    // Active is last tab (index 2)
+    session.nextTab()
+    XCTAssertEqual(session.activeTab?.id, session.tabs[0].id)
+  }
+
+  func test_prevTab_wrapsAround() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab()
+    session.addTab()
+    session.activeTab = session.tabs[0]
+    session.prevTab()
+    XCTAssertEqual(session.activeTab?.id, session.tabs[2].id)
+  }
+
+  func test_nextSession_wrapsAround() {
+    let _ = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))
+    let s3 = store.createSession(name: "c", directory: URL(fileURLWithPath: "/tmp"))
+    XCTAssertEqual(store.activeSession?.id, s3.id)
+    store.nextSession()
+    XCTAssertEqual(store.activeSession?.name, "a")
+  }
+
+  func test_prevSession_wrapsAround() {
+    let s1 = store.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "c", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = s1
+    store.prevSession()
+    XCTAssertEqual(store.activeSession?.name, "c")
+  }
+
+  func test_focusTabByIndex_boundsCheck() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab()
+    session.activeTab = session.tabs[0]
+    let index = 5
+    if index < session.tabs.count {
+      session.activeTab = session.tabs[index]
+    }
+    XCTAssertEqual(session.activeTab?.id, session.tabs[0].id)
+  }
+
+  func test_paneProcessTitle() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let pane = session.tabs[0].panes[0]
+    XCTAssertNil(pane.processTitle)
+    pane.processTitle = "nvim"
+    XCTAssertEqual(pane.processTitle, "nvim")
+  }
+
+  func test_isRunningNeovim() {
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let pane = session.tabs[0].panes[0]
+
+    pane.processTitle = "zsh"
+    XCTAssertFalse(pane.isRunningNeovim)
+
+    pane.processTitle = "nvim"
+    XCTAssertTrue(pane.isRunningNeovim)
+
+    pane.processTitle = "nvim ."
+    XCTAssertTrue(pane.isRunningNeovim)
+
+    pane.processTitle = "vim"
+    XCTAssertTrue(pane.isRunningNeovim)
+
+    pane.processTitle = "vimtutor"
+    XCTAssertFalse(pane.isRunningNeovim)
+
+    pane.processTitle = nil
+    XCTAssertFalse(pane.isRunningNeovim)
   }
 
   func test_idsAreSequential() {

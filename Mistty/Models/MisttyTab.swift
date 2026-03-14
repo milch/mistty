@@ -14,7 +14,13 @@ final class MisttyTab: Identifiable {
   private(set) var panes: [MisttyPane] = []
   var activePane: MisttyPane?
   var hasBell = false
-  var isWindowModeActive = false
+
+  enum WindowModeState {
+    case inactive, normal, joinPick
+  }
+
+  var windowModeState: WindowModeState = .inactive
+  var isWindowModeActive: Bool { windowModeState != .inactive }
   var copyModeState: CopyModeState?
   var isCopyModeActive: Bool { copyModeState != nil }
   var zoomedPane: MisttyPane?
@@ -52,6 +58,13 @@ final class MisttyTab: Identifiable {
     layout.split(pane: activePane, direction: direction, newPane: newPane)
     panes = layout.leaves
     self.activePane = layout.leaves.last
+  }
+
+  func addExistingPane(_ pane: MisttyPane, direction: SplitDirection) {
+    guard let activePane else { return }
+    layout.split(pane: activePane, direction: direction, newPane: pane)
+    panes = layout.leaves
+    self.activePane = pane
   }
 
   func closePane(_ pane: MisttyPane) {
