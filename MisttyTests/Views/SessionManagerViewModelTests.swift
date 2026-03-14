@@ -20,4 +20,29 @@ final class SessionManagerViewModelTests: XCTestCase {
     XCTAssertFalse(sessionItems.contains("current"))
     XCTAssertTrue(sessionItems.contains("other"))
   }
+
+  func test_frecencySorting() async {
+    let store = SessionStore()
+    let tempURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("frecency-test-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    let service = FrecencyService(storageURL: tempURL)
+    service.recordAccess(for: "session:other")
+    service.recordAccess(for: "session:other")
+    service.recordAccess(for: "session:other")
+
+    let _ = store.createSession(name: "first", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "other", directory: URL(fileURLWithPath: "/home"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store, frecencyService: service)
+    await vm.load()
+
+    let names = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertEqual(names.first, "other")
+  }
 }
