@@ -21,6 +21,22 @@ final class SessionManagerViewModelTests: XCTestCase {
     XCTAssertTrue(sessionItems.contains("other"))
   }
 
+  func test_sshHostSelectionCreatesSshSession() async {
+    let store = SessionStore()
+    let host = SSHHost(alias: "dev-box", hostname: "10.0.0.1")
+    let config = MisttyConfig.default
+    let command = config.ssh.resolveCommand(for: host.alias)
+    let fullCommand = "\(command) \(host.alias)"
+    let session = store.createSession(
+      name: host.alias,
+      directory: FileManager.default.homeDirectoryForCurrentUser,
+      exec: fullCommand
+    )
+    session.sshCommand = fullCommand
+    XCTAssertEqual(session.sshCommand, "ssh dev-box")
+    XCTAssertEqual(session.name, "dev-box")
+  }
+
   func test_frecencySorting() async {
     let store = SessionStore()
     let tempURL = FileManager.default.temporaryDirectory

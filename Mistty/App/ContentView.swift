@@ -85,10 +85,32 @@ struct ContentView: View {
         store.activeSession?.addTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
-        store.activeSession?.activeTab?.splitActivePane(direction: .horizontal)
+        guard let session = store.activeSession,
+              let tab = session.activeTab else { return }
+        if let sshCommand = session.sshCommand,
+           !NSEvent.modifierFlags.contains(.option) {
+          let pane = MisttyPane(id: tab.paneIDGenerator())
+          pane.directory = session.directory
+          pane.command = sshCommand
+          pane.useCommandField = false
+          tab.addExistingPane(pane, direction: .horizontal)
+        } else {
+          tab.splitActivePane(direction: .horizontal)
+        }
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
-        store.activeSession?.activeTab?.splitActivePane(direction: .vertical)
+        guard let session = store.activeSession,
+              let tab = session.activeTab else { return }
+        if let sshCommand = session.sshCommand,
+           !NSEvent.modifierFlags.contains(.option) {
+          let pane = MisttyPane(id: tab.paneIDGenerator())
+          pane.directory = session.directory
+          pane.command = sshCommand
+          pane.useCommandField = false
+          tab.addExistingPane(pane, direction: .vertical)
+        } else {
+          tab.splitActivePane(direction: .vertical)
+        }
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
         showingSessionManager = true

@@ -117,8 +117,16 @@ final class SessionManagerViewModel {
       store.activeSession = session
     case .directory(let url):
       store.createSession(name: url.lastPathComponent, directory: url)
-    case .sshHost:
-      break  // post-MVP
+    case .sshHost(let host):
+      let config = MisttyConfig.load()
+      let command = config.ssh.resolveCommand(for: host.alias)
+      let fullCommand = "\(command) \(host.alias)"
+      let session = store.createSession(
+        name: host.alias,
+        directory: FileManager.default.homeDirectoryForCurrentUser,
+        exec: fullCommand
+      )
+      session.sshCommand = fullCommand
     }
   }
 }
