@@ -71,12 +71,18 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Session workflow
 - Session manager (cmd+j) with fuzzy find
+  - FuzzyMatcher with two-pass greedy algorithm (fzf-style) + Damerau-Levenshtein typo tolerance
   - Multi-token AND matching: space-separated query tokens all must match
   - Subsequence matching across session name, directory path, and SSH hostname
-  - Typo tolerance via transposition and character-skip scoring
+  - Typo tolerance (query 4-6 chars: 1 edit, 7+: 2 edits) with 0.3x score penalty
   - Match quality as primary sort key, frecency as tiebreaker
-  - Tab completion for filesystem paths (completionValue())
-  - matchResults dictionary stores per-item FuzzyMatch for highlight rendering
+  - SSH boost (1.5x) when query starts with "ssh"
+  - Match highlighting: matched characters shown in accent color via HighlightedText view
+  - Tab/Right Arrow completion: fills selected item's path into search field
+  - "New" option at top of results when query is non-empty (not default-selected unless only item)
+    - Plain text mode: creates session with query as name in active pane's CWD (Cmd for home)
+    - Path-like mode: creates session in directory, offers to create directory if parent exists
+    - SSH mode: creates SSH session when query starts with "ssh hostname"
 - Running sessions list
 - Recent directories via zoxide (ZoxideService)
 - SSH hosts from ~/.ssh/config (SSHConfigService)
