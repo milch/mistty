@@ -93,4 +93,118 @@ final class SessionManagerViewModelTests: XCTestCase {
     }
     XCTAssertEqual(names.first, "other")
   }
+
+  func test_fuzzyFilter_subsequence() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "my-project", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("mprj")
+
+    let sessionNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertTrue(sessionNames.contains("my-project"))
+  }
+
+  func test_fuzzyFilter_multiToken_AND() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "work-bazel", directory: URL(fileURLWithPath: "/tmp/workspace"))
+    let _ = store.createSession(name: "work-other", directory: URL(fileURLWithPath: "/tmp/other"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("work bazel")
+
+    let sessionNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertTrue(sessionNames.contains("work-bazel"))
+    XCTAssertFalse(sessionNames.contains("work-other"))
+  }
+
+  func test_fuzzyFilter_matchQualityPrimary_frecencyTiebreak() async {
+    let store = SessionStore()
+    let tempURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("frecency-test-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    let service = FrecencyService(storageURL: tempURL)
+    service.recordAccess(for: "session:dev-tools")
+    service.recordAccess(for: "session:dev-tools")
+
+    let _ = store.createSession(name: "dev", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "dev-tools", directory: URL(fileURLWithPath: "/home"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store, frecencyService: service)
+    await vm.load()
+    vm.updateQuery("dev")
+
+    let sessionNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertEqual(sessionNames.first, "dev")
+  }
+
+  func test_fuzzyFilter_storesMatchResults() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "my-project", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("proj")
+
+    let matchedItem = vm.filteredItems.first { item in
+      if case .runningSession = item { return true }
+      return false
+    }
+    if let item = matchedItem {
+      XCTAssertNotNil(vm.matchResults[item.id])
+    }
+  }
+
+  func test_fuzzyFilter_emptyQuery_showsAll() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "alpha", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(name: "beta", directory: URL(fileURLWithPath: "/home"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("")
+
+    let sessionNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertTrue(sessionNames.contains("alpha"))
+    XCTAssertTrue(sessionNames.contains("beta"))
+    XCTAssertEqual(sessionNames.count, 2)
+    XCTAssertTrue(vm.matchResults.isEmpty)
+  }
+
+  func test_fuzzyFilter_whitespaceOnly_treatedAsEmpty() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "alpha", directory: URL(fileURLWithPath: "/tmp"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("   ")
+
+    let sessionNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertEqual(sessionNames.count, 1)
+    XCTAssertTrue(sessionNames.contains("alpha"))
+  }
 }

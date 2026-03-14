@@ -1,6 +1,12 @@
 import AppKit
 import Foundation
 
+struct ItemMatchResult {
+  let score: Double
+  let displayNameIndices: [Int]
+  let subtitleIndices: [Int]
+}
+
 @MainActor
 enum SessionManagerItem {
   case runningSession(MisttySession)
@@ -66,6 +72,7 @@ final class SessionManagerViewModel {
   private var allItems: [SessionManagerItem] = []
   var filteredItems: [SessionManagerItem] = []
   var selectedIndex = 0
+  var matchResults: [String: ItemMatchResult] = [:]
 
   let store: SessionStore
   private let frecencyService: FrecencyService
@@ -105,15 +112,103 @@ final class SessionManagerViewModel {
     applyFilter()
   }
 
-  private func applyFilter() {
-    if query.isEmpty {
-      filteredItems = allItems
-    } else {
-      filteredItems = allItems.filter {
-        $0.displayName.localizedCaseInsensitiveContains(query)
-      }
+  /// Returns (rawName, subtitle, displayNamePrefixLength) for fuzzy matching.
+  private func matchableFields(for item: SessionManagerItem) -> (rawName: String, subtitle: String?, prefixLen: Int) {
+    switch item {
+    case .runningSession(let s):
+      return (s.name, nil, 2) // "▶ " is 2 chars
+    case .directory(let u):
+      return (u.lastPathComponent, u.path, 0)
+    case .sshHost(let h):
+      return (h.alias, h.hostname, 2) // "⌁ " is 2 chars
+    case .newSession:
+      return ("", nil, 0)
     }
-    selectedIndex = filteredItems.isEmpty ? 0 : 0
+  }
+
+  private func applyFilter() {
+    matchResults = [:]
+
+    let tokens = query.split(separator: " ").map(String.init)
+
+    if tokens.isEmpty {
+      filteredItems = allItems
+      selectedIndex = 0
+      return
+    }
+
+    let isSSHQuery = tokens.first?.lowercased() == "ssh"
+
+    struct ScoredItem {
+      let item: SessionManagerItem
+      let result: ItemMatchResult
+    }
+
+    var scored: [ScoredItem] = []
+
+    for item in allItems {
+      let fields = matchableFields(for: item)
+
+      var allTokensMatch = true
+      var minScore = Double.infinity
+      var displayIndices: [Int] = []
+      var subtitleIndices: [Int] = []
+
+      for token in tokens {
+        let displayMatch = FuzzyMatcher.match(query: token, target: fields.rawName)
+        let subtitleMatch = fields.subtitle.flatMap { FuzzyMatcher.match(query: token, target: $0) }
+
+        if let dm = displayMatch, let sm = subtitleMatch {
+          if dm.score >= sm.score {
+            minScore = min(minScore, dm.score)
+            displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + fields.prefixLen })
+          } else {
+            minScore = min(minScore, sm.score)
+            subtitleIndices.append(contentsOf: sm.matchedIndices)
+          }
+        } else if let dm = displayMatch {
+          minScore = min(minScore, dm.score)
+          displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + fields.prefixLen })
+        } else if let sm = subtitleMatch {
+          minScore = min(minScore, sm.score)
+          subtitleIndices.append(contentsOf: sm.matchedIndices)
+        } else {
+          allTokensMatch = false
+          break
+        }
+      }
+
+      guard allTokensMatch else { continue }
+
+      var finalScore = minScore
+
+      // SSH boost
+      if isSSHQuery, case .sshHost = item {
+        finalScore = min(finalScore * 1.5, 1.0)
+      }
+
+      let result = ItemMatchResult(
+        score: finalScore,
+        displayNameIndices: displayIndices,
+        subtitleIndices: subtitleIndices
+      )
+      scored.append(ScoredItem(item: item, result: result))
+    }
+
+    // Sort by score desc, frecency as tiebreaker
+    scored.sort { a, b in
+      if a.result.score != b.result.score { return a.result.score > b.result.score }
+      let freqA = a.item.frecencyKey.map { frecencyService.score(for: $0) } ?? 0
+      let freqB = b.item.frecencyKey.map { frecencyService.score(for: $0) } ?? 0
+      return freqA > freqB
+    }
+
+    filteredItems = scored.map(\.item)
+    for s in scored {
+      matchResults[s.item.id] = s.result
+    }
+
+    selectedIndex = 0
   }
 
   func moveUp() { selectedIndex = max(0, selectedIndex - 1) }
