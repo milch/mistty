@@ -43,6 +43,18 @@ Each matched character accumulates points based on:
 
 For typo-tolerant matches, the base score is reduced by a penalty factor (0.5x) so strict matches always rank above typo matches of similar quality.
 
+### Implementation Reference
+
+[frizbee](https://github.com/saghen/frizbee) uses Smith-Waterman with affine gaps — a local sequence alignment algorithm that naturally handles insertions, deletions, and substitutions (typos). Key ideas to draw from:
+
+- **Affine gap penalties** — distinguish between opening a gap (skipping characters) and extending one, so consecutive skips are cheaper than scattered ones. This maps to our "consecutive run bonus" concept.
+- **Bonus scoring at boundaries** — frizbee awards PREFIX_BONUS (match at start), DELIMITER_BONUS (match after non-alphanumeric separator like `/`), and CAPITALIZATION_BONUS (match at camelCase boundary). These align with our word boundary and prefix bonuses.
+- **SIMD row-wise parallelism** — processes 16 haystack characters per SIMD lane (256-bit registers) against each needle character. For our small dataset (tens of items) this is likely unnecessary, but if performance becomes an issue, the technique is: broadcast the current needle character, compare against 16 haystack bytes simultaneously, then apply scoring in parallel.
+- **Byte-level matching** — frizbee matches against raw bytes, skipping Unicode decoding. For our use case (paths, hostnames, session names) this is safe and fast.
+- **Prefiltering** — before expensive scoring, frizbee validates that all needle characters exist in the haystack using SIMD comparisons. We can use a simpler version: a character frequency check as a fast-reject before running the full scoring pass.
+
+For our dataset size (tens of items, not millions), a straightforward implementation of the scoring heuristics above will be fast enough. The SIMD and prefiltering techniques from frizbee are available as optimizations if needed later.
+
 ### Multi-Token AND Logic
 
 The query is split by spaces into tokens. Empty tokens (from consecutive spaces or leading/trailing spaces) are discarded. If no non-empty tokens remain, the query is treated as empty.
