@@ -1,6 +1,32 @@
 import Foundation
 import TOMLKit
 
+struct SSHHostOverride: Sendable, Equatable {
+  var hostname: String?
+  var regex: String?
+  var command: String
+
+  func matches(_ host: String) -> Bool {
+    if let hostname { return hostname == host }
+    if let regex, let re = try? Regex(regex) {
+      return host.wholeMatch(of: re) != nil
+    }
+    return false
+  }
+}
+
+struct SSHConfig: Sendable, Equatable {
+  var defaultCommand: String = "ssh"
+  var hosts: [SSHHostOverride] = []
+
+  func resolveCommand(for host: String) -> String {
+    for override in hosts {
+      if override.matches(host) { return override.command }
+    }
+    return defaultCommand
+  }
+}
+
 struct MisttyConfig: Sendable, Equatable {
   var fontSize: Int = 13
   var fontFamily: String = "monospace"
@@ -8,6 +34,7 @@ struct MisttyConfig: Sendable, Equatable {
   var scrollbackLines: Int = 10000
   var sidebarVisible: Bool = true
   var popups: [PopupDefinition] = []
+  var ssh: SSHConfig = SSHConfig()
 
   static let `default` = MisttyConfig()
 
@@ -30,6 +57,21 @@ struct MisttyConfig: Sendable, Equatable {
           height: max(0.1, min(1.0, t["height"]?.double ?? 0.8)),
           closeOnExit: t["close_on_exit"]?.bool ?? true
         )
+      }
+    }
+    if let sshTable = table["ssh"]?.table {
+      if let defaultCmd = sshTable["default_command"]?.string {
+        config.ssh.defaultCommand = defaultCmd
+      }
+      if let hostArray = sshTable["host"]?.array {
+        config.ssh.hosts = hostArray.compactMap { entry -> SSHHostOverride? in
+          guard let t = entry.table else { return nil }
+          return SSHHostOverride(
+            hostname: t["hostname"]?.string,
+            regex: t["regex"]?.string,
+            command: t["command"]?.string ?? config.ssh.defaultCommand
+          )
+        }
       }
     }
     return config
@@ -72,6 +114,22 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("width = \(popup.width)")
       lines.append("height = \(popup.height)")
       lines.append("close_on_exit = \(popup.closeOnExit)")
+    }
+    if ssh.defaultCommand != "ssh" || !ssh.hosts.isEmpty {
+      lines.append("")
+      lines.append("[ssh]")
+      lines.append("default_command = \"\(ssh.defaultCommand)\"")
+      for host in ssh.hosts {
+        lines.append("")
+        lines.append("[[ssh.host]]")
+        if let hostname = host.hostname {
+          lines.append("hostname = \"\(hostname)\"")
+        }
+        if let regex = host.regex {
+          lines.append("regex = \"\(regex)\"")
+        }
+        lines.append("command = \"\(host.command)\"")
+      }
     }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
   }

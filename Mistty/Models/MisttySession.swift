@@ -6,6 +6,7 @@ final class MisttySession: Identifiable {
   let id: Int
   var name: String
   let directory: URL
+  var sshCommand: String?
   private(set) var tabs: [MisttyTab] = []
   var activeTab: MisttyTab?
 

@@ -76,4 +76,71 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertEqual(config.popups[0].closeOnExit, true)
     XCTAssertEqual(config.popups[0].shortcut, nil)
   }
+
+  func test_parsesSSHConfig() throws {
+    let toml = """
+      [ssh]
+      default_command = "et"
+
+      [[ssh.host]]
+      hostname = "dev-box"
+      command = "et"
+
+      [[ssh.host]]
+      regex = "prod-.*"
+      command = "ssh"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ssh.defaultCommand, "et")
+    XCTAssertEqual(config.ssh.hosts.count, 2)
+    XCTAssertEqual(config.ssh.hosts[0].hostname, "dev-box")
+    XCTAssertNil(config.ssh.hosts[0].regex)
+    XCTAssertEqual(config.ssh.hosts[0].command, "et")
+    XCTAssertNil(config.ssh.hosts[1].hostname)
+    XCTAssertEqual(config.ssh.hosts[1].regex, "prod-.*")
+    XCTAssertEqual(config.ssh.hosts[1].command, "ssh")
+  }
+
+  func test_sshConfigDefaults() throws {
+    let config = try MisttyConfig.parse("")
+    XCTAssertEqual(config.ssh.defaultCommand, "ssh")
+    XCTAssertTrue(config.ssh.hosts.isEmpty)
+  }
+
+  func test_sshCommandResolution_exactMatch() throws {
+    let toml = """
+      [[ssh.host]]
+      hostname = "dev-box"
+      command = "et"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ssh.resolveCommand(for: "dev-box"), "et")
+    XCTAssertEqual(config.ssh.resolveCommand(for: "other"), "ssh")
+  }
+
+  func test_sshCommandResolution_regexMatch() throws {
+    let toml = """
+      [[ssh.host]]
+      regex = "prod-.*"
+      command = "et"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ssh.resolveCommand(for: "prod-web1"), "et")
+    XCTAssertEqual(config.ssh.resolveCommand(for: "staging-web1"), "ssh")
+  }
+
+  func test_sshCommandResolution_firstMatchWins() throws {
+    let toml = """
+      [[ssh.host]]
+      hostname = "prod-db"
+      command = "ssh"
+
+      [[ssh.host]]
+      regex = "prod-.*"
+      command = "et"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ssh.resolveCommand(for: "prod-db"), "ssh")
+    XCTAssertEqual(config.ssh.resolveCommand(for: "prod-web"), "et")
+  }
 }
