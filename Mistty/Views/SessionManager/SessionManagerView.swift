@@ -43,10 +43,9 @@ struct SessionManagerView: View {
       Divider()
 
       ScrollViewReader { proxy in
-        let items = vm.filteredItems
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+            ForEach(Array(vm.filteredItems.enumerated()), id: \.element.id) { index, item in
               HStack {
                 VStack(alignment: .leading, spacing: 2) {
                   if case .newSession = item {
@@ -95,6 +94,7 @@ struct SessionManagerView: View {
           }
         }
         .frame(maxHeight: 360)
+        .id(queryText)
         .onChange(of: vm.selectedIndex) { _, newValue in
           proxy.scrollTo(newValue, anchor: .center)
         }
