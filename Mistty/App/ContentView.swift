@@ -390,7 +390,7 @@ struct ContentView: View {
         showingSessionManager = false
         return nil
       case 36:  // Return
-        vm.confirmSelection()
+        vm.confirmSelection(modifierFlags: event.modifierFlags)
         showingSessionManager = false
         return nil
       case 126:  // Up arrow

@@ -221,6 +221,17 @@ final class SessionManagerViewModel {
   func moveUp() { selectedIndex = max(0, selectedIndex - 1) }
   func moveDown() { selectedIndex = min(filteredItems.count - 1, selectedIndex + 1) }
 
+  func completionValue() -> String? {
+    guard selectedIndex < filteredItems.count else { return nil }
+    let item = filteredItems[selectedIndex]
+    switch item {
+    case .newSession: return nil
+    case .runningSession(let s): return s.name
+    case .directory(let u): return u.path
+    case .sshHost(let h): return h.alias
+    }
+  }
+
   private func categoryOrder(_ item: SessionManagerItem) -> Int {
     switch item {
     case .runningSession: return 0

@@ -1,6 +1,23 @@
 import AppKit
 import SwiftUI
 
+struct HighlightedText: View {
+  let text: String
+  let indices: Set<Int>
+
+  var body: some View {
+    if indices.isEmpty {
+      Text(text)
+    } else {
+      text.enumerated().reduce(Text("")) { result, pair in
+        let char = String(pair.element)
+        return result + Text(char)
+          .foregroundColor(indices.contains(pair.offset) ? .accentColor : .primary)
+      }
+    }
+  }
+}
+
 struct SessionManagerView: View {
   @Bindable var vm: SessionManagerViewModel
   @Binding var isPresented: Bool
@@ -10,7 +27,12 @@ struct SessionManagerView: View {
     VStack(spacing: 0) {
       FocusableTextField(
         text: $queryText,
-        placeholder: "Search sessions, directories, hosts..."
+        placeholder: "Search sessions, directories, hosts...",
+        onComplete: {
+          if let value = vm.completionValue() {
+            queryText = value
+          }
+        }
       )
       .font(.title3)
       .padding(14)
@@ -26,14 +48,33 @@ struct SessionManagerView: View {
             ForEach(Array(vm.filteredItems.enumerated()), id: \.element.id) { index, item in
               HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                  Text(item.displayName)
+                  if case .newSession = item {
+                    HStack(spacing: 4) {
+                      Image(systemName: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                      Text(item.displayName)
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+                    }
+                  } else {
+                    let matchResult = vm.matchResults[item.id]
+                    HighlightedText(
+                      text: item.displayName,
+                      indices: Set(matchResult?.displayNameIndices ?? [])
+                    )
                     .font(.system(size: 13))
                     .lineLimit(1)
+                  }
                   if let subtitle = item.subtitle {
-                    Text(subtitle)
-                      .font(.system(size: 11))
-                      .foregroundStyle(.secondary)
-                      .lineLimit(1)
+                    let matchResult = vm.matchResults[item.id]
+                    HighlightedText(
+                      text: subtitle,
+                      indices: Set(matchResult?.subtitleIndices ?? [])
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                   }
                 }
                 Spacer()
@@ -45,7 +86,8 @@ struct SessionManagerView: View {
               .contentShape(Rectangle())
               .onTapGesture {
                 vm.selectedIndex = index
-                vm.confirmSelection()
+                let flags = NSApp.currentEvent?.modifierFlags ?? []
+                vm.confirmSelection(modifierFlags: flags)
                 isPresented = false
               }
             }
@@ -69,6 +111,7 @@ struct SessionManagerView: View {
 struct FocusableTextField: NSViewRepresentable {
   @Binding var text: String
   var placeholder: String
+  var onComplete: (() -> Void)?
 
   func makeNSView(context: Context) -> NSTextField {
     let field = NSTextField()
@@ -94,19 +137,37 @@ struct FocusableTextField: NSViewRepresentable {
   }
 
   func makeCoordinator() -> Coordinator {
-    Coordinator(text: $text)
+    Coordinator(text: $text, onComplete: onComplete)
   }
 
   class Coordinator: NSObject, NSTextFieldDelegate {
     var text: Binding<String>
+    var onComplete: (() -> Void)?
 
-    init(text: Binding<String>) {
+    init(text: Binding<String>, onComplete: (() -> Void)?) {
       self.text = text
+      self.onComplete = onComplete
     }
 
     func controlTextDidChange(_ obj: Notification) {
       guard let field = obj.object as? NSTextField else { return }
       text.wrappedValue = field.stringValue
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+      if commandSelector == #selector(NSResponder.insertTab(_:)) {
+        onComplete?()
+        return true
+      }
+      if commandSelector == #selector(NSResponder.moveRight(_:)) {
+        // Only complete if cursor is at the end
+        if textView.selectedRange().location == textView.string.count {
+          onComplete?()
+          return true
+        }
+        return false
+      }
+      return false
     }
   }
 }
