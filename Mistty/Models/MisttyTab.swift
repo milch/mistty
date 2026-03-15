@@ -72,4 +72,12 @@ final class MisttyTab: Identifiable {
     panes = layout.leaves
     if activePane?.id == pane.id { activePane = panes.last }
   }
+
+  func applyStandardLayout(_ standardLayout: StandardLayout) {
+    let currentPanes = layout.leaves
+    guard currentPanes.count >= 2 else { return }
+    zoomedPane = nil
+    layout = PaneLayout(root: LayoutEngine.apply(standardLayout, to: currentPanes))
+    panes = layout.leaves
+  }
 }

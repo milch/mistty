@@ -128,6 +128,7 @@ struct ContentView: View {
                 copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
                 windowModeState: tab.windowModeState,
                 joinPickTabNames: joinPickTabNames,
+                paneCount: tab.panes.count,
                 onClose: { closePane(zoomedPane) },
                 onSelect: {}
               )
@@ -140,6 +141,7 @@ struct ContentView: View {
                 copyModePaneID: tab.activePane?.id,
                 windowModeState: tab.windowModeState,
                 joinPickTabNames: joinPickTabNames,
+                paneCount: tab.panes.count,
                 onClosePane: { pane in closePane(pane) },
                 onSelectPane: { pane in tab.activePane = pane }
               )
@@ -490,6 +492,21 @@ struct ContentView: View {
       case 46:  // m — join pane to tab
         guard let tab = store.activeSession?.activeTab else { return nil }
         tab.windowModeState = .joinPick
+        return nil
+      case 18, 19, 20, 21, 23:  // 1-5: standard layouts
+        if let tab = store.activeSession?.activeTab, tab.panes.count >= 2 {
+          let standardLayout: StandardLayout = switch event.keyCode {
+          case 18: .evenHorizontal
+          case 19: .evenVertical
+          case 20: .mainHorizontal
+          case 21: .mainVertical
+          case 23: .tiled
+          default: .evenHorizontal
+          }
+          tab.applyStandardLayout(standardLayout)
+          tab.windowModeState = .inactive
+          removeWindowModeMonitor()
+        }
         return nil
       default:
         return event

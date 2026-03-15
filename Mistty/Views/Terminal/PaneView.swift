@@ -8,6 +8,7 @@ struct PaneView: View {
   var copyModeState: CopyModeState?
   var windowModeState: MisttyTab.WindowModeState = .inactive
   var joinPickTabNames: [String] = []
+  var paneCount: Int = 1
   var onClose: (() -> Void)?
   var onSelect: (() -> Void)?
   @State private var isHovering = false
@@ -37,7 +38,8 @@ struct PaneView: View {
               Spacer()
               WindowModeHints(
                 isJoinPick: windowModeState == .joinPick,
-                tabNames: joinPickTabNames
+                tabNames: joinPickTabNames,
+                paneCount: paneCount
               )
                 .padding(6)
             }

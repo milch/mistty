@@ -8,6 +8,7 @@ struct PaneLayoutView: View {
   var copyModePaneID: Int?
   var windowModeState: MisttyTab.WindowModeState = .inactive
   var joinPickTabNames: [String] = []
+  var paneCount: Int = 1
   var onClosePane: ((MisttyPane) -> Void)?
   var onSelectPane: ((MisttyPane) -> Void)?
 
@@ -23,6 +24,7 @@ struct PaneLayoutView: View {
         copyModeState: (pane.id == copyModePaneID) ? copyModeState : nil,
         windowModeState: windowModeState,
         joinPickTabNames: joinPickTabNames,
+        paneCount: paneCount,
         onClose: { onClosePane?(pane) },
         onSelect: { onSelectPane?(pane) }
       )
@@ -34,7 +36,7 @@ struct PaneLayoutView: View {
               node: a, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
               windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              onClosePane: onClosePane, onSelectPane: onSelectPane
+              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane
             )
             .frame(width: geo.size.width * ratio)
             Divider()
@@ -42,7 +44,7 @@ struct PaneLayoutView: View {
               node: b, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
               windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              onClosePane: onClosePane, onSelectPane: onSelectPane)
+              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane)
           }
         } else {
           VStack(spacing: 1) {
@@ -50,7 +52,7 @@ struct PaneLayoutView: View {
               node: a, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
               windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              onClosePane: onClosePane, onSelectPane: onSelectPane
+              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane
             )
             .frame(height: geo.size.height * ratio)
             Divider()
@@ -58,7 +60,7 @@ struct PaneLayoutView: View {
               node: b, activePane: activePane, isWindowModeActive: isWindowModeActive,
               copyModeState: copyModeState, copyModePaneID: copyModePaneID,
               windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              onClosePane: onClosePane, onSelectPane: onSelectPane)
+              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane)
           }
         }
       }
