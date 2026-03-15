@@ -180,6 +180,74 @@ final class PaneLayoutTests: XCTestCase {
     XCTAssertFalse(layout.isEmpty)
   }
 
+  // MARK: - Empty node handling
+
+  func test_leavesSkipsEmpty() {
+    let pane = makePane()
+    let root: PaneLayoutNode = .split(.horizontal, .leaf(pane), .empty, 0.5)
+    let layout = PaneLayout(root: root)
+    XCTAssertEqual(layout.leaves.count, 1)
+    XCTAssertEqual(layout.leaves[0].id, pane.id)
+  }
+
+  func test_rootInitializer() {
+    let pane = makePane()
+    let root: PaneLayoutNode = .leaf(pane)
+    let layout = PaneLayout(root: root)
+    XCTAssertEqual(layout.leaves.count, 1)
+  }
+
+  func test_adjacentPaneSkipsEmpty() {
+    let pane1 = makePane()
+    let pane2 = makePane()
+    let root: PaneLayoutNode = .split(
+      .horizontal,
+      .leaf(pane1),
+      .split(.horizontal, .empty, .leaf(pane2), 0.5),
+      0.5)
+    let layout = PaneLayout(root: root)
+    let adjacent = layout.adjacentPane(from: pane1, direction: .right)
+    XCTAssertEqual(adjacent?.id, pane2.id)
+  }
+
+  func test_removeCollapsesSiblingEmpty() {
+    let pane1 = makePane()
+    let pane2 = makePane()
+    let pane3 = makePane()
+    let root: PaneLayoutNode = .split(
+      .vertical,
+      .split(.horizontal, .leaf(pane1), .leaf(pane2), 0.5),
+      .split(.horizontal, .leaf(pane3), .empty, 0.5),
+      0.5)
+    var layout = PaneLayout(root: root)
+    layout.remove(pane: pane3)
+    XCTAssertEqual(layout.leaves.count, 2)
+    if case .split(.horizontal, .leaf(let a), .leaf(let b), _) = layout.root {
+      XCTAssertEqual(a.id, pane1.id)
+      XCTAssertEqual(b.id, pane2.id)
+    } else {
+      XCTFail("Expected flat horizontal split after collapsing empty sibling")
+    }
+  }
+
+  func test_firstLeafSkipsEmpty() {
+    let pane = makePane()
+    let root: PaneLayoutNode = .split(.horizontal, .empty, .leaf(pane), 0.5)
+    let layout = PaneLayout(root: root)
+    let adjacent = layout.adjacentPane(from: pane, direction: .left)
+    XCTAssertNil(adjacent)
+  }
+
+  func test_swapPaneSkipsEmpty() {
+    let pane1 = makePane()
+    let root: PaneLayoutNode = .split(.horizontal, .leaf(pane1), .empty, 0.5)
+    var layout = PaneLayout(root: root)
+    let target = layout.swapPane(pane1, direction: .right)
+    XCTAssertNil(target)
+  }
+
+  // MARK: - Tab integration
+
   func test_tabIntegration_splitUpdatesLayout() {
     let store = SessionStore()
     let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))

@@ -13,6 +13,8 @@ struct PaneLayoutView: View {
 
   var body: some View {
     switch node {
+    case .empty:
+      Color(nsColor: .windowBackgroundColor)
     case .leaf(let pane):
       PaneView(
         pane: pane,

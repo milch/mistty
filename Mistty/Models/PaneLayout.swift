@@ -6,6 +6,7 @@ enum NavigationDirection {
 
 indirect enum PaneLayoutNode {
   case leaf(MisttyPane)
+  case empty
   case split(SplitDirection, PaneLayoutNode, PaneLayoutNode, CGFloat)
 }
 
@@ -17,6 +18,10 @@ struct PaneLayout {
     root = .leaf(pane)
   }
 
+  init(root: PaneLayoutNode) {
+    self.root = root
+  }
+
   var leaves: [MisttyPane] {
     if isEmpty { return [] }
     return Self.collectLeaves(root)
@@ -26,6 +31,8 @@ struct PaneLayout {
     switch node {
     case .leaf(let pane):
       return [pane]
+    case .empty:
+      return []
     case .split(_, let a, let b, _):
       return collectLeaves(a) + collectLeaves(b)
     }
@@ -53,6 +60,8 @@ struct PaneLayout {
       return nil  // Remove this leaf
     case .leaf:
       return node  // Not the target, keep it
+    case .empty:
+      return node
     case .split(let dir, let a, let b, let ratio):
       let newA = removeNode(a, target: target)
       let newB = removeNode(b, target: target)
@@ -60,7 +69,11 @@ struct PaneLayout {
       case (nil, nil): return nil
       case (nil, let remaining): return remaining
       case (let remaining, nil): return remaining
-      case (let left?, let right?): return .split(dir, left, right, ratio)
+      case (let left?, let right?):
+        // Collapse empty siblings so orphaned .empty nodes don't waste screen space
+        if case .empty = left { return right }
+        if case .empty = right { return left }
+        return .split(dir, left, right, ratio)
       }
     }
   }
@@ -80,6 +93,8 @@ struct PaneLayout {
       return .split(direction, .leaf(p), .leaf(newPane), 0.5)
     case .leaf:
       return node
+    case .empty:
+      return node
     case .split(let dir, let a, let b, let ratio):
       return .split(
         dir,
@@ -98,7 +113,7 @@ struct PaneLayout {
 
   private static func rotate(_ node: PaneLayoutNode, target: Int) -> PaneLayoutNode {
     switch node {
-    case .leaf:
+    case .leaf, .empty:
       return node
     case .split(let dir, let a, let b, let ratio):
       // Check if target is a direct leaf child of this split
@@ -133,7 +148,7 @@ struct PaneLayout {
     along direction: SplitDirection?
   ) -> PaneLayoutNode {
     switch node {
-    case .leaf:
+    case .leaf, .empty:
       return node
     case .split(let dir, let a, let b, let ratio):
       let aContains = collectLeaves(a).contains { $0.id == target }
@@ -168,6 +183,8 @@ struct PaneLayout {
     switch node {
     case .leaf(let p):
       return p.id == target ? [] : nil
+    case .empty:
+      return nil
     case .split(_, let a, let b, _):
       if let path = findPath(a, target: target) {
         return [.left] + path
@@ -238,6 +255,8 @@ struct PaneLayout {
       if p.id == pane1.id { return .leaf(pane2) }
       if p.id == pane2.id { return .leaf(pane1) }
       return node
+    case .empty:
+      return node
     case .split(let dir, let a, let b, let ratio):
       return .split(dir, swapLeaves(a, pane1: pane1, pane2: pane2), swapLeaves(b, pane1: pane1, pane2: pane2), ratio)
     }
@@ -246,14 +265,16 @@ struct PaneLayout {
   private static func firstLeaf(_ node: PaneLayoutNode) -> MisttyPane? {
     switch node {
     case .leaf(let p): return p
-    case .split(_, let a, _, _): return firstLeaf(a)
+    case .empty: return nil
+    case .split(_, let a, let b, _): return firstLeaf(a) ?? firstLeaf(b)
     }
   }
 
   private static func lastLeaf(_ node: PaneLayoutNode) -> MisttyPane? {
     switch node {
     case .leaf(let p): return p
-    case .split(_, _, let b, _): return lastLeaf(b)
+    case .empty: return nil
+    case .split(_, let a, let b, _): return lastLeaf(b) ?? lastLeaf(a)
     }
   }
 }
