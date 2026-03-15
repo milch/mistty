@@ -119,32 +119,43 @@ struct ContentView: View {
             let joinPickTabNames = session.tabs
               .filter { $0.id != tab.id }
               .map { $0.displayTitle }
-            if let zoomedPane = tab.zoomedPane {
-              PaneView(
-                pane: zoomedPane,
-                isActive: true,
-                isWindowModeActive: tab.isWindowModeActive,
-                isZoomed: true,
-                copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
-                windowModeState: tab.windowModeState,
-                joinPickTabNames: joinPickTabNames,
-                paneCount: tab.panes.count,
-                onClose: { closePane(zoomedPane) },
-                onSelect: {}
-              )
-            } else {
-              PaneLayoutView(
-                node: tab.layout.root,
-                activePane: tab.activePane,
-                isWindowModeActive: tab.isWindowModeActive,
-                copyModeState: tab.copyModeState,
-                copyModePaneID: tab.activePane?.id,
-                windowModeState: tab.windowModeState,
-                joinPickTabNames: joinPickTabNames,
-                paneCount: tab.panes.count,
-                onClosePane: { pane in closePane(pane) },
-                onSelectPane: { pane in tab.activePane = pane }
-              )
+            ZStack(alignment: .bottom) {
+              if let zoomedPane = tab.zoomedPane {
+                PaneView(
+                  pane: zoomedPane,
+                  isActive: true,
+                  isWindowModeActive: tab.isWindowModeActive,
+                  isZoomed: true,
+                  copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
+                  windowModeState: tab.windowModeState,
+                  joinPickTabNames: joinPickTabNames,
+                  paneCount: tab.panes.count,
+                  onClose: { closePane(zoomedPane) },
+                  onSelect: {}
+                )
+              } else {
+                PaneLayoutView(
+                  node: tab.layout.root,
+                  activePane: tab.activePane,
+                  isWindowModeActive: tab.isWindowModeActive,
+                  copyModeState: tab.copyModeState,
+                  copyModePaneID: tab.activePane?.id,
+                  windowModeState: tab.windowModeState,
+                  joinPickTabNames: joinPickTabNames,
+                  paneCount: tab.panes.count,
+                  onClosePane: { pane in closePane(pane) },
+                  onSelectPane: { pane in tab.activePane = pane }
+                )
+              }
+              if tab.windowModeState != .inactive {
+                WindowModeHints(
+                  isJoinPick: tab.windowModeState == .joinPick,
+                  tabNames: joinPickTabNames,
+                  paneCount: tab.panes.count
+                )
+                .padding(6)
+                .allowsHitTesting(false)
+              }
             }
           }
         } else {

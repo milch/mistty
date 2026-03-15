@@ -31,20 +31,9 @@ struct PaneView: View {
       }
       .overlay {
         if isActive && windowModeState != .inactive {
-          ZStack {
-            RoundedRectangle(cornerRadius: 2)
-              .stroke(Color.orange, lineWidth: 2)
-            VStack {
-              Spacer()
-              WindowModeHints(
-                isJoinPick: windowModeState == .joinPick,
-                tabNames: joinPickTabNames,
-                paneCount: paneCount
-              )
-                .padding(6)
-            }
-          }
-          .allowsHitTesting(false)
+          RoundedRectangle(cornerRadius: 2)
+            .stroke(Color.orange, lineWidth: 2)
+            .allowsHitTesting(false)
         } else if isActive {
           RoundedRectangle(cornerRadius: 2)
             .stroke(Color.accentColor, lineWidth: 1)
