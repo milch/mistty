@@ -55,9 +55,31 @@ bundle-release: build-release
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
 
-# Run the app (debug, as .app bundle)
-run: bundle
-    open build/Mistty.app
+# Install to /Applications (debug)
+install: bundle
+    #!/usr/bin/env bash
+    set -euo pipefail
+    osascript -e 'tell application "Mistty" to quit' 2>/dev/null || true
+    rm -rf /Applications/Mistty.app
+    cp -R build/Mistty.app /Applications/Mistty.app
+    echo "Installed: /Applications/Mistty.app"
+
+# Install to /Applications (release)
+install-release: bundle-release
+    #!/usr/bin/env bash
+    set -euo pipefail
+    osascript -e 'tell application "Mistty" to quit' 2>/dev/null || true
+    rm -rf /Applications/Mistty.app
+    cp -R build/Mistty.app /Applications/Mistty.app
+    echo "Installed: /Applications/Mistty.app (release)"
+
+# Run the app (debug)
+run: install
+    open /Applications/Mistty.app
+
+# Run the app (release)
+run-release: install-release
+    open /Applications/Mistty.app
 
 # Run tests
 test:
