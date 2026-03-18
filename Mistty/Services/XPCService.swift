@@ -13,7 +13,7 @@ private struct Reply: @unchecked Sendable {
     }
 }
 
-final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendable {
+final class MisttyIPCService: NSObject, MisttyServiceProtocol, @unchecked Sendable {
     private let store: SessionStore
 
     init(store: SessionStore) {
@@ -28,7 +28,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     }
 
     private func notImplemented(_ reply: @escaping (Data?, Error?) -> Void) {
-        reply(nil, MisttyXPC.error(.operationFailed, "Not implemented"))
+        reply(nil, MisttyIPC.error(.operationFailed, "Not implemented"))
     }
 
     @MainActor private func sessionResponse(_ session: MisttySession) -> SessionResponse {
@@ -90,7 +90,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let session = self.store.session(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session \(id) not found"))
                 return
             }
             reply(self.encode(self.sessionResponse(session)), nil)
@@ -101,7 +101,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let session = self.store.session(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session \(id) not found"))
                 return
             }
             self.store.closeSession(session)
@@ -115,12 +115,12 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let session = self.store.session(byId: sessionId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session \(sessionId) not found"))
                 return
             }
             session.addTab(exec: exec)
             guard let tab = session.tabs.last else {
-                reply(nil, MisttyXPC.error(.operationFailed, "Failed to create tab"))
+                reply(nil, MisttyIPC.error(.operationFailed, "Failed to create tab"))
                 return
             }
             if let name { tab.customTitle = name }
@@ -132,7 +132,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let session = self.store.session(byId: sessionId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session \(sessionId) not found"))
                 return
             }
             let responses = session.tabs.map { self.tabResponse($0) }
@@ -144,7 +144,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, tab) = self.store.tab(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Tab \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Tab \(id) not found"))
                 return
             }
             reply(self.encode(self.tabResponse(tab)), nil)
@@ -155,7 +155,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (session, tab) = self.store.tab(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Tab \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Tab \(id) not found"))
                 return
             }
             session.closeTab(tab)
@@ -167,7 +167,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, tab) = self.store.tab(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Tab \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Tab \(id) not found"))
                 return
             }
             tab.customTitle = name
@@ -181,13 +181,13 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, tab) = self.store.tab(byId: tabId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Tab \(tabId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Tab \(tabId) not found"))
                 return
             }
             let splitDir: SplitDirection = direction == "horizontal" ? .horizontal : .vertical
             tab.splitActivePane(direction: splitDir)
             guard let newPane = tab.panes.last else {
-                reply(nil, MisttyXPC.error(.operationFailed, "Failed to create pane"))
+                reply(nil, MisttyIPC.error(.operationFailed, "Failed to create pane"))
                 return
             }
             reply(self.encode(self.paneResponse(newPane)), nil)
@@ -198,7 +198,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, tab) = self.store.tab(byId: tabId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Tab \(tabId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Tab \(tabId) not found"))
                 return
             }
             let responses = tab.panes.map { self.paneResponse($0) }
@@ -210,7 +210,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, _, pane) = self.store.pane(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Pane \(id) not found"))
                 return
             }
             reply(self.encode(self.paneResponse(pane)), nil)
@@ -221,7 +221,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, tab, pane) = self.store.pane(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Pane \(id) not found"))
                 return
             }
             tab.closePane(pane)
@@ -233,7 +233,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (session, tab, pane) = self.store.pane(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Pane \(id) not found"))
                 return
             }
             self.store.activeSession = session
@@ -253,12 +253,12 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 session = self.store.session(byId: sessionId)
             }
             guard let session else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session not found"))
                 return
             }
             guard let tab = session.activeTab,
                   let pane = tab.activePane else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "No active pane"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "No active pane"))
                 return
             }
 
@@ -269,12 +269,12 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
             case "up": navDirection = .up
             case "down": navDirection = .down
             default:
-                reply(nil, MisttyXPC.error(.invalidArgument, "Invalid direction: \(direction). Use left, right, up, or down"))
+                reply(nil, MisttyIPC.error(.invalidArgument, "Invalid direction: \(direction). Use left, right, up, or down"))
                 return
             }
 
             guard let target = tab.layout.adjacentPane(from: pane, direction: navDirection) else {
-                reply(nil, MisttyXPC.error(.operationFailed, "No pane in direction \(direction)"))
+                reply(nil, MisttyIPC.error(.operationFailed, "No pane in direction \(direction)"))
                 return
             }
 
@@ -287,7 +287,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, tab, pane) = self.store.pane(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Pane \(id) not found"))
                 return
             }
             let delta = CGFloat(amount) / 100.0
@@ -299,7 +299,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
             case "up":    splitDir = .vertical;   sign = -1.0
             case "down":  splitDir = .vertical;   sign = 1.0
             default:
-                reply(nil, MisttyXPC.error(.invalidArgument, "Invalid direction: \(direction). Use left, right, up, or down"))
+                reply(nil, MisttyIPC.error(.invalidArgument, "Invalid direction: \(direction). Use left, right, up, or down"))
                 return
             }
             tab.layout.resizeSplit(containing: pane, delta: delta * sign, along: splitDir)
@@ -311,7 +311,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (_, _, pane) = self.store.activePaneInfo() else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "No active pane"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "No active pane"))
                 return
             }
             reply(self.encode(self.paneResponse(pane)), nil)
@@ -328,12 +328,12 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 targetPane = store.pane(byId: paneId)?.pane
             }
             guard let pane = targetPane else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Pane \(paneId) not found"))
                 return
             }
             let view = pane.surfaceView
             guard let surface = view.surface else {
-                reply(nil, MisttyXPC.error(.operationFailed, "Pane has no active surface"))
+                reply(nil, MisttyIPC.error(.operationFailed, "Pane has no active surface"))
                 return
             }
             keys.withCString { ptr in
@@ -357,11 +357,11 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
                 targetPane = self.store.pane(byId: paneId)?.pane
             }
             guard let pane = targetPane else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Pane \(paneId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Pane \(paneId) not found"))
                 return
             }
             guard let surface = pane.surfaceView.surface else {
-                reply(nil, MisttyXPC.error(.operationFailed, "Pane has no active surface"))
+                reply(nil, MisttyIPC.error(.operationFailed, "Pane has no active surface"))
                 return
             }
 
@@ -383,7 +383,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
 
             var text = ghostty_text_s()
             guard ghostty_surface_read_text(surface, sel, &text) else {
-                reply(nil, MisttyXPC.error(.operationFailed, "Failed to read text from surface"))
+                reply(nil, MisttyIPC.error(.operationFailed, "Failed to read text from surface"))
                 return
             }
             defer { ghostty_surface_free_text(surface, &text) }
@@ -402,7 +402,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
     // MARK: - Windows
 
     func createWindow(reply: @escaping (Data?, Error?) -> Void) {
-        reply(nil, MisttyXPC.error(.operationFailed, "Not supported: programmatic window creation is not available with SwiftUI WindowGroup"))
+        reply(nil, MisttyIPC.error(.operationFailed, "Not supported: programmatic window creation is not available with SwiftUI WindowGroup"))
     }
 
     func listWindows(reply: @escaping (Data?, Error?) -> Void) {
@@ -419,7 +419,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let tracked = self.store.trackedWindow(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Window \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Window \(id) not found"))
                 return
             }
             reply(self.encode(WindowResponse(id: tracked.id, sessionCount: self.store.sessions.count)), nil)
@@ -430,7 +430,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let tracked = self.store.trackedWindow(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Window \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Window \(id) not found"))
                 return
             }
             tracked.window.close()
@@ -443,7 +443,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let tracked = self.store.trackedWindow(byId: id) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Window \(id) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Window \(id) not found"))
                 return
             }
             tracked.window.makeKeyAndOrderFront(nil)
@@ -457,13 +457,13 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let session = self.store.session(byId: sessionId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session \(sessionId) not found"))
                 return
             }
             let definition = PopupDefinition(name: name, command: exec, width: width, height: height, closeOnExit: closeOnExit)
             session.openPopup(definition: definition)
             guard let popup = session.activePopup else {
-                reply(nil, MisttyXPC.error(.operationFailed, "Failed to create popup"))
+                reply(nil, MisttyIPC.error(.operationFailed, "Failed to create popup"))
                 return
             }
             reply(self.encode(self.popupResponse(popup)), nil)
@@ -474,7 +474,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let (session, popup) = self.store.popup(byId: popupId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Popup \(popupId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Popup \(popupId) not found"))
                 return
             }
             session.closePopup(popup)
@@ -486,12 +486,12 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let session = self.store.session(byId: sessionId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session \(sessionId) not found"))
                 return
             }
             let config = MisttyConfig.load()
             guard let definition = config.popups.first(where: { $0.name == name }) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Popup definition '\(name)' not found in config"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Popup definition '\(name)' not found in config"))
                 return
             }
             session.togglePopup(definition: definition)
@@ -507,7 +507,7 @@ final class MisttyXPCService: NSObject, MisttyServiceProtocol, @unchecked Sendab
         let reply = Reply(handler: reply)
         Task { @MainActor in
             guard let session = self.store.session(byId: sessionId) else {
-                reply(nil, MisttyXPC.error(.entityNotFound, "Session \(sessionId) not found"))
+                reply(nil, MisttyIPC.error(.entityNotFound, "Session \(sessionId) not found"))
                 return
             }
             let responses = session.popups.map { self.popupResponse($0) }

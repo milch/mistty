@@ -27,27 +27,14 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.createWindow { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("createWindow")
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -77,27 +64,14 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.listWindows { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("listWindows")
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -133,27 +107,14 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.getWindow(id: id) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("getWindow", ["id": id])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -186,19 +147,12 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultError: Error?
-
-            proxy.closeWindow(id: id) { _, error in
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            do {
+                _ = try client.call("closeWindow", ["id": id])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
@@ -222,19 +176,12 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultError: Error?
-
-            proxy.focusWindow(id: id) { _, error in
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            do {
+                _ = try client.call("focusWindow", ["id": id])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }

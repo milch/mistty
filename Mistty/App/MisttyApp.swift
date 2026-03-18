@@ -5,70 +5,36 @@ import SwiftUI
 @main
 struct MisttyApp: App {
   @State private var store = SessionStore()
-  @State private var xpcListener: MisttyXPCListener?
+  @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
 
   init() {
     _ = GhosttyAppManager.shared
-    installXPCServiceIfNeeded()
+    cleanupLegacyLaunchdPlist()
   }
 
-  /// Installs the launchd plist for the CLI XPC Mach service if it doesn't already exist.
-  private func installXPCServiceIfNeeded() {
-    let label = "com.mistty.cli-service"
-    let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/LaunchAgents")
-    let plistURL = launchAgentsDir.appendingPathComponent("\(label).plist")
-
-    guard !FileManager.default.fileExists(atPath: plistURL.path) else { return }
-
-    // Resolve the current app's executable path
-    let executablePath = Bundle.main.executablePath ?? ProcessInfo.processInfo.arguments.first ?? "/usr/local/bin/mistty-cli"
-
-    let plistContent = """
-      <?xml version="1.0" encoding="UTF-8"?>
-      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-      <plist version="1.0">
-      <dict>
-          <key>Label</key>
-          <string>\(label)</string>
-          <key>MachServices</key>
-          <dict>
-              <key>\(label)</key>
-              <true/>
-          </dict>
-          <key>ProgramArguments</key>
-          <array>
-              <string>\(executablePath)</string>
-          </array>
-          <key>RunAtLoad</key>
-          <false/>
-      </dict>
-      </plist>
-      """
-
-    do {
-      try FileManager.default.createDirectory(at: launchAgentsDir, withIntermediateDirectories: true)
-      try plistContent.write(to: plistURL, atomically: true, encoding: .utf8)
-      let process = Process()
-      process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-      process.arguments = ["load", plistURL.path]
-      try process.run()
-      process.waitUntilExit()
-    } catch {
-      print("Warning: failed to install XPC service plist: \(error)")
-    }
+  /// Remove the legacy launchd plist that caused duplicate app launches.
+  private func cleanupLegacyLaunchdPlist() {
+    let plistURL = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/LaunchAgents/com.mistty.cli-service.plist")
+    guard FileManager.default.fileExists(atPath: plistURL.path) else { return }
+    let unload = Process()
+    unload.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+    unload.arguments = ["unload", plistURL.path]
+    try? unload.run()
+    unload.waitUntilExit()
+    try? FileManager.default.removeItem(at: plistURL)
   }
 
   var body: some Scene {
     WindowGroup {
       ContentView(store: store)
         .onAppear {
-          if xpcListener == nil {
-            let service = MisttyXPCService(store: store)
-            let listener = MisttyXPCListener(service: service)
+          if ipcListener == nil {
+            let service = MisttyIPCService(store: store)
+            let listener = IPCListener(service: service)
             listener.start()
-            xpcListener = listener
+            ipcListener = listener
           }
         }
     }

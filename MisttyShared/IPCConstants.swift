@@ -1,8 +1,15 @@
 import Foundation
 
-public enum MisttyXPC {
+public enum MisttyIPC {
     public static let serviceName = "com.mistty.cli-service"
     public static let errorDomain = "com.mistty.error"
+
+    public static var socketPath: String {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("Mistty/mistty.sock").path
+    }
+
+    public static let maxMessageSize: UInt32 = 16 * 1024 * 1024  // 16 MB
 
     public enum ErrorCode: Int {
         case entityNotFound = 1

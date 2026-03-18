@@ -6,12 +6,12 @@ import XCTest
 @MainActor
 final class XPCServiceTests: XCTestCase {
     var store: SessionStore!
-    var service: MisttyXPCService!
+    var service: MisttyIPCService!
 
     override func setUp() async throws {
         await MainActor.run {
             store = SessionStore()
-            service = MisttyXPCService(store: store)
+            service = MisttyIPCService(store: store)
         }
     }
 
@@ -95,8 +95,8 @@ final class XPCServiceTests: XCTestCase {
             XCTAssertNil(data)
             XCTAssertNotNil(error)
             let nsError = error! as NSError
-            XCTAssertEqual(nsError.domain, MisttyXPC.errorDomain)
-            XCTAssertEqual(nsError.code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            XCTAssertEqual(nsError.domain, MisttyIPC.errorDomain)
+            XCTAssertEqual(nsError.code, MisttyIPC.ErrorCode.entityNotFound.rawValue)
             expectation.fulfill()
         }
         await fulfillment(of: [expectation], timeout: 2)
@@ -122,7 +122,7 @@ final class XPCServiceTests: XCTestCase {
             XCTAssertNil(data)
             XCTAssertNotNil(error)
             let nsError = error! as NSError
-            XCTAssertEqual(nsError.code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            XCTAssertEqual(nsError.code, MisttyIPC.ErrorCode.entityNotFound.rawValue)
             expectation.fulfill()
         }
         await fulfillment(of: [expectation], timeout: 2)
@@ -251,7 +251,7 @@ final class XPCServiceTests: XCTestCase {
             XCTAssertNil(data)
             XCTAssertNotNil(error)
             let nsError = error! as NSError
-            XCTAssertEqual(nsError.code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            XCTAssertEqual(nsError.code, MisttyIPC.ErrorCode.entityNotFound.rawValue)
             expectation.fulfill()
         }
         await fulfillment(of: [expectation], timeout: 2)
@@ -267,7 +267,7 @@ final class XPCServiceTests: XCTestCase {
         service.sendKeys(paneId: paneId, keys: "hello") { data, error in
             // Pane found but surface is nil in test → operationFailed
             if let error = error as? NSError {
-                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+                XCTAssertEqual(error.code, MisttyIPC.ErrorCode.operationFailed.rawValue)
             }
             expectation.fulfill()
         }
@@ -278,7 +278,7 @@ final class XPCServiceTests: XCTestCase {
         let expectation = XCTestExpectation(description: "send keys not found")
         service.sendKeys(paneId: 999, keys: "hello") { data, error in
             XCTAssertNotNil(error)
-            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            XCTAssertEqual((error! as NSError).code, MisttyIPC.ErrorCode.entityNotFound.rawValue)
             expectation.fulfill()
         }
         await fulfillment(of: [expectation], timeout: 2)
@@ -291,7 +291,7 @@ final class XPCServiceTests: XCTestCase {
         service.sendKeys(paneId: 0, keys: "hello") { data, error in
             // Resolves active pane, surface nil → operationFailed
             if let error = error as? NSError {
-                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+                XCTAssertEqual(error.code, MisttyIPC.ErrorCode.operationFailed.rawValue)
             }
             expectation.fulfill()
         }
@@ -302,7 +302,7 @@ final class XPCServiceTests: XCTestCase {
         let expectation = XCTestExpectation(description: "run command not found")
         service.runCommand(paneId: 999, command: "ls") { data, error in
             XCTAssertNotNil(error)
-            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            XCTAssertEqual((error! as NSError).code, MisttyIPC.ErrorCode.entityNotFound.rawValue)
             expectation.fulfill()
         }
         await fulfillment(of: [expectation], timeout: 2)
@@ -317,7 +317,7 @@ final class XPCServiceTests: XCTestCase {
         let expectation = XCTestExpectation(description: "get text")
         service.getText(paneId: paneId) { data, error in
             if let error = error as? NSError {
-                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+                XCTAssertEqual(error.code, MisttyIPC.ErrorCode.operationFailed.rawValue)
             }
             expectation.fulfill()
         }
@@ -328,7 +328,7 @@ final class XPCServiceTests: XCTestCase {
         let expectation = XCTestExpectation(description: "get text not found")
         service.getText(paneId: 999) { data, error in
             XCTAssertNotNil(error)
-            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.entityNotFound.rawValue)
+            XCTAssertEqual((error! as NSError).code, MisttyIPC.ErrorCode.entityNotFound.rawValue)
             expectation.fulfill()
         }
         await fulfillment(of: [expectation], timeout: 2)
@@ -341,7 +341,7 @@ final class XPCServiceTests: XCTestCase {
         service.getText(paneId: 0) { data, error in
             // Resolves active pane, surface nil → operationFailed
             if let error = error as? NSError {
-                XCTAssertEqual(error.code, MisttyXPC.ErrorCode.operationFailed.rawValue)
+                XCTAssertEqual(error.code, MisttyIPC.ErrorCode.operationFailed.rawValue)
             }
             expectation.fulfill()
         }
@@ -374,7 +374,7 @@ final class XPCServiceTests: XCTestCase {
         let expectation = XCTestExpectation(description: "focus by direction invalid")
         service.focusPaneByDirection(direction: "diagonal", sessionId: 0) { data, error in
             XCTAssertNotNil(error)
-            XCTAssertEqual((error! as NSError).code, MisttyXPC.ErrorCode.invalidArgument.rawValue)
+            XCTAssertEqual((error! as NSError).code, MisttyIPC.ErrorCode.invalidArgument.rawValue)
             expectation.fulfill()
         }
         await fulfillment(of: [expectation], timeout: 2)

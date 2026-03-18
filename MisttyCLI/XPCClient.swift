@@ -1,25 +1,26 @@
+import CoreFoundation
 import Foundation
 import MisttyShared
 
-enum XPCClientError: Error, CustomStringConvertible {
+enum IPCClientError: Error, CustomStringConvertible {
     case connectionFailed(String)
+    case remoteError(String)
 
     var description: String {
         switch self {
-        case .connectionFailed(let message):
-            return message
+        case .connectionFailed(let message): return message
+        case .remoteError(let message): return message
         }
     }
 }
 
-final class XPCClient: @unchecked Sendable {
-    private var connection: NSXPCConnection?
+/// CLI-side IPC client using CFMessagePort to communicate with the Mistty app.
+final class IPCClient {
+    private var port: CFMessagePort?
 
-    func connect() throws -> MisttyServiceProtocol {
-        // Attempt to connect; on first failure launch the app and retry with backoff.
-        if let proxy = tryConnect() {
-            return proxy
-        }
+    /// Connect to the running Mistty app, launching it if needed.
+    func connect() throws {
+        if tryConnect() { return }
 
         // Launch the app
         let launchProcess = Process()
@@ -28,62 +29,64 @@ final class XPCClient: @unchecked Sendable {
         try? launchProcess.run()
         launchProcess.waitUntilExit()
 
-        // Retry with exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms (~3s total)
+        // Retry with exponential backoff
         let delays: [UInt32] = [100_000, 200_000, 400_000, 800_000, 1_600_000]
         for delay in delays {
             usleep(delay)
-            if let proxy = tryConnect() {
-                return proxy
-            }
+            if tryConnect() { return }
         }
 
-        throw XPCClientError.connectionFailed(
-            "Could not connect to Mistty.app. Is it installed?"
+        throw IPCClientError.connectionFailed(
+            "Could not connect to Mistty.app. Is it running?"
         )
     }
 
-    private func tryConnect() -> MisttyServiceProtocol? {
-        let conn = NSXPCConnection(machServiceName: MisttyXPC.serviceName)
-        conn.remoteObjectInterface = NSXPCInterface(with: MisttyServiceProtocol.self)
-        conn.resume()
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var connectionError: Error?
-
-        let proxy = conn.remoteObjectProxyWithErrorHandler { error in
-            connectionError = error
-            semaphore.signal()
-        } as? MisttyServiceProtocol
-
-        guard let proxy = proxy else {
-            conn.invalidate()
-            return nil
+    private func tryConnect() -> Bool {
+        guard let remote = CFMessagePortCreateRemote(nil, MisttyIPC.serviceName as CFString) else {
+            return false
         }
-
-        // Test the connection by calling a lightweight method
-        proxy.listSessions { _, error in
-            if let error = error {
-                connectionError = error
-            }
-            semaphore.signal()
-        }
-
-        let timeout = DispatchTime.now() + .milliseconds(500)
-        if semaphore.wait(timeout: timeout) == .timedOut {
-            conn.invalidate()
-            return nil
-        }
-
-        if connectionError != nil {
-            conn.invalidate()
-            return nil
-        }
-
-        self.connection = conn
-        return proxy
+        port = remote
+        return true
     }
 
-    deinit {
-        connection?.invalidate()
+    /// Send an IPC request and return the response data.
+    func call(_ method: String, _ params: [String: Any] = [:]) throws -> Data {
+        guard let port else {
+            throw IPCClientError.connectionFailed("Not connected")
+        }
+
+        var request = params
+        request["method"] = method
+        let requestData = try JSONSerialization.data(withJSONObject: request)
+
+        var response: Unmanaged<CFData>?
+        let status = CFMessagePortSendRequest(
+            port, 0, requestData as CFData,
+            /* sendTimeout */ 5, /* recvTimeout */ 30,
+            CFRunLoopMode.defaultMode.rawValue, &response
+        )
+
+        guard status == kCFMessagePortSuccess else {
+            throw IPCClientError.connectionFailed("Send failed (status \(status))")
+        }
+
+        guard let responseData = response?.takeRetainedValue() as Data? else {
+            throw IPCClientError.connectionFailed("No response")
+        }
+
+        guard !responseData.isEmpty else {
+            throw IPCClientError.connectionFailed("Empty response")
+        }
+
+        let statusByte = responseData[0]
+        let payload = responseData.dropFirst()
+
+        if statusByte == 0x01 {
+            // Error response
+            let message = String(data: Data(payload), encoding: .utf8) ?? "Unknown error"
+            throw IPCClientError.remoteError(message)
+        }
+
+        return Data(payload)
     }
 }

@@ -47,10 +47,10 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let sessionId = try resolveSessionId(session, proxy: proxy)
+            let sessionId = try resolveSessionId(session, client: client)
             let popupName = name ?? exec ?? "popup"
             guard let command = exec ?? name else {
                 OutputFormatter.printError("Provide --name (from config) or --exec (ad-hoc command)")
@@ -59,24 +59,18 @@ struct PopupCommand: ParsableCommand {
 
             let shouldCloseOnExit = closeOnExit || !keepOnExit
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.openPopup(sessionId: sessionId, name: popupName, exec: command, width: width, height: height, closeOnExit: shouldCloseOnExit) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("openPopup", [
+                    "sessionId": sessionId,
+                    "name": popupName,
+                    "exec": command,
+                    "width": width,
+                    "height": height,
+                    "closeOnExit": shouldCloseOnExit,
+                ])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -112,19 +106,12 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultError: Error?
-
-            proxy.closePopup(popupId: id) { _, error in
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            do {
+                _ = try client.call("closePopup", ["popupId": id])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
@@ -151,29 +138,16 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let sessionId = try resolveSessionId(session, proxy: proxy)
+            let sessionId = try resolveSessionId(session, client: client)
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.togglePopup(sessionId: sessionId, name: name) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("togglePopup", ["sessionId": sessionId, "name": name])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -209,29 +183,16 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let sessionId = try resolveSessionId(session, proxy: proxy)
+            let sessionId = try resolveSessionId(session, client: client)
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.listPopups(sessionId: sessionId) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("listPopups", ["sessionId": sessionId])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -254,17 +215,10 @@ struct PopupCommand: ParsableCommand {
 }
 
 /// Resolve session ID: use provided value or look up the first (active) session.
-private func resolveSessionId(_ provided: Int?, proxy: MisttyServiceProtocol) throws -> Int {
+private func resolveSessionId(_ provided: Int?, client: IPCClient) throws -> Int {
     if let sid = provided { return sid }
-    let semaphore = DispatchSemaphore(value: 0)
-    var resultData: Data?
-    proxy.listSessions { data, _ in
-        resultData = data
-        semaphore.signal()
-    }
-    semaphore.wait()
-    guard let data = resultData,
-          let sessions = try? JSONDecoder().decode([SessionResponse].self, from: data),
+    let data = try client.call("listSessions")
+    guard let sessions = try? JSONDecoder().decode([SessionResponse].self, from: data),
           let first = sessions.first
     else {
         OutputFormatter.printError("No active session. Specify --session")

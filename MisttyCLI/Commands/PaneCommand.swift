@@ -38,27 +38,17 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
+            var params: [String: Any] = ["tabId": tab]
+            if let direction { params["direction"] = direction }
 
-            proxy.createPane(tabId: tab, direction: direction) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("createPane", params)
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -91,27 +81,14 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.listPanes(tabId: tab) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("listPanes", ["tabId": tab])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -147,27 +124,14 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.getPane(id: id) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("getPane", ["id": id])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -200,19 +164,12 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultError: Error?
-
-            proxy.closePane(id: id) { _, error in
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            do {
+                _ = try client.call("closePane", ["id": id])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
@@ -248,47 +205,37 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            if let direction {
-                proxy.focusPaneByDirection(direction: direction, sessionId: session) { data, error in
-                    resultData = data
-                    resultError = error
-                    semaphore.signal()
+            let data: Data
+            do {
+                if let direction {
+                    data = try client.call("focusPaneByDirection", ["direction": direction, "sessionId": session])
+                } else if let id {
+                    data = try client.call("focusPane", ["id": id])
+                } else {
+                    // Should not reach here due to validate()
+                    OutputFormatter.printError("Provide either a pane ID or --direction")
+                    Foundation.exit(1)
                 }
-            } else if let id {
-                proxy.focusPane(id: id) { data, error in
-                    resultData = data
-                    resultError = error
-                    semaphore.signal()
-                }
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            if let data = resultData {
-                switch format {
-                case .json:
-                    formatter.printJSON(data)
-                case .human:
-                    if let pane = try? JSONDecoder().decode(PaneResponse.self, from: data) {
-                        formatter.printSingle([
-                            ("ID", "\(pane.id)"),
-                            ("Directory", pane.directory ?? "-"),
-                        ])
-                    }
+            switch format {
+            case .json:
+                formatter.printJSON(data)
+            case .human:
+                if let pane = try? JSONDecoder().decode(PaneResponse.self, from: data) {
+                    formatter.printSingle([
+                        ("ID", "\(pane.id)"),
+                        ("Directory", pane.directory ?? "-"),
+                    ])
+                } else {
+                    formatter.printSuccess("Pane focused")
                 }
-            } else {
-                formatter.printSuccess("Pane focused")
             }
         }
     }
@@ -314,19 +261,12 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultError: Error?
-
-            proxy.resizePane(id: id, direction: direction, amount: amount) { _, error in
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            do {
+                _ = try client.call("resizePane", ["id": id, "direction": direction, "amount": amount])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
@@ -347,27 +287,14 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.activePane { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("activePane")
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
@@ -406,19 +333,12 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultError: Error?
-
-            proxy.sendKeys(paneId: pane, keys: keys) { _, error in
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            do {
+                _ = try client.call("sendKeys", ["paneId": pane, "keys": keys])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
@@ -448,19 +368,12 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultError: Error?
-
-            proxy.runCommand(paneId: pane, command: command) { _, error in
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            do {
+                _ = try client.call("runCommand", ["paneId": pane, "command": command])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
@@ -487,27 +400,14 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
-            let client = XPCClient()
-            let proxy = try client.connect()
+            let client = IPCClient()
+            try client.connect()
 
-            let semaphore = DispatchSemaphore(value: 0)
-            var resultData: Data?
-            var resultError: Error?
-
-            proxy.getText(paneId: pane) { data, error in
-                resultData = data
-                resultError = error
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            if let error = resultError {
+            let data: Data
+            do {
+                data = try client.call("getText", ["paneId": pane])
+            } catch {
                 OutputFormatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            guard let data = resultData else {
-                OutputFormatter.printError("No response from Mistty")
                 Foundation.exit(1)
             }
 
