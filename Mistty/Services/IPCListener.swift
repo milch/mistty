@@ -1,96 +1,196 @@
-import CoreFoundation
+import Darwin
 import Foundation
 import MisttyShared
 
-/// CFMessagePort callback — dispatches JSON request to the service and returns JSON response.
-/// Response format: first byte is status (0 = success, 1 = error), rest is payload.
-private func ipcMessageCallback(
-    _ port: CFMessagePort?,
-    _ msgid: Int32,
-    _ data: CFData?,
-    _ info: UnsafeMutableRawPointer?
-) -> Unmanaged<CFData>? {
-    guard let info, let data else { return nil }
-    let service = Unmanaged<MisttyIPCService>.fromOpaque(info).takeUnretainedValue()
-    let requestData = data as Data
-
-    guard let json = try? JSONSerialization.jsonObject(with: requestData) as? [String: Any],
-          let method = json["method"] as? String
-    else {
-        return ipcErrorResponse("Invalid request format")
-    }
-
-    let semaphore = DispatchSemaphore(value: 0)
-    var responseData: Data?
-    var responseError: String?
-
-    let reply: (Data?, Error?) -> Void = { data, error in
-        responseData = data
-        responseError = error?.localizedDescription
-        semaphore.signal()
-    }
-
-    IPCListener.dispatch(service: service, method: method, params: json, reply: reply)
-    semaphore.wait()
-
-    if let errorMsg = responseError {
-        return ipcErrorResponse(errorMsg)
-    }
-    var result = Data([0x00])
-    if let d = responseData { result.append(d) }
-    return Unmanaged.passRetained(result as CFData)
-}
-
-private func ipcErrorResponse(_ message: String) -> Unmanaged<CFData> {
-    var result = Data([0x01])
-    result.append(Data(message.utf8))
-    return Unmanaged.passRetained(result as CFData)
-}
-
-/// CFMessagePort-based IPC listener. Replaces XPC Mach service approach which required
-/// launchd management and caused duplicate app launches.
+/// Unix domain socket IPC listener. The app binds to a socket and accepts
+/// one-shot connections from the CLI: read request, dispatch, write response, close.
 @MainActor
 final class IPCListener {
-    private var port: CFMessagePort?
-    private var source: CFRunLoopSource?
     nonisolated(unsafe) private let service: MisttyIPCService
+    nonisolated(unsafe) private var serverFD: Int32 = -1
+    private var acceptSource: DispatchSourceRead?
+    private let queue = DispatchQueue(label: "com.mistty.ipc-listener", qos: .userInitiated)
 
     init(service: MisttyIPCService) {
         self.service = service
     }
 
     func start() {
-        var ctx = CFMessagePortContext(
-            version: 0,
-            info: Unmanaged.passUnretained(service).toOpaque(),
-            retain: nil, release: nil, copyDescription: nil
-        )
+        let path = MisttyIPC.socketPath
 
-        port = CFMessagePortCreateLocal(
-            nil,
-            MisttyIPC.serviceName as CFString,
-            ipcMessageCallback,
-            &ctx,
-            nil
-        )
+        // Ensure parent directory exists with 0700 permissions
+        let dir = (path as NSString).deletingLastPathComponent
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
 
-        guard let port else {
-            print("Warning: failed to create IPC message port (is another instance running?)")
+        // Unconditionally unlink any stale socket
+        unlink(path)
+
+        // Create socket
+        serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard serverFD >= 0 else {
+            print("Warning: failed to create IPC socket: \(String(cString: strerror(errno)))")
             return
         }
 
-        source = CFMessagePortCreateRunLoopSource(nil, port, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        // Bind
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = path.utf8CString
+        guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
+            print("Warning: socket path too long")
+            close(serverFD); serverFD = -1
+            return
+        }
+        withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { dest in
+                pathBytes.withUnsafeBufferPointer { src in
+                    _ = memcpy(dest, src.baseAddress!, src.count)
+                }
+            }
+        }
+
+        let bindResult = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                Darwin.bind(serverFD, sockPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard bindResult == 0 else {
+            print("Warning: failed to bind IPC socket: \(String(cString: strerror(errno)))")
+            close(serverFD); serverFD = -1
+            return
+        }
+
+        // Listen
+        guard Darwin.listen(serverFD, 5) == 0 else {
+            print("Warning: failed to listen on IPC socket: \(String(cString: strerror(errno)))")
+            close(serverFD); serverFD = -1
+            return
+        }
+
+        // Accept connections using GCD
+        let source = DispatchSource.makeReadSource(fileDescriptor: serverFD, queue: queue)
+        source.setEventHandler { [weak self] in
+            self?.acceptConnection()
+        }
+        source.setCancelHandler { [serverFD] in
+            close(serverFD)
+        }
+        source.resume()
+        acceptSource = source
     }
 
     func stop() {
-        if let source {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
-            self.source = nil
+        acceptSource?.cancel()
+        acceptSource = nil
+        serverFD = -1
+        unlink(MisttyIPC.socketPath)
+    }
+
+    // MARK: - Connection Handling
+
+    private nonisolated func acceptConnection() {
+        let clientFD = Darwin.accept(serverFD, nil, nil)
+        guard clientFD >= 0 else { return }
+
+        // Set SO_NOSIGPIPE to avoid SIGPIPE on write to closed socket
+        var on: Int32 = 1
+        setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+
+        // Set read/write timeout (5 seconds)
+        var tv = timeval(tv_sec: 5, tv_usec: 0)
+        setsockopt(clientFD, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(clientFD, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+
+        queue.async {
+            self.handleConnection(clientFD)
         }
-        if let port {
-            CFMessagePortInvalidate(port)
-            self.port = nil
+    }
+
+    private nonisolated func handleConnection(_ fd: Int32) {
+        defer { close(fd) }
+
+        // Read length prefix (4 bytes, big-endian UInt32)
+        guard let lengthBytes = readExact(fd: fd, count: 4) else { return }
+        let length = lengthBytes.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+
+        guard length > 0, length <= MisttyIPC.maxMessageSize else { return }
+
+        // Read request payload
+        guard let requestData = readExact(fd: fd, count: Int(length)) else { return }
+
+        // Parse request
+        guard let json = try? JSONSerialization.jsonObject(with: requestData) as? [String: Any],
+              let method = json["method"] as? String
+        else {
+            writeResponse(fd: fd, data: errorResponse("Invalid request format"))
+            return
+        }
+
+        // Dispatch to service (synchronous via semaphore — service methods are @MainActor)
+        let semaphore = DispatchSemaphore(value: 0)
+        var responseData: Data?
+        var responseError: String?
+
+        let reply: (Data?, Error?) -> Void = { data, error in
+            responseData = data
+            responseError = error?.localizedDescription
+            semaphore.signal()
+        }
+
+        IPCListener.dispatch(service: service, method: method, params: json, reply: reply)
+        semaphore.wait()
+
+        if let errorMsg = responseError {
+            writeResponse(fd: fd, data: errorResponse(errorMsg))
+        } else {
+            var result = Data([0x00])
+            if let d = responseData { result.append(d) }
+            writeResponse(fd: fd, data: result)
+        }
+    }
+
+    private nonisolated func errorResponse(_ message: String) -> Data {
+        var result = Data([0x01])
+        result.append(Data(message.utf8))
+        return result
+    }
+
+    // MARK: - Socket I/O Helpers
+
+    /// Read exactly `count` bytes, looping for short reads and EINTR. Returns nil on error/timeout.
+    private nonisolated func readExact(fd: Int32, count: Int) -> Data? {
+        var buffer = Data(count: count)
+        var offset = 0
+        while offset < count {
+            let n = buffer.withUnsafeMutableBytes { ptr in
+                Darwin.read(fd, ptr.baseAddress! + offset, count - offset)
+            }
+            if n < 0 && errno == EINTR { continue }
+            if n <= 0 { return nil }
+            offset += n
+        }
+        return buffer
+    }
+
+    /// Write response with length prefix, looping for short writes.
+    private nonisolated func writeResponse(fd: Int32, data: Data) {
+        // Write length prefix
+        var length = UInt32(data.count).bigEndian
+        let lengthData = Data(bytes: &length, count: 4)
+        writeAll(fd: fd, data: lengthData)
+        // Write payload
+        writeAll(fd: fd, data: data)
+    }
+
+    private nonisolated func writeAll(fd: Int32, data: Data) {
+        var offset = 0
+        while offset < data.count {
+            let n = data.withUnsafeBytes { ptr in
+                Darwin.write(fd, ptr.baseAddress! + offset, data.count - offset)
+            }
+            if n < 0 && errno == EINTR { continue }
+            if n <= 0 { return }
+            offset += n
         }
     }
 
