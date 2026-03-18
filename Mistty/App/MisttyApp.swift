@@ -10,20 +10,6 @@ struct MisttyApp: App {
 
   init() {
     _ = GhosttyAppManager.shared
-    cleanupLegacyLaunchdPlist()
-  }
-
-  /// Remove the legacy launchd plist that caused duplicate app launches.
-  private func cleanupLegacyLaunchdPlist() {
-    let plistURL = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/LaunchAgents/com.mistty.cli-service.plist")
-    guard FileManager.default.fileExists(atPath: plistURL.path) else { return }
-    let unload = Process()
-    unload.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-    unload.arguments = ["unload", plistURL.path]
-    try? unload.run()
-    unload.waitUntilExit()
-    try? FileManager.default.removeItem(at: plistURL)
   }
 
   var body: some Scene {
