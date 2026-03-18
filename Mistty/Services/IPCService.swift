@@ -3,8 +3,8 @@ import Foundation
 import GhosttyKit
 import MisttyShared
 
-/// Wraps a non-Sendable XPC reply closure so it can be captured by a @MainActor Task.
-/// XPC reply handlers are thread-safe by design — they just aren't annotated as @Sendable.
+/// Wraps a non-Sendable reply closure so it can be captured by a @MainActor Task.
+/// Reply handlers are thread-safe by design — they just aren't annotated as @Sendable.
 private struct Reply: @unchecked Sendable {
     let handler: (Data?, Error?) -> Void
 

@@ -4,7 +4,7 @@ import XCTest
 @testable import MisttyShared
 
 @MainActor
-final class XPCServiceTests: XCTestCase {
+final class IPCServiceTests: XCTestCase {
     var store: SessionStore!
     var service: MisttyIPCService!
 
