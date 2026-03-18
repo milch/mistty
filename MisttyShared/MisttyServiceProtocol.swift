@@ -1,6 +1,6 @@
 import Foundation
 
-@objc public protocol MisttyServiceProtocol {
+public protocol MisttyServiceProtocol {
     // MARK: - Sessions
 
     func createSession(name: String, directory: String?, exec: String?, reply: @escaping (Data?, Error?) -> Void)

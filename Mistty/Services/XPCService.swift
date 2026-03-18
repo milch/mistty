@@ -13,12 +13,11 @@ private struct Reply: @unchecked Sendable {
     }
 }
 
-final class MisttyIPCService: NSObject, MisttyServiceProtocol, @unchecked Sendable {
+final class MisttyIPCService: MisttyServiceProtocol, @unchecked Sendable {
     private let store: SessionStore
 
     init(store: SessionStore) {
         self.store = store
-        super.init()
     }
 
     // MARK: - Helpers
