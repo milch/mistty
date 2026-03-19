@@ -142,6 +142,54 @@ final class CopyModeStateTests: XCTestCase {
         XCTAssertEqual(state.searchQuery, "")
     }
 
+    // MARK: - Word motions
+
+    func test_w_movesToNextWord() {
+        var state = makeState(cursorCol: 0)
+        let reader: (Int) -> String? = { _ in "hello world" }
+        _ = state.handleKey(key: "w", keyCode: 0, modifiers: [], lineReader: reader)
+        XCTAssertEqual(state.cursorCol, 6)
+    }
+
+    func test_W_movesToNextWORD() {
+        var state = makeState(cursorCol: 0)
+        let reader: (Int) -> String? = { _ in "foo.bar baz" }
+        _ = state.handleKey(key: "W", keyCode: 0, modifiers: [], lineReader: reader)
+        XCTAssertEqual(state.cursorCol, 8)
+    }
+
+    func test_b_movesToPrevWord() {
+        var state = makeState(cursorCol: 6)
+        let reader: (Int) -> String? = { _ in "hello world" }
+        _ = state.handleKey(key: "b", keyCode: 0, modifiers: [], lineReader: reader)
+        XCTAssertEqual(state.cursorCol, 0)
+    }
+
+    func test_e_movesToWordEnd() {
+        var state = makeState(cursorCol: 0)
+        let reader: (Int) -> String? = { _ in "hello world" }
+        _ = state.handleKey(key: "e", keyCode: 0, modifiers: [], lineReader: reader)
+        XCTAssertEqual(state.cursorCol, 4)
+    }
+
+    func test_ge_movesToPrevWordEnd() {
+        var state = makeState(cursorCol: 6)
+        let reader: (Int) -> String? = { _ in "hello world" }
+        _ = state.handleKey(key: "g", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+        _ = state.handleKey(key: "e", keyCode: 0, modifiers: [], lineReader: reader)
+        XCTAssertEqual(state.cursorCol, 4)
+    }
+
+    func test_w_crossLine() {
+        var state = makeState(rows: 24, cols: 80, cursorRow: 5, cursorCol: 3)
+        let reader: (Int) -> String? = { row in
+            row == 5 ? "hello" : "world foo"
+        }
+        _ = state.handleKey(key: "w", keyCode: 0, modifiers: [], lineReader: reader)
+        XCTAssertEqual(state.cursorRow, 6)
+        XCTAssertEqual(state.cursorCol, 0)
+    }
+
     // MARK: - y without selection is no-op
 
     func test_y_withoutSelection_isNoOp() {

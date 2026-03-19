@@ -185,9 +185,13 @@ struct CopyModeState {
         case ";": return repeatFindChar(count: count, reverse: false, lineReader: lineReader)
         case ",": return repeatFindChar(count: count, reverse: true, lineReader: lineReader)
 
-        // Word motions (placeholder — replaced in Task 6 with real word motions)
-        case "w": return repeatMotion(count) { $0.cursorCol = min($0.cols - 1, $0.cursorCol + 5) }
-        case "b": return repeatMotion(count) { $0.cursorCol = max(0, $0.cursorCol - 5) }
+        // Word motions
+        case "w": return wordMotion(count: count, lineReader: lineReader) { line, col in WordMotion.nextWordStart(in: line, from: col, bigWord: false) }
+        case "W": return wordMotion(count: count, lineReader: lineReader) { line, col in WordMotion.nextWordStart(in: line, from: col, bigWord: true) }
+        case "b": return wordMotionBackward(count: count, lineReader: lineReader) { line, col in WordMotion.prevWordStart(in: line, from: col, bigWord: false) }
+        case "B": return wordMotionBackward(count: count, lineReader: lineReader) { line, col in WordMotion.prevWordStart(in: line, from: col, bigWord: true) }
+        case "e": return wordMotion(count: count, lineReader: lineReader) { line, col in WordMotion.nextWordEnd(in: line, from: col, bigWord: false) }
+        case "E": return wordMotion(count: count, lineReader: lineReader) { line, col in WordMotion.nextWordEnd(in: line, from: col, bigWord: true) }
 
         // Yank
         case "y":
@@ -215,17 +219,11 @@ struct CopyModeState {
         case "e":
             let count = pendingCount ?? 1
             pendingCount = nil
-            return repeatMotion(count) { state in
-                // ge placeholder — replaced in Task 6
-                state.cursorCol = max(0, state.cursorCol - 5)
-            }
+            return wordMotionBackward(count: count, lineReader: lineReader) { line, col in WordMotion.prevWordEnd(in: line, from: col, bigWord: false) }
         case "E":
             let count = pendingCount ?? 1
             pendingCount = nil
-            return repeatMotion(count) { state in
-                // gE placeholder — replaced in Task 6
-                state.cursorCol = max(0, state.cursorCol - 5)
-            }
+            return wordMotionBackward(count: count, lineReader: lineReader) { line, col in WordMotion.prevWordEnd(in: line, from: col, bigWord: true) }
         case "?":
             showingHelp.toggle()
             return showingHelp ? [.showHelp] : [.hideHelp]
@@ -317,5 +315,62 @@ struct CopyModeState {
             return [.cursorMoved, .updateSelection]
         }
         return [.cursorMoved]
+    }
+
+    // MARK: - Word motion helpers
+
+    /// Execute a forward word motion with cross-line wrapping.
+    private mutating func wordMotion(
+        count: Int,
+        lineReader: (Int) -> String?,
+        motion: (String, Int) -> Int?
+    ) -> [CopyModeAction] {
+        for _ in 0..<count {
+            guard let line = lineReader(cursorRow) else { break }
+            if let newCol = motion(line, cursorCol) {
+                cursorCol = newCol
+            } else {
+                // Wrap to next line
+                if cursorRow < rows - 1 {
+                    cursorRow += 1
+                    cursorCol = 0
+                    // Skip leading whitespace on the new line
+                    if let nextLine = lineReader(cursorRow) {
+                        let chars = Array(nextLine)
+                        var i = 0
+                        while i < chars.count && chars[i].isWhitespace { i += 1 }
+                        if i < chars.count {
+                            cursorCol = i
+                        }
+                    }
+                }
+            }
+        }
+        return motionActions()
+    }
+
+    /// Execute a backward word motion with cross-line wrapping
+    private mutating func wordMotionBackward(
+        count: Int,
+        lineReader: (Int) -> String?,
+        motion: (String, Int) -> Int?
+    ) -> [CopyModeAction] {
+        for _ in 0..<count {
+            guard let line = lineReader(cursorRow) else { break }
+            if let newCol = motion(line, cursorCol) {
+                cursorCol = newCol
+            } else {
+                // Wrap to previous line
+                if cursorRow > 0 {
+                    cursorRow -= 1
+                    if let prevLine = lineReader(cursorRow) {
+                        cursorCol = max(0, prevLine.count - 1)
+                    } else {
+                        cursorCol = 0
+                    }
+                }
+            }
+        }
+        return motionActions()
     }
 }
