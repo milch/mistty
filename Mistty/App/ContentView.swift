@@ -635,66 +635,55 @@ struct ContentView: View {
     copyModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       guard var state = store.activeSession?.activeTab?.copyModeState else { return event }
 
-      // Escape always exits (search or copy mode)
-      if event.keyCode == 53 {
-        if state.isSearching {
-          state.cancelSearch()
-          store.activeSession?.activeTab?.copyModeState = state
-          return nil
-        }
-        exitCopyMode()
-        return nil
-      }
-
-      // Pass through system shortcuts (Cmd+Q, Cmd+W, etc.)
-      if event.modifierFlags.contains(.command) && !state.isSearching {
+      // Pass through system shortcuts (Cmd+*) when not searching
+      if event.modifierFlags.contains(.command) && state.subMode != .search {
         return event
       }
 
-      // Search mode: keys go to query
-      if state.isSearching {
-        if event.keyCode == 36 {  // Return — confirm search
-          state.subMode = .normal
-          self.performSearch(&state)
-          store.activeSession?.activeTab?.copyModeState = state
-          return nil
-        }
-        if event.keyCode == 51 {  // Backspace
-          state.deleteSearchChar()
-          store.activeSession?.activeTab?.copyModeState = state
-          return nil
-        }
-        if let chars = event.characters {
-          for char in chars {
-            state.appendSearchChar(char)
-          }
-        }
-        store.activeSession?.activeTab?.copyModeState = state
-        return nil
+      // Extract key from charactersIgnoringModifiers for correct Ctrl-v handling
+      guard let keyStr = event.charactersIgnoringModifiers, let key = keyStr.first else { return event }
+
+      let lineReader: (Int) -> String? = { row in
+        self.readTerminalLine(row: row)
       }
 
-      // Normal copy mode keys
-      guard let chars = event.characters else { return event }
-      switch chars {
-      case "h": state.moveLeft()
-      case "j": state.moveDown()
-      case "k": state.moveUp()
-      case "l": state.moveRight()
-      case "0": state.moveToLineStart()
-      case "$": state.moveToLineEnd()
-      case "G": state.moveToBottom()
-      case "g": state.moveToTop()
-      case "v": state.toggleSelection()
-      case "w": state.moveWordForward()
-      case "b": state.moveWordBackward()
-      case "/": state.startSearch()
-      case "n":
-        if !state.searchQuery.isEmpty { performSearch(&state) }
-      case "y":
-        yankSelection()
-        exitCopyMode()
-        return nil
-      default: break
+      let actions = state.handleKey(
+        key: key,
+        keyCode: event.keyCode,
+        modifiers: event.modifierFlags,
+        lineReader: lineReader
+      )
+
+      // Apply actions
+      for action in actions {
+        switch action {
+        case .cursorMoved:
+          break  // Position already in state
+        case .updateSelection:
+          break  // Selection derived from state
+        case .yank:
+          break  // Not used — yank is signaled by exitCopyMode
+        case .exitCopyMode:
+          // Yank if there's a selection before exiting
+          if state.isSelecting {
+            store.activeSession?.activeTab?.copyModeState = state
+            yankSelection()
+          }
+          exitCopyMode()
+          return nil
+        case .enterSubMode:
+          break  // Sub-mode already in state
+        case .showHelp, .hideHelp:
+          break  // showingHelp already in state
+        case .startSearch:
+          break  // subMode already set to .search
+        case .updateSearch:
+          break  // searchQuery already updated
+        case .confirmSearch:
+          performSearch(&state)
+        case .cancelSearch:
+          break  // Already handled in state
+        }
       }
 
       store.activeSession?.activeTab?.copyModeState = state
@@ -797,6 +786,31 @@ struct ContentView: View {
         return
       }
     }
+  }
+
+  private func readTerminalLine(row: Int) -> String? {
+    guard let pane = store.activeSession?.activeTab?.activePane,
+          let surface = pane.surfaceView.surface
+    else { return nil }
+
+    let size = ghostty_surface_size(surface)
+
+    var sel = ghostty_selection_s()
+    sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
+    sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.top_left.x = 0
+    sel.top_left.y = UInt32(row)
+    sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
+    sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.bottom_right.x = UInt32(size.columns - 1)
+    sel.bottom_right.y = UInt32(row)
+    sel.rectangle = false
+
+    var text = ghostty_text_s()
+    guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
+    defer { ghostty_surface_free_text(surface, &text) }
+    guard let ptr = text.text else { return nil }
+    return String(cString: ptr)
   }
 
   private func yankSelection() {

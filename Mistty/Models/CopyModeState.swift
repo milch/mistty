@@ -37,48 +37,16 @@ struct CopyModeState {
         return (anchor, (cursorRow, cursorCol))
     }
 
-    // MARK: - Backward compatibility shims (removed in Task 3)
+    // MARK: - Private movement helpers
 
-    var selectionStart: (row: Int, col: Int)? { anchor }
-
-    mutating func toggleSelection() {
-        if isSelecting {
-            subMode = .normal
-            anchor = nil
-        } else {
-            subMode = .visual
-            anchor = (cursorRow, cursorCol)
-        }
-    }
-
-    mutating func startSearch() {
-        subMode = .search
-        searchQuery = ""
-    }
-
-    mutating func cancelSearch() {
-        subMode = .normal
-        searchQuery = ""
-    }
-
-    mutating func appendSearchChar(_ char: Character) {
-        searchQuery.append(char)
-    }
-
-    mutating func deleteSearchChar() {
-        _ = searchQuery.popLast()
-    }
-
-    mutating func moveUp() { cursorRow = max(0, cursorRow - 1) }
-    mutating func moveDown() { cursorRow = min(rows - 1, cursorRow + 1) }
-    mutating func moveLeft() { cursorCol = max(0, cursorCol - 1) }
-    mutating func moveRight() { cursorCol = min(cols - 1, cursorCol + 1) }
-    mutating func moveToLineStart() { cursorCol = 0 }
-    mutating func moveToLineEnd() { cursorCol = cols - 1 }
-    mutating func moveWordForward() { cursorCol = min(cols - 1, cursorCol + 5) }
-    mutating func moveWordBackward() { cursorCol = max(0, cursorCol - 5) }
-    mutating func moveToTop() { cursorRow = 0; cursorCol = 0 }
-    mutating func moveToBottom() { cursorRow = rows - 1; cursorCol = 0 }
+    private mutating func moveUp() { cursorRow = max(0, cursorRow - 1) }
+    private mutating func moveDown() { cursorRow = min(rows - 1, cursorRow + 1) }
+    private mutating func moveLeft() { cursorCol = max(0, cursorCol - 1) }
+    private mutating func moveRight() { cursorCol = min(cols - 1, cursorCol + 1) }
+    private mutating func moveToLineStart() { cursorCol = 0 }
+    private mutating func moveToLineEnd() { cursorCol = cols - 1 }
+    private mutating func moveToTop() { cursorRow = 0; cursorCol = 0 }
+    private mutating func moveToBottom() { cursorRow = rows - 1; cursorCol = 0 }
 
     // MARK: - Key handling
 
