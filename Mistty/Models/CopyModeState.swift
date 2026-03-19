@@ -177,11 +177,11 @@ struct CopyModeState {
             if !searchQuery.isEmpty { return [.confirmSearch] }
             return []
 
-        // Find char
-        case "f": pendingFindChar = .f; return []
-        case "F": pendingFindChar = .F; return []
-        case "t": pendingFindChar = .t; return []
-        case "T": pendingFindChar = .T; return []
+        // Find char (restore count so handleFindCharTarget can use it)
+        case "f": pendingFindChar = .f; pendingCount = hadExplicitCount ? count : nil; return []
+        case "F": pendingFindChar = .F; pendingCount = hadExplicitCount ? count : nil; return []
+        case "t": pendingFindChar = .t; pendingCount = hadExplicitCount ? count : nil; return []
+        case "T": pendingFindChar = .T; pendingCount = hadExplicitCount ? count : nil; return []
         case ";": return repeatFindChar(count: count, reverse: false, lineReader: lineReader)
         case ",": return repeatFindChar(count: count, reverse: true, lineReader: lineReader)
 
