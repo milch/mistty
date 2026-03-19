@@ -1,3 +1,4 @@
+import GhosttyKit
 import SwiftUI
 
 struct PaneView: View {
@@ -60,12 +61,32 @@ struct PaneView: View {
             let cellH = metrics?.cellHeight ?? geo.size.height / CGFloat(state.rows)
             let offX = metrics?.offsetX ?? 0
             let offY = metrics?.offsetY ?? 0
+            let reader: ((Int) -> String?)? = { row in
+              guard let surface = pane.surfaceView.surface else { return nil }
+              let size = ghostty_surface_size(surface)
+              var sel = ghostty_selection_s()
+              sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
+              sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
+              sel.top_left.x = 0
+              sel.top_left.y = UInt32(row)
+              sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
+              sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
+              sel.bottom_right.x = UInt32(size.columns - 1)
+              sel.bottom_right.y = UInt32(row)
+              sel.rectangle = false
+              var text = ghostty_text_s()
+              guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
+              defer { ghostty_surface_free_text(surface, &text) }
+              guard let ptr = text.text else { return nil }
+              return String(cString: ptr)
+            }
             CopyModeOverlay(
               state: state,
               cellWidth: cellW,
               cellHeight: cellH,
               gridOffsetX: offX,
-              gridOffsetY: offY
+              gridOffsetY: offY,
+              lineReader: reader
             )
           }
         }

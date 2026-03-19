@@ -6,6 +6,7 @@ struct CopyModeOverlay: View {
   let cellHeight: CGFloat
   var gridOffsetX: CGFloat = 0
   var gridOffsetY: CGFloat = 0
+  var lineReader: ((Int) -> String?)? = nil
 
   var body: some View {
     ZStack(alignment: .topLeading) {
@@ -15,7 +16,9 @@ struct CopyModeOverlay: View {
           start: range.start,
           end: range.end,
           cellWidth: cellWidth,
-          cellHeight: cellHeight
+          cellHeight: cellHeight,
+          mode: state.subMode,
+          lineReader: lineReader
         )
         .offset(x: gridOffsetX, y: gridOffsetY)
       }
@@ -34,7 +37,7 @@ struct CopyModeOverlay: View {
         Spacer()
         HStack {
           if state.subMode == .search {
-            Text("/\(state.searchQuery)█")
+            Text("/\(state.searchQuery)\u{2588}")
               .font(.system(size: 11, weight: .bold, design: .monospaced))
               .foregroundStyle(.white)
               .padding(.horizontal, 8)
@@ -51,6 +54,13 @@ struct CopyModeOverlay: View {
           Spacer()
         }
         .padding(4)
+      }
+
+      // Help overlay (g?)
+      if state.showingHelp {
+        CopyModeHelpOverlay()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(Color.black.opacity(0.3))
       }
     }
     .allowsHitTesting(false)
@@ -72,33 +82,71 @@ struct SelectionHighlightView: View {
   let end: (row: Int, col: Int)
   let cellWidth: CGFloat
   let cellHeight: CGFloat
+  let mode: CopySubMode
+  let lineReader: ((Int) -> String?)?
 
   var body: some View {
     Canvas { context, size in
       let minRow = min(start.row, end.row)
       let maxRow = max(start.row, end.row)
 
-      for row in minRow...maxRow {
-        let x0: CGFloat
-        let x1: CGFloat
-        if row == minRow && row == maxRow {
-          x0 = CGFloat(min(start.col, end.col)) * cellWidth
-          x1 = CGFloat(max(start.col, end.col) + 1) * cellWidth
-        } else if row == minRow {
-          let startCol = start.row <= end.row ? start.col : end.col
-          x0 = CGFloat(startCol) * cellWidth
-          x1 = size.width
-        } else if row == maxRow {
-          let endCol = start.row <= end.row ? end.col : start.col
-          x0 = 0
-          x1 = CGFloat(endCol + 1) * cellWidth
-        } else {
-          x0 = 0
-          x1 = size.width
-        }
-        let rect = CGRect(x: x0, y: CGFloat(row) * cellHeight, width: x1 - x0, height: cellHeight)
-        context.fill(Path(rect), with: .color(.blue.opacity(0.3)))
+      switch mode {
+      case .visual:
+        drawCharacterWise(context: context, size: size, minRow: minRow, maxRow: maxRow)
+      case .visualLine:
+        drawLineWise(context: context, size: size, minRow: minRow, maxRow: maxRow)
+      case .visualBlock:
+        drawBlockWise(context: context, size: size, minRow: minRow, maxRow: maxRow)
+      default:
+        break
       }
+    }
+  }
+
+  private func drawCharacterWise(context: GraphicsContext, size: CGSize, minRow: Int, maxRow: Int) {
+    for row in minRow...maxRow {
+      let x0: CGFloat
+      let x1: CGFloat
+      if row == minRow && row == maxRow {
+        x0 = CGFloat(min(start.col, end.col)) * cellWidth
+        x1 = CGFloat(max(start.col, end.col) + 1) * cellWidth
+      } else if row == minRow {
+        let startCol = start.row <= end.row ? start.col : end.col
+        x0 = CGFloat(startCol) * cellWidth
+        x1 = size.width
+      } else if row == maxRow {
+        let endCol = start.row <= end.row ? end.col : start.col
+        x0 = 0
+        x1 = CGFloat(endCol + 1) * cellWidth
+      } else {
+        x0 = 0
+        x1 = size.width
+      }
+      let rect = CGRect(x: x0, y: CGFloat(row) * cellHeight, width: x1 - x0, height: cellHeight)
+      context.fill(Path(rect), with: .color(.blue.opacity(0.3)))
+    }
+  }
+
+  private func drawLineWise(context: GraphicsContext, size: CGSize, minRow: Int, maxRow: Int) {
+    for row in minRow...maxRow {
+      let lineLen = lineReader?(row)?.count ?? 0
+      let x1 = lineLen > 0 ? CGFloat(lineLen) * cellWidth : size.width
+      let rect = CGRect(x: 0, y: CGFloat(row) * cellHeight, width: x1, height: cellHeight)
+      context.fill(Path(rect), with: .color(.blue.opacity(0.3)))
+    }
+  }
+
+  private func drawBlockWise(context: GraphicsContext, size: CGSize, minRow: Int, maxRow: Int) {
+    let minCol = min(start.col, end.col)
+    let logicalRightCol = max(start.col, end.col)
+
+    for row in minRow...maxRow {
+      let lineLen = lineReader?(row)?.count ?? 0
+      let rightCol = max(logicalRightCol, lineLen > 0 ? lineLen - 1 : 0)
+      let x0 = CGFloat(minCol) * cellWidth
+      let x1 = CGFloat(rightCol + 1) * cellWidth
+      let rect = CGRect(x: x0, y: CGFloat(row) * cellHeight, width: x1 - x0, height: cellHeight)
+      context.fill(Path(rect), with: .color(.blue.opacity(0.3)))
     }
   }
 }
