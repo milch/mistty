@@ -817,29 +817,88 @@ struct ContentView: View {
     guard let tab = store.activeSession?.activeTab,
       let pane = tab.activePane,
       let state = tab.copyModeState,
-      let range = state.selectionRange,
+      let anchor = state.anchor,
       let surface = pane.surfaceView.surface
     else { return }
 
+    let size = ghostty_surface_size(surface)
+    let cols = Int(size.columns)
+    var textToCopy: String?
+
+    switch state.subMode {
+    case .visual:
+      // Character-wise: read from anchor to cursor
+      textToCopy = readGhosttyText(
+        surface: surface,
+        startRow: anchor.row, startCol: anchor.col,
+        endRow: state.cursorRow, endCol: state.cursorCol,
+        rectangle: false
+      )
+
+    case .visualLine:
+      // Line-wise: full lines from min to max row
+      let minRow = min(anchor.row, state.cursorRow)
+      let maxRow = max(anchor.row, state.cursorRow)
+      textToCopy = readGhosttyText(
+        surface: surface,
+        startRow: minRow, startCol: 0,
+        endRow: maxRow, endCol: cols - 1,
+        rectangle: false
+      )
+
+    case .visualBlock:
+      // Block-wise: read each row's slice, joined by newlines
+      let minRow = min(anchor.row, state.cursorRow)
+      let maxRow = max(anchor.row, state.cursorRow)
+      let minCol = min(anchor.col, state.cursorCol)
+      var lines: [String] = []
+      for row in minRow...maxRow {
+        if let line = readTerminalLine(row: row) {
+          let chars = Array(line)
+          let rightCol = max(
+            max(anchor.col, state.cursorCol), chars.count > 0 ? chars.count - 1 : 0)
+          let start = min(minCol, chars.count)
+          let end = min(rightCol + 1, chars.count)
+          if start < end {
+            lines.append(String(chars[start..<end]))
+          } else {
+            lines.append("")
+          }
+        }
+      }
+      textToCopy = lines.joined(separator: "\n")
+
+    default:
+      return
+    }
+
+    if let text = textToCopy, !text.isEmpty {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(text, forType: .string)
+    }
+  }
+
+  private func readGhosttyText(
+    surface: ghostty_surface_t,
+    startRow: Int, startCol: Int,
+    endRow: Int, endCol: Int,
+    rectangle: Bool
+  ) -> String? {
     var sel = ghostty_selection_s()
     sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
     sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.top_left.x = UInt32(range.start.col)
-    sel.top_left.y = UInt32(range.start.row)
+    sel.top_left.x = UInt32(startCol)
+    sel.top_left.y = UInt32(startRow)
     sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
     sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.bottom_right.x = UInt32(range.end.col)
-    sel.bottom_right.y = UInt32(range.end.row)
-    sel.rectangle = false
+    sel.bottom_right.x = UInt32(endCol)
+    sel.bottom_right.y = UInt32(endRow)
+    sel.rectangle = rectangle
 
     var text = ghostty_text_s()
-    if ghostty_surface_read_text(surface, sel, &text) {
-      if let ptr = text.text {
-        let str = String(cString: ptr)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(str, forType: .string)
-      }
-      ghostty_surface_free_text(surface, &text)
-    }
+    guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
+    defer { ghostty_surface_free_text(surface, &text) }
+    guard let ptr = text.text else { return nil }
+    return String(cString: ptr)
   }
 }
