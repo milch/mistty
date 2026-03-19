@@ -26,7 +26,7 @@ enum CopySubMode {
 
 ```swift
 enum CopyModeAction {
-    case moveCursor(row: Int, col: Int)
+    case cursorMoved          // signals UI refresh; new position already in state
     case updateSelection
     case yank(text: String)
     case exitCopyMode
@@ -37,7 +37,7 @@ enum CopyModeAction {
     case updateSearch(query: String)
     case confirmSearch
     case cancelSearch
-    case none
+    // no .none -- return an empty array instead
 }
 
 mutating func handleKey(
@@ -50,7 +50,9 @@ mutating func handleKey(
 
 The `lineReader` closure provides access to terminal content. ContentView supplies it by wrapping `ghostty_surface_read_text()`. This keeps the state machine testable with mock line content.
 
-Returns an array of actions since one keypress can trigger multiple effects (e.g., movement + selection update).
+Returns an array of actions since one keypress can trigger multiple effects (e.g., movement + selection update). An empty array means the key was consumed with no side effects.
+
+**Key extraction:** The `key` parameter should come from `event.charactersIgnoringModifiers` (not `event.characters`) so that modifier combinations resolve correctly. For example, Ctrl-v produces a control character in `event.characters`, but `charactersIgnoringModifiers` still yields `v`, which combined with checking `modifiers.contains(.control)` allows correct detection of Ctrl-v for visual block mode.
 
 ### Pending Input State
 
@@ -90,19 +92,21 @@ Two classes only: blank and non-blank. A WORD is any contiguous run of non-blank
 | e/E | Move to end of current/next word/WORD |
 | b/B | Move to start of current/previous word/WORD |
 | ge/gE | Move to end of previous word/WORD |
-| gb/gB | Move to start of previous word/WORD |
 
 ### Cross-Line Behavior
 
 Word motions wrap across lines. If `w` reaches end of line, it continues to the first word on the next line via `lineReader`. Same for `b` going backwards. Matches vim behavior.
 
+**Phase 1 viewport limitation:** Wrapping stops at viewport boundaries (row 0 and row `rows-1`). Scrollback wrapping is deferred to Phase 2.
+
 ### Pending g Resolution
 
 When `g` is pressed, `pendingG` is set to `true`. The next key resolves it:
 
-- `e` -> ge, `E` -> gE, `b` -> gb, `B` -> gB
+- `e` -> ge motion, `E` -> gE motion
 - `g` -> go to top (existing behavior)
-- Any other key: cancels pending g, starts a find-char if f/F/t/T, otherwise ignored
+- `0` -> cancels pending g, then executes line-start (since `0` without pending count is line-start)
+- Any other key: cancels pending g, then the key is processed normally (e.g., `g` then `f` cancels pending g and starts a find-char)
 
 ## f/F/t/T and ;/,
 
@@ -140,7 +144,7 @@ Digits 1-9 start a count, 0-9 continue it. `0` alone maps to line-start (existin
 
 The count is applied as a multiplier when a movement key arrives. The motion is executed `count` times, then `pendingCount` is cleared.
 
-Applies to: h/j/k/l, w/W/b/B/e/E, ge/gE/gb/gB, f/F/t/T, ;/,, G (as go-to-line).
+Applies to: h/j/k/l, w/W/b/B/e/E, ge/gE, f/F/t/T, ;/,, G (as go-to-line).
 
 `5G` goes to line 5. `G` without count goes to bottom (existing).
 
@@ -170,7 +174,7 @@ Selection is derived from the sub-mode rather than stored as a separate `isSelec
 - `visualLine` -> full lines from anchor line to cursor line
 - `visualBlock` -> rectangular from anchor corner to cursor, with per-row right edge
 
-The anchor point is set when entering any visual sub-mode and stays fixed.
+Entering any visual sub-mode always sets the anchor to the current cursor position. The anchor stays fixed until the mode is exited.
 
 ### Mode Switching Between Visual Modes
 
@@ -185,11 +189,17 @@ The anchor point is set when entering any visual sub-mode and stays fixed.
 - Line-wise: copies full lines including newlines
 - Block-wise: copies each row's slice within the column range, joined by newlines
 
+### Yank Without Selection
+
+`y` in normal sub-mode (no active selection) is a no-op.
+
 ## Help Overlay
 
 ### Activation
 
 `?` in normal sub-mode toggles `showingHelp`. Any other keypress while help is visible hides it and is consumed (does not execute). Escape also hides it.
+
+**Note:** In vim, `?` is reverse search. Reverse search is planned for Phase 2. At that point, `?` will be reassigned to reverse search and help will move to a different key (TBD in Phase 2 spec).
 
 ### Rendering
 
@@ -202,14 +212,15 @@ Organized by category:
 ```
 Navigation                Selection              Search
 h/j/k/l  move cursor     v      visual          /  search forward
-w/b/e    word forward/    V      visual line     n  next match
-         back/end         Ctrl-v visual block
+w/b/e    word fwd/back/   V      visual line     n  next match
+         end              Ctrl-v visual block
 W/B/E    WORD motions     Esc    exit visual     Actions
-0/$      line start/end                          y  yank selection
-g/G      top/bottom       Find on Line           ?  toggle help
-f/F      find char        ;  repeat find         Esc exit copy mode
-t/T      find before      ,  reverse find
-[count]  repeat motion
+ge/gE    end of prev                             y  yank selection
+         word/WORD        Find on Line           ?  toggle help
+0/$      line start/end   f/F    find char       Esc exit copy mode
+g/G      top/bottom       t/T    find before
+[count]  repeat motion    ;      repeat find
+                          ,      reverse find
 ```
 
 ## ContentView Integration
@@ -221,14 +232,13 @@ The `NSEvent` monitor closure reduces to:
 1. Convert `NSEvent` to `(character, keyCode, modifiers)`
 2. Call `state.handleKey(...)` with `lineReader` closure wrapping `ghostty_surface_read_text()`
 3. Apply returned actions:
-   - `.moveCursor` -> already reflected in state
-   - `.updateSelection` -> already reflected in state
+   - `.cursorMoved` -> trigger UI refresh (position already in state)
+   - `.updateSelection` -> trigger UI refresh (selection already in state)
    - `.yank` -> write to `NSPasteboard`
    - `.exitCopyMode` -> call existing `exitCopyMode()`
-   - `.enterSubMode` -> reflected in state, triggers UI refresh
+   - `.enterSubMode` -> trigger UI refresh (sub-mode already in state)
    - `.showHelp`/`.hideHelp` -> toggle overlay
    - Search actions -> update search UI state
-   - `.none` -> no-op
 
 ### Mode Indicator Text
 
