@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import MisttyShared
 
-enum IPCClientError: Error, CustomStringConvertible {
+enum IPCClientError: LocalizedError, CustomStringConvertible {
     case connectionFailed(String)
     case remoteError(String)
 
@@ -12,6 +12,8 @@ enum IPCClientError: Error, CustomStringConvertible {
         case .remoteError(let message): return message
         }
     }
+
+    var errorDescription: String? { description }
 }
 
 /// CLI-side IPC client using Unix domain sockets to communicate with the Mistty app.

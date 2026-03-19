@@ -8,7 +8,7 @@ import MisttyShared
 final class IPCListener {
     nonisolated(unsafe) private let service: MisttyIPCService
     nonisolated(unsafe) private var serverFD: Int32 = -1
-    private var acceptSource: DispatchSourceRead?
+    nonisolated(unsafe) private var running = false
     private let queue = DispatchQueue(label: "com.mistty.ipc-listener", qos: .userInitiated)
 
     init(service: MisttyIPCService) {
@@ -38,7 +38,7 @@ final class IPCListener {
         let pathBytes = path.utf8CString
         guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
             print("Warning: socket path too long")
-            close(serverFD); serverFD = -1
+            Darwin.close(serverFD); serverFD = -1
             return
         }
         withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
@@ -56,58 +56,63 @@ final class IPCListener {
         }
         guard bindResult == 0 else {
             print("Warning: failed to bind IPC socket: \(String(cString: strerror(errno)))")
-            close(serverFD); serverFD = -1
+            Darwin.close(serverFD); serverFD = -1
             return
         }
 
         // Listen
         guard Darwin.listen(serverFD, 5) == 0 else {
             print("Warning: failed to listen on IPC socket: \(String(cString: strerror(errno)))")
-            close(serverFD); serverFD = -1
+            Darwin.close(serverFD); serverFD = -1
             return
         }
 
-        // Accept connections using GCD
-        let source = DispatchSource.makeReadSource(fileDescriptor: serverFD, queue: queue)
-        source.setEventHandler { [weak self] in
-            self?.acceptConnection()
+        // Accept loop on background thread
+        running = true
+        queue.async { [weak self] in
+            self?.acceptLoop()
         }
-        source.setCancelHandler { [serverFD] in
-            close(serverFD)
-        }
-        source.resume()
-        acceptSource = source
     }
 
     func stop() {
-        acceptSource?.cancel()
-        acceptSource = nil
-        serverFD = -1
+        running = false
+        if serverFD >= 0 {
+            Darwin.close(serverFD)
+            serverFD = -1
+        }
         unlink(MisttyIPC.socketPath)
+    }
+
+    // MARK: - Accept Loop
+
+    private nonisolated func acceptLoop() {
+        while running {
+            let clientFD = Darwin.accept(serverFD, nil, nil)
+            guard clientFD >= 0 else {
+                if !running { break }  // stopped intentionally
+                continue
+            }
+
+            // Set SO_NOSIGPIPE to avoid SIGPIPE on write to closed socket
+            var on: Int32 = 1
+            setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+
+            // Set read/write timeout (5 seconds)
+            var tv = timeval(tv_sec: 5, tv_usec: 0)
+            setsockopt(clientFD, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+            setsockopt(clientFD, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+
+            // Handle connection on a separate queue to not block accept loop
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.handleConnection(clientFD)
+            }
+        }
     }
 
     // MARK: - Connection Handling
 
-    private nonisolated func acceptConnection() {
-        let clientFD = Darwin.accept(serverFD, nil, nil)
-        guard clientFD >= 0 else { return }
-
-        // Set SO_NOSIGPIPE to avoid SIGPIPE on write to closed socket
-        var on: Int32 = 1
-        setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
-
-        // Set read/write timeout (5 seconds)
-        var tv = timeval(tv_sec: 5, tv_usec: 0)
-        setsockopt(clientFD, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-        setsockopt(clientFD, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-
-        queue.async {
-            self.handleConnection(clientFD)
-        }
-    }
-
     private nonisolated func handleConnection(_ fd: Int32) {
-        defer { close(fd) }
+        defer { Darwin.close(fd) }
 
         // Read length prefix (4 bytes, big-endian UInt32)
         guard let lengthBytes = readExact(fd: fd, count: 4) else { return }
