@@ -19,19 +19,16 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 ## TODO
 
 ### Window mode
-- Press number keys to switch standard layouts
-  1. even-horizontal
-  2. even-vertical
-  3. main-horizontal
-  4. main-vertical
-  5. tiled
+
 - s to save layout for this session / r to restore layout
 
 ### Copy mode improvements
+
 - Visual line mode
 - Visual block mode
+- number prefix (10j jumps 10 lines down, etc...)
 - Escaping out of visual mode should return to copy mode, not escape out of copy mode completely
-- w/W/e/E/b/B/ge/gE/gb/gB should work as expected (currently w/b are simple 5-char jumps)
+- w/W/e/E/b/B/ge/gE should work as expected (currently w/b are simple 5-char jumps)
 - f/F/t/T/; should work as expected
 - Actually move through scrollback - current copy mode implementation only covers the contents of the screen
 - Search hit highlighting
@@ -44,16 +41,20 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
   - Specifically for links and file paths, there is a slight variant - if entering "yank mode" by pressing `o` instead of `y`, it instead automatically runs `open` on the item
 
 ### Save layouts
+
 - There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
 - Configurable allowlist of processes that should be relaunched when restoring a layout, e.g. nvim, claude, ssh
 
 ### Ghostty config
+
 - Ghostty config needs to be configurable too. At least some of the options, not all - those that control the UI, for example, don't apply for mistty, but things like rendering (e.g. display colorspace) do apply
 
 ### Keyboard shortcut configuration
+
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
 
 ### UI improvements
+
 - Better minimal tab bar design
 - Tab bar should only show when there is more than 1 tab
 - Session manager icons (SFSymbols?) indicating the type of each row (currently uses Unicode icons)
@@ -70,6 +71,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 ## Implemented
 
 ### Session workflow
+
 - Session manager (cmd+j) with fuzzy find
   - FuzzyMatcher with two-pass greedy algorithm (fzf-style) + Damerau-Levenshtein typo tolerance
   - Multi-token AND matching: space-separated query tokens all must match
@@ -90,25 +92,35 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 - Current session hidden in session manager
 
 ### Standard terminal functions
+
 - New tab (cmd+t)
 - Rename tab (cmd+shift+r, or double-click tab title for inline edit)
 - New split pane horizontal (cmd+d) and vertical (cmd+shift+d)
 
 ### Sidebar
+
 - Shows all open sessions with tabs nested in collapsible disclosure groups
 - Collapsible sidebar (cmd+s) with resizable drag handle
 - Bell activity indicator (orange dot) on tabs with background bell
 - Highlights current session and current tab
 
 ### Window mode (cmd+x)
+
 - Toast popup with orange border and help overlay
 - Grow/shrink panes (cmd+arrows, 5% delta)
 - Swap panes in direction (arrow keys)
 - Break pane to new tab (b)
 - Merge/join pane to existing tab (m, then number key to pick target)
 - Rotate pane direction (r)
+- Press number keys to switch standard layouts
+  1. even-horizontal
+  2. even-vertical
+  3. main-horizontal
+  4. main-vertical
+  5. tiled
 
 ### Copy mode
+
 - Enter/exit copy mode
 - Vim navigation: h/j/k/l cursor movement, 0/$ line start/end, g/G top/bottom
 - Visual mode (v) with selection highlighting
@@ -117,6 +129,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 - Basic word movement (w/b, simplified 5-char jumps)
 
 ### CLI control (mistty-cli via XPC/Mach service)
+
 - Session CRUD: create, list, get, close (with --name, --directory, --exec)
 - Tab CRUD: create, list, get, close, rename
 - Pane CRUD: create, list, get, close, focus, resize, send-keys, run-command, get-text, active
@@ -125,6 +138,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 - JSON and human-readable output formats
 
 ### Popup support
+
 - Configurable popup definitions in config.toml (name, command, shortcut, width, height, close_on_exit)
 - Popup overlay UI with semi-transparent backdrop, header bar, close button
 - Toggle via configurable keyboard shortcuts
@@ -132,22 +146,26 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 - Popup inherits current pane's working directory
 
 ### Navigation
+
 - Ctrl-h/j/k/l between panes with smart neovim pass-through
 - Cmd-1 through cmd-9 to focus tab by index
 - Cmd-]/cmd-[ for next/prev tab (circular)
 - Cmd-shift-up/down to cycle between sessions (circular)
 
 ### SSH integration
+
 - SSH auto-connect for SSH session types
 - Configurable SSH command with per-host overrides in config
 - Option modifier bypasses SSH auto-connect on new panes
 
 ### Config & preferences
+
 - Config file parsing from ~/.config/mistty/config.toml
 - Preference pane (cmd+,) for font size, cursor style, scrollback, sidebar visibility
 - Popup definition configuration
 
 ### Native macOS UI
+
 - SwiftUI + AppKit hybrid (terminal surface is NSView, UI is SwiftUI)
 - Tab bar with horizontal scrolling, close buttons, new tab button
 - Process title display via ghostty notifications

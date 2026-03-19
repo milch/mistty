@@ -161,9 +161,10 @@ Applies to: h/j/k/l, w/W/b/B/e/E, ge/gE, f/F/t/T, ;/,, G (as go-to-line).
 
 - Defined by anchor point and cursor position
 - Left edge: `min(anchorCol, cursorCol)`
-- Right edge per row: `max(cursorCol, length of that row's text)`
+- Logical right column: `max(anchorCol, cursorCol)`
+- Right edge per row: `max(logicalRightCol, length of that row's text)` — extends to at least the end of each line
 - Row range: `min(anchorRow, cursorRow)` to `max(anchorRow, cursorRow)`
-- The right edge can be ragged per-line
+- The right edge can be ragged per-line since line lengths vary
 
 ### Selection State
 
@@ -232,7 +233,7 @@ The `NSEvent` monitor closure reduces to:
 1. Convert `NSEvent` to `(character, keyCode, modifiers)`
 2. Call `state.handleKey(...)` with `lineReader` closure wrapping `ghostty_surface_read_text()`
 3. Apply returned actions:
-   - `.cursorMoved` -> trigger UI refresh (position already in state)
+   - `.cursorMoved` -> trigger UI refresh (position already in state). In visual modes, movement also changes selection, so `handleKey` returns both `.cursorMoved` and `.updateSelection` together.
    - `.updateSelection` -> trigger UI refresh (selection already in state)
    - `.yank` -> write to `NSPasteboard`
    - `.exitCopyMode` -> call existing `exitCopyMode()`
@@ -260,4 +261,4 @@ The `NSEvent` monitor closure reduces to:
 
 - **Character-wise:** existing behavior (start to end, wrapping across lines)
 - **Line-wise:** full-width rectangles from min line to max line, each row from col 0 to end of that line's text
-- **Block-wise:** per-row rectangles from `minCol` to `max(cursorCol, lineLength)` for each row in range
+- **Block-wise:** per-row rectangles from `minCol` to `max(logicalRightCol, lineLength)` for each row in range
