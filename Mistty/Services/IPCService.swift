@@ -13,7 +13,7 @@ private struct Reply: @unchecked Sendable {
     }
 }
 
-final class MisttyIPCService: MisttyServiceProtocol, @unchecked Sendable {
+final class MisttyIPCService: MisttyServiceProtocol, Sendable {
     private let store: SessionStore
 
     init(store: SessionStore) {

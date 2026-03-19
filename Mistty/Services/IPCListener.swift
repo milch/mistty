@@ -1,14 +1,20 @@
 import Darwin
 import Foundation
 import MisttyShared
+import os
+
+/// Thread-safe state shared between the main thread and the accept loop.
+private struct ListenerState: Sendable {
+    var serverFD: Int32 = -1
+    var running = false
+}
 
 /// Unix domain socket IPC listener. The app binds to a socket and accepts
 /// one-shot connections from the CLI: read request, dispatch, write response, close.
 @MainActor
 final class IPCListener {
-    nonisolated(unsafe) private let service: MisttyIPCService
-    nonisolated(unsafe) private var serverFD: Int32 = -1
-    nonisolated(unsafe) private var running = false
+    private let service: MisttyIPCService
+    private let state = OSAllocatedUnfairLock(initialState: ListenerState())
     private let queue = DispatchQueue(label: "com.mistty.ipc-listener", qos: .userInitiated)
 
     init(service: MisttyIPCService) {
@@ -26,8 +32,8 @@ final class IPCListener {
         unlink(path)
 
         // Create socket
-        serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard serverFD >= 0 else {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else {
             print("Warning: failed to create IPC socket: \(String(cString: strerror(errno)))")
             return
         }
@@ -38,7 +44,7 @@ final class IPCListener {
         let pathBytes = path.utf8CString
         guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
             print("Warning: socket path too long")
-            Darwin.close(serverFD); serverFD = -1
+            Darwin.close(fd)
             return
         }
         withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
@@ -51,45 +57,58 @@ final class IPCListener {
 
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                Darwin.bind(serverFD, sockPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
+                Darwin.bind(fd, sockPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
         guard bindResult == 0 else {
             print("Warning: failed to bind IPC socket: \(String(cString: strerror(errno)))")
-            Darwin.close(serverFD); serverFD = -1
+            Darwin.close(fd)
             return
         }
 
         // Listen
-        guard Darwin.listen(serverFD, 5) == 0 else {
+        guard Darwin.listen(fd, 5) == 0 else {
             print("Warning: failed to listen on IPC socket: \(String(cString: strerror(errno)))")
-            Darwin.close(serverFD); serverFD = -1
+            Darwin.close(fd)
             return
         }
 
-        // Accept loop on background thread
-        running = true
-        queue.async { [weak self] in
-            self?.acceptLoop()
+        // Publish state atomically before launching accept loop
+        state.withLock { s in
+            s.serverFD = fd
+            s.running = true
+        }
+
+        let service = self.service
+        queue.async { [state] in
+            IPCListener.acceptLoop(state: state, service: service)
         }
     }
 
     func stop() {
-        running = false
-        if serverFD >= 0 {
-            Darwin.close(serverFD)
-            serverFD = -1
+        let fd = state.withLock { s -> Int32 in
+            s.running = false
+            let fd = s.serverFD
+            s.serverFD = -1
+            return fd
         }
+        // Closing the fd unblocks the accept() call in the background thread
+        if fd >= 0 { Darwin.close(fd) }
         unlink(MisttyIPC.socketPath)
     }
 
     // MARK: - Accept Loop
 
-    private nonisolated func acceptLoop() {
-        while running {
-            let clientFD = Darwin.accept(serverFD, nil, nil)
+    private nonisolated static func acceptLoop(state: OSAllocatedUnfairLock<ListenerState>, service: MisttyIPCService) {
+        while true {
+            let fd = state.withLock { $0.running ? $0.serverFD : -1 }
+            guard fd >= 0 else { break }
+
+            let clientFD = Darwin.accept(fd, nil, nil)
             guard clientFD >= 0 else {
-                if !running { break }  // stopped intentionally
+                // Check if we were stopped (fd closed)
+                let stillRunning = state.withLock { $0.running }
+                if !stillRunning { break }
                 continue
             }
 
@@ -104,14 +123,14 @@ final class IPCListener {
 
             // Handle connection on a separate queue to not block accept loop
             DispatchQueue.global(qos: .userInitiated).async {
-                self.handleConnection(clientFD)
+                handleConnection(clientFD, service: service)
             }
         }
     }
 
     // MARK: - Connection Handling
 
-    private nonisolated func handleConnection(_ fd: Int32) {
+    private nonisolated static func handleConnection(_ fd: Int32, service: MisttyIPCService) {
         defer { Darwin.close(fd) }
 
         // Read length prefix (4 bytes, big-endian UInt32)
@@ -154,7 +173,7 @@ final class IPCListener {
         }
     }
 
-    private nonisolated func errorResponse(_ message: String) -> Data {
+    private nonisolated static func errorResponse(_ message: String) -> Data {
         var result = Data([0x01])
         result.append(Data(message.utf8))
         return result
@@ -163,7 +182,7 @@ final class IPCListener {
     // MARK: - Socket I/O Helpers
 
     /// Read exactly `count` bytes, looping for short reads and EINTR. Returns nil on error/timeout.
-    private nonisolated func readExact(fd: Int32, count: Int) -> Data? {
+    private nonisolated static func readExact(fd: Int32, count: Int) -> Data? {
         var buffer = Data(count: count)
         var offset = 0
         while offset < count {
@@ -178,7 +197,7 @@ final class IPCListener {
     }
 
     /// Write response with length prefix, looping for short writes.
-    private nonisolated func writeResponse(fd: Int32, data: Data) {
+    private nonisolated static func writeResponse(fd: Int32, data: Data) {
         // Write length prefix
         var length = UInt32(data.count).bigEndian
         let lengthData = Data(bytes: &length, count: 4)
@@ -187,7 +206,7 @@ final class IPCListener {
         writeAll(fd: fd, data: data)
     }
 
-    private nonisolated func writeAll(fd: Int32, data: Data) {
+    private nonisolated static func writeAll(fd: Int32, data: Data) {
         var offset = 0
         while offset < data.count {
             let n = data.withUnsafeBytes { ptr in
