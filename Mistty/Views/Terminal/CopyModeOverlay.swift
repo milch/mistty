@@ -33,7 +33,7 @@ struct CopyModeOverlay: View {
       VStack {
         Spacer()
         HStack {
-          if state.isSearching {
+          if state.subMode == .search {
             Text("/\(state.searchQuery)█")
               .font(.system(size: 11, weight: .bold, design: .monospaced))
               .foregroundStyle(.white)
@@ -41,7 +41,7 @@ struct CopyModeOverlay: View {
               .padding(.vertical, 2)
               .background(Color.blue.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
           } else {
-            Text(state.isSelecting ? "-- VISUAL --" : "-- COPY --")
+            Text(modeIndicatorText)
               .font(.system(size: 11, weight: .bold, design: .monospaced))
               .foregroundStyle(.white)
               .padding(.horizontal, 8)
@@ -54,6 +54,16 @@ struct CopyModeOverlay: View {
       }
     }
     .allowsHitTesting(false)
+  }
+
+  private var modeIndicatorText: String {
+    switch state.subMode {
+    case .normal: return "-- COPY --"
+    case .visual: return "-- VISUAL --"
+    case .visualLine: return "-- VISUAL LINE --"
+    case .visualBlock: return "-- VISUAL BLOCK --"
+    case .search: return ""  // handled separately
+    }
   }
 }
 
