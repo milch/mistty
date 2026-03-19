@@ -129,7 +129,8 @@ final class SessionStoreTests: XCTestCase {
   }
 
   func test_createSessionWithExec() {
-    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"), exec: "nvim")
+    let session = store.createSession(
+      name: "test", directory: URL(fileURLWithPath: "/tmp"), exec: "nvim")
     XCTAssertEqual(session.tabs.first?.panes.first?.command, "nvim")
   }
 

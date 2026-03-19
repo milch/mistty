@@ -16,10 +16,11 @@ struct ContentView: View {
 
   var body: some View {
     contentWithNotifications
-      .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) { notification in
+      .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) {
+        notification in
         guard let session = store.activeSession,
-              let index = notification.userInfo?["index"] as? Int,
-              index < session.tabs.count
+          let index = notification.userInfo?["index"] as? Int,
+          index < session.tabs.count
         else { return }
         session.activeTab = session.tabs[index]
       }
@@ -213,8 +214,8 @@ struct ContentView: View {
   @ViewBuilder
   private var popupOverlay: some View {
     if let session = store.activeSession,
-       let popup = session.activePopup,
-       popup.isVisible
+      let popup = session.activePopup,
+      popup.isVisible
     {
       GeometryReader { geometry in
         PopupOverlayView(
@@ -239,9 +240,11 @@ struct ContentView: View {
 
   private func splitPane(direction: SplitDirection) {
     guard let session = store.activeSession,
-          let tab = session.activeTab else { return }
+      let tab = session.activeTab
+    else { return }
     if let sshCommand = session.sshCommand,
-       !NSEvent.modifierFlags.contains(.option) {
+      !NSEvent.modifierFlags.contains(.option)
+    {
       let pane = MisttyPane(id: tab.paneIDGenerator())
       pane.directory = session.directory
       pane.command = sshCommand
@@ -281,7 +284,7 @@ struct ContentView: View {
 
   private func handlePopupToggle(_ notification: Notification) {
     guard let session = store.activeSession,
-          let name = notification.userInfo?["name"] as? String
+      let name = notification.userInfo?["name"] as? String
     else { return }
     let config = MisttyConfig.load()
     guard let definition = config.popups.first(where: { $0.name == name }) else { return }
@@ -295,8 +298,8 @@ struct ContentView: View {
 
   private func handleClosePane() {
     if let session = store.activeSession,
-       let popup = session.activePopup,
-       popup.isVisible
+      let popup = session.activePopup,
+      popup.isVisible
     {
       session.closePopup(popup)
       returnFocusToActivePane()
@@ -506,14 +509,15 @@ struct ContentView: View {
         return nil
       case 18, 19, 20, 21, 23:  // 1-5: standard layouts
         if let tab = store.activeSession?.activeTab, tab.panes.count >= 2 {
-          let standardLayout: StandardLayout = switch event.keyCode {
-          case 18: .evenHorizontal
-          case 19: .evenVertical
-          case 20: .mainHorizontal
-          case 21: .mainVertical
-          case 23: .tiled
-          default: .evenHorizontal
-          }
+          let standardLayout: StandardLayout =
+            switch event.keyCode {
+            case 18: .evenHorizontal
+            case 19: .evenVertical
+            case 20: .mainHorizontal
+            case 21: .mainVertical
+            case 23: .tiled
+            default: .evenHorizontal
+            }
           tab.applyStandardLayout(standardLayout)
           tab.windowModeState = .inactive
           removeWindowModeMonitor()
@@ -527,8 +531,8 @@ struct ContentView: View {
 
   private func joinPaneToTab(targetIndex: Int) {
     guard let session = store.activeSession,
-          let sourceTab = session.activeTab,
-          let pane = sourceTab.activePane
+      let sourceTab = session.activeTab,
+      let pane = sourceTab.activePane
     else { return }
     let targetTabs = session.tabs.filter { $0.id != sourceTab.id }
     guard targetIndex < targetTabs.count else { return }
@@ -622,7 +626,8 @@ struct ContentView: View {
       }
     }
 
-    tab.copyModeState = CopyModeState(rows: rows, cols: cols, cursorRow: cursorRow, cursorCol: cursorCol)
+    tab.copyModeState = CopyModeState(
+      rows: rows, cols: cols, cursorRow: cursorRow, cursorCol: cursorCol)
     installCopyModeMonitor()
   }
 
@@ -641,7 +646,9 @@ struct ContentView: View {
       }
 
       // Extract key from charactersIgnoringModifiers for correct Ctrl-v handling
-      guard let keyStr = event.charactersIgnoringModifiers, let key = keyStr.first else { return event }
+      guard let keyStr = event.charactersIgnoringModifiers, let key = keyStr.first else {
+        return event
+      }
 
       let lineReader: (Int) -> String? = { row in
         self.readTerminalLine(row: row)
@@ -703,7 +710,7 @@ struct ContentView: View {
   private func installCtrlNavMonitor() {
     ctrlNavMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       guard event.modifierFlags.contains(.control),
-            let chars = event.charactersIgnoringModifiers?.lowercased()
+        let chars = event.charactersIgnoringModifiers?.lowercased()
       else { return event }
 
       let direction: NavigationDirection
@@ -717,12 +724,12 @@ struct ContentView: View {
 
       // Don't intercept if session manager, window mode, or copy mode is active
       guard !showingSessionManager,
-            store.activeSession?.activeTab?.isWindowModeActive != true,
-            store.activeSession?.activeTab?.isCopyModeActive != true
+        store.activeSession?.activeTab?.isWindowModeActive != true,
+        store.activeSession?.activeTab?.isCopyModeActive != true
       else { return event }
 
       guard let tab = store.activeSession?.activeTab,
-            let pane = tab.activePane
+        let pane = tab.activePane
       else { return event }
 
       // If running neovim, let the keypress through for smart-splits
@@ -790,7 +797,7 @@ struct ContentView: View {
 
   private func readTerminalLine(row: Int) -> String? {
     guard let pane = store.activeSession?.activeTab?.activePane,
-          let surface = pane.surfaceView.surface
+      let surface = pane.surfaceView.surface
     else { return nil }
 
     let size = ghostty_surface_size(surface)

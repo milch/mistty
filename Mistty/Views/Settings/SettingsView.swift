@@ -33,10 +33,13 @@ struct SettingsView: View {
                 .frame(width: 120)
               TextField("Command", text: $config.popups[index].command)
                 .frame(width: 150)
-              TextField("Shortcut", text: Binding(
-                get: { config.popups[index].shortcut ?? "" },
-                set: { config.popups[index].shortcut = $0.isEmpty ? nil : $0 }
-              ))
+              TextField(
+                "Shortcut",
+                text: Binding(
+                  get: { config.popups[index].shortcut ?? "" },
+                  set: { config.popups[index].shortcut = $0.isEmpty ? nil : $0 }
+                )
+              )
               .frame(width: 120)
               Button(role: .destructive) {
                 config.popups.remove(at: index)
@@ -83,34 +86,43 @@ struct SettingsView: View {
 
         ForEach(config.ssh.hosts.indices, id: \.self) { index in
           HStack {
-            Picker("Match", selection: Binding(
-              get: { config.ssh.hosts[index].hostname != nil ? "hostname" : "regex" },
-              set: { type in
-                if type == "hostname" {
-                  config.ssh.hosts[index].hostname = config.ssh.hosts[index].regex ?? ""
-                  config.ssh.hosts[index].regex = nil
-                } else {
-                  config.ssh.hosts[index].regex = config.ssh.hosts[index].hostname ?? ""
-                  config.ssh.hosts[index].hostname = nil
+            Picker(
+              "Match",
+              selection: Binding(
+                get: { config.ssh.hosts[index].hostname != nil ? "hostname" : "regex" },
+                set: { type in
+                  if type == "hostname" {
+                    config.ssh.hosts[index].hostname = config.ssh.hosts[index].regex ?? ""
+                    config.ssh.hosts[index].regex = nil
+                  } else {
+                    config.ssh.hosts[index].regex = config.ssh.hosts[index].hostname ?? ""
+                    config.ssh.hosts[index].hostname = nil
+                  }
                 }
-              }
-            )) {
+              )
+            ) {
               Text("Hostname").tag("hostname")
               Text("Regex").tag("regex")
             }
             .frame(width: 120)
 
             if config.ssh.hosts[index].hostname != nil {
-              TextField("hostname", text: Binding(
-                get: { config.ssh.hosts[index].hostname ?? "" },
-                set: { config.ssh.hosts[index].hostname = $0 }
-              ))
+              TextField(
+                "hostname",
+                text: Binding(
+                  get: { config.ssh.hosts[index].hostname ?? "" },
+                  set: { config.ssh.hosts[index].hostname = $0 }
+                )
+              )
               .frame(width: 120)
             } else {
-              TextField("pattern", text: Binding(
-                get: { config.ssh.hosts[index].regex ?? "" },
-                set: { config.ssh.hosts[index].regex = $0 }
-              ))
+              TextField(
+                "pattern",
+                text: Binding(
+                  get: { config.ssh.hosts[index].regex ?? "" },
+                  set: { config.ssh.hosts[index].regex = $0 }
+                )
+              )
               .frame(width: 120)
             }
 

@@ -17,7 +17,9 @@ final class TerminalSurfaceView: NSView {
   /// Stores the initial input string to keep it alive for the C pointer.
   private var initialInputString: String?
 
-  init(frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, initialInput: String? = nil) {
+  init(
+    frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, initialInput: String? = nil
+  ) {
     super.init(frame: frame)
     wantsLayer = true
 
@@ -156,7 +158,10 @@ final class TerminalSurfaceView: NSView {
   /// Returns the terminal cursor position as (row, col) in grid coordinates.
   func cursorPosition() -> (row: Int, col: Int)? {
     guard let surface else { return nil }
-    var x: Double = 0, y: Double = 0, w: Double = 0, h: Double = 0
+    var x: Double = 0
+    var y: Double = 0
+    var w: Double = 0
+    var h: Double = 0
     ghostty_surface_ime_point(surface, &x, &y, &w, &h)
     guard let metrics = gridMetrics() else { return nil }
     // ime_point returns point coordinates (not pixels).

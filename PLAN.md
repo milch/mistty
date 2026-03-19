@@ -24,21 +24,32 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Copy mode improvements
 
-- Visual line mode
-- Visual block mode
-- number prefix (10j jumps 10 lines down, etc...)
-- Escaping out of visual mode should return to copy mode, not escape out of copy mode completely
-- w/W/e/E/b/B/ge/gE should work as expected (currently w/b are simple 5-char jumps)
-- f/F/t/T/; should work as expected
-- Actually move through scrollback - current copy mode implementation only covers the contents of the screen
-- Search hit highlighting
-- ? support (reverse search)
-- Copy mode improvement, "yank mode":
-  - Press y to enter yank mode while in copy mode
-  - Automatically highlight visible links, file paths, hashes, numbers, etc.
-  - They receive a non-movement shortcut label next to them, e.g. "a"
-  - Pressing the label copies the text to the system clipboard
-  - Specifically for links and file paths, there is a slight variant - if entering "yank mode" by pressing `o` instead of `y`, it instead automatically runs `open` on the item
+Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/2026-03-18-copy-mode-phase1-design.md`.
+
+#### Phase 1: Motion & selection (spec complete)
+
+- Refactor CopyModeState to action-based state machine with `handleKey` returning `[CopyModeAction]`
+- Visual line mode (V), visual block mode (Ctrl-v)
+- Tmux-style escape: esc from visual -> copy mode, esc from copy mode -> exit
+- Number prefix for movement commands (10j, 3w, 5G, etc.)
+- Proper word motions: w/W/e/E/b/B/ge/gE with vim-exact word/WORD definitions
+- f/F/t/T find-character on current line, ; and , for repeat/reverse
+- Toggle-able help overlay (g?) showing keybindings
+
+#### Phase 2: Scrollback & search
+
+- Navigate through scrollback buffer (not just viewport)
+- Search hit highlighting (all matches visible, not just current)
+- ? support (reverse search) — `?` key reassigned from help overlay to reverse search
+- Cross-line word motion wrapping into scrollback
+
+#### Phase 3: Yank mode
+
+- Press y to enter yank mode while in copy mode (when no selection is active)
+- Automatically highlight visible links, file paths, hashes, numbers, etc.
+- They receive a non-movement shortcut label next to them, e.g. "a"
+- Pressing the label copies the text to the system clipboard
+- Variant: pressing `o` instead of `y` to enter yank mode runs `open` on the item instead of copying
 
 ### Save layouts
 

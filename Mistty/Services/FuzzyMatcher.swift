@@ -18,7 +18,8 @@ struct FuzzyMatcher {
     let queryLower = Array(query.lowercased())
     let targetLower = Array(target.lowercased())
 
-    guard queryLower.count <= targetLower.count + maxAllowedEdits(queryLength: queryLower.count) else { return nil }
+    guard queryLower.count <= targetLower.count + maxAllowedEdits(queryLength: queryLower.count)
+    else { return nil }
 
     // Prefilter: check all query chars exist in target (fast reject)
     var charCounts: [Character: Int] = [:]
@@ -33,7 +34,9 @@ struct FuzzyMatcher {
     }
 
     // Try strict ordered match
-    if let result = strictMatch(query: queryLower, target: targetLower, targetLength: targetLower.count) {
+    if let result = strictMatch(
+      query: queryLower, target: targetLower, targetLength: targetLower.count)
+    {
       return result
     }
 
@@ -45,7 +48,9 @@ struct FuzzyMatcher {
   /// Pass 1: scan left-to-right to find the rightmost valid subsequence match
   /// Pass 2: scan right-to-left from the end of pass 1 to find the tightest window
   /// Then score the matched positions within that window
-  private static func strictMatch(query: [Character], target: [Character], targetLength: Int) -> FuzzyMatch? {
+  private static func strictMatch(query: [Character], target: [Character], targetLength: Int)
+    -> FuzzyMatch?
+  {
     let qLen = query.count
     let tLen = target.count
 
@@ -94,7 +99,9 @@ struct FuzzyMatcher {
     }
 
     for sp in startPositions {
-      if let (score, indices) = greedyMatch(query: query, target: target, from: sp, targetLength: targetLength) {
+      if let (score, indices) = greedyMatch(
+        query: query, target: target, from: sp, targetLength: targetLength)
+      {
         if score > bestScore {
           bestScore = score
           bestIndices = indices
@@ -104,14 +111,17 @@ struct FuzzyMatcher {
 
     guard let indices = bestIndices else { return nil }
 
-    let maxPossible = Double(qLen) * (1.0 + prefixBonus + wordBoundaryBonus + consecutiveBonus) + 1.0
+    let maxPossible =
+      Double(qLen) * (1.0 + prefixBonus + wordBoundaryBonus + consecutiveBonus) + 1.0
     let normalized = min(max(bestScore / maxPossible, 0.0), 1.0)
 
     return FuzzyMatch(score: normalized, matchedIndices: indices)
   }
 
   /// Greedy forward match from a given start position, preferring consecutive and boundary matches
-  private static func greedyMatch(query: [Character], target: [Character], from start: Int, targetLength: Int) -> (Double, [Int])? {
+  private static func greedyMatch(
+    query: [Character], target: [Character], from start: Int, targetLength: Int
+  ) -> (Double, [Int])? {
     var indices: [Int] = []
     var score: Double = 0.0
     var qi = 0
@@ -150,7 +160,9 @@ struct FuzzyMatcher {
     }
   }
 
-  private static func typoMatch(query: [Character], target: [Character], targetLength: Int) -> FuzzyMatch? {
+  private static func typoMatch(query: [Character], target: [Character], targetLength: Int)
+    -> FuzzyMatch?
+  {
     let maxEdits = maxAllowedEdits(queryLength: query.count)
     guard maxEdits > 0 else { return nil }
 
@@ -188,7 +200,8 @@ struct FuzzyMatcher {
 
   /// Standard Damerau-Levenshtein distance (optimal string alignment variant)
   private static func damerauLevenshtein(_ a: [Character], _ b: [Character]) -> Int {
-    let n = a.count, m = b.count
+    let n = a.count
+    let m = b.count
     if n == 0 { return m }
     if m == 0 { return n }
 
@@ -200,9 +213,9 @@ struct FuzzyMatcher {
       for j in 1...m {
         let cost = a[i - 1] == b[j - 1] ? 0 : 1
         dp[i][j] = min(
-          dp[i - 1][j] + 1,       // deletion
-          dp[i][j - 1] + 1,       // insertion
-          dp[i - 1][j - 1] + cost // substitution
+          dp[i - 1][j] + 1,  // deletion
+          dp[i][j - 1] + 1,  // insertion
+          dp[i - 1][j - 1] + cost  // substitution
         )
         // Transposition (always costs 1 edit)
         if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {

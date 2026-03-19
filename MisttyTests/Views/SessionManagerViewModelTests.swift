@@ -112,7 +112,8 @@ final class SessionManagerViewModelTests: XCTestCase {
 
   func test_fuzzyFilter_multiToken_AND() async {
     let store = SessionStore()
-    let _ = store.createSession(name: "work-bazel", directory: URL(fileURLWithPath: "/tmp/workspace"))
+    let _ = store.createSession(
+      name: "work-bazel", directory: URL(fileURLWithPath: "/tmp/workspace"))
     let _ = store.createSession(name: "work-other", directory: URL(fileURLWithPath: "/tmp/other"))
     store.activeSession = nil
 
@@ -485,7 +486,7 @@ final class SessionManagerViewModelTests: XCTestCase {
 
     XCTAssertFalse(vm.matchResults.isEmpty)
 
-    vm.selectedIndex = 1 // skip "New"
+    vm.selectedIndex = 1  // skip "New"
     vm.confirmSelection()
     XCTAssertEqual(store.activeSession?.name, "work-project")
   }

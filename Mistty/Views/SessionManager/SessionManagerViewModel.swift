@@ -30,12 +30,14 @@ enum SessionManagerItem {
     case .sshHost(let h): return "⌁ \(h.alias)"
     case .newSession(let query, let directory, let createDir, let sshCommand):
       if sshCommand != nil {
-        let hostname = query.drop(while: { $0 != " " }).dropFirst().trimmingCharacters(in: .whitespaces)
+        let hostname = query.drop(while: { $0 != " " }).dropFirst().trimmingCharacters(
+          in: .whitespaces)
         return "New SSH session: \(hostname)"
       } else if createDir {
         return "New session + create directory: \(directory.path)"
       } else {
-        let name = query.contains("/") || query.hasPrefix("~")
+        let name =
+          query.contains("/") || query.hasPrefix("~")
           ? directory.lastPathComponent : query
         return "New session: \(name)"
       }
@@ -113,14 +115,16 @@ final class SessionManagerViewModel {
   }
 
   /// Returns (rawName, subtitle, displayNamePrefixLength) for fuzzy matching.
-  private func matchableFields(for item: SessionManagerItem) -> (rawName: String, subtitle: String?, prefixLen: Int) {
+  private func matchableFields(for item: SessionManagerItem) -> (
+    rawName: String, subtitle: String?, prefixLen: Int
+  ) {
     switch item {
     case .runningSession(let s):
-      return (s.name, nil, 2) // "▶ " is 2 chars
+      return (s.name, nil, 2)  // "▶ " is 2 chars
     case .directory(let u):
       return (u.lastPathComponent, u.path, 0)
     case .sshHost(let h):
-      return (h.alias, h.hostname, 2) // "⌁ " is 2 chars
+      return (h.alias, h.hostname, 2)  // "⌁ " is 2 chars
     case .newSession:
       return ("", nil, 0)
     }
@@ -271,7 +275,7 @@ final class SessionManagerViewModel {
 
       var isDir: ObjCBool = false
       if fm.fileExists(atPath: url.path, isDirectory: &isDir) {
-        if !isDir.boolValue { return nil } // points to a file
+        if !isDir.boolValue { return nil }  // points to a file
         return .newSession(query: query, directory: url, createDirectory: false, sshCommand: nil)
       }
 
@@ -282,11 +286,12 @@ final class SessionManagerViewModel {
         return .newSession(query: query, directory: url, createDirectory: true, sshCommand: nil)
       }
 
-      return nil // parent doesn't exist
+      return nil  // parent doesn't exist
     }
 
     // Plain text: create session with query as name in active pane's CWD
-    let directory = store.activeSession?.activeTab?.activePane?.directory
+    let directory =
+      store.activeSession?.activeTab?.activePane?.directory
       ?? store.activeSession?.directory
       ?? fm.homeDirectoryForCurrentUser
     return .newSession(query: query, directory: directory, createDirectory: false, sshCommand: nil)
@@ -342,13 +347,15 @@ final class SessionManagerViewModel {
           try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         }
 
-        let name = query.contains("/") || query.hasPrefix("~")
+        let name =
+          query.contains("/") || query.hasPrefix("~")
           ? directory.lastPathComponent : query
         store.createSession(name: name, directory: directory)
       }
 
       // Record frecency for the new session
-      let sessionName = sshCommand != nil
+      let sessionName =
+        sshCommand != nil
         ? query.drop(while: { $0 != " " }).dropFirst().trimmingCharacters(in: .whitespaces)
         : (query.contains("/") || query.hasPrefix("~") ? directory.lastPathComponent : query)
       frecencyService.recordAccess(for: "session:\(sessionName)")

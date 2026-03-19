@@ -27,7 +27,8 @@ final class FuzzyMatcherBenchmarkTests: XCTestCase {
   }
 
   func test_benchmark_singleMatch_longTarget() {
-    let target = "/Users/developer/workspace/very/deeply/nested/project/structure/with/many/path/components/file.swift"
+    let target =
+      "/Users/developer/workspace/very/deeply/nested/project/structure/with/many/path/components/file.swift"
     measure {
       for _ in 0..<1000 {
         _ = FuzzyMatcher.match(query: "proj", target: target)

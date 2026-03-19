@@ -119,7 +119,7 @@ struct MisttyApp: App {
 
         ForEach(Array(MisttyConfig.load().popups.enumerated()), id: \.offset) { _, popup in
           if let key = parseShortcutKey(popup.shortcut),
-             let modifiers = parseShortcutModifiers(popup.shortcut)
+            let modifiers = parseShortcutModifiers(popup.shortcut)
           {
             Button("Toggle \(popup.name)") {
               NotificationCenter.default.post(
@@ -149,7 +149,8 @@ struct MisttyApp: App {
 
   private func parseShortcutKey(_ shortcut: String?) -> KeyEquivalent? {
     guard let parts = shortcutParts(shortcut),
-          let last = parts.last, last.count == 1, let char = last.first else { return nil }
+      let last = parts.last, last.count == 1, let char = last.first
+    else { return nil }
     return KeyEquivalent(char)
   }
 

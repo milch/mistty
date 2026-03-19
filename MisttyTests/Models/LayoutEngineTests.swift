@@ -37,7 +37,10 @@ final class LayoutEngineTests: XCTestCase {
   func test_evenHorizontal_threePanes() {
     let panes = makePanes(3)
     let node = LayoutEngine.apply(.evenHorizontal, to: panes)
-    if case .split(.horizontal, .leaf(let a), .split(.horizontal, .leaf(let b), .leaf(let c), let innerRatio), let outerRatio) = node {
+    if case .split(
+      .horizontal, .leaf(let a), .split(.horizontal, .leaf(let b), .leaf(let c), let innerRatio),
+      let outerRatio) = node
+    {
       XCTAssertEqual(a.id, panes[0].id)
       XCTAssertEqual(b.id, panes[1].id)
       XCTAssertEqual(c.id, panes[2].id)
@@ -160,7 +163,8 @@ final class LayoutEngineTests: XCTestCase {
     XCTAssertEqual(layout.leaves.count, 3)
     XCTAssertEqual(layout.leaves.map(\.id), panes.map(\.id))
 
-    if case .split(.vertical,
+    if case .split(
+      .vertical,
       .split(.horizontal, .leaf(let a), .leaf(let b), _),
       .split(.horizontal, .leaf(let c), .empty, _),
       let ratio) = node
@@ -177,7 +181,8 @@ final class LayoutEngineTests: XCTestCase {
   func test_tiled_fourPanes() {
     let panes = makePanes(4)
     let node = LayoutEngine.apply(.tiled, to: panes)
-    if case .split(.vertical,
+    if case .split(
+      .vertical,
       .split(.horizontal, .leaf(let a), .leaf(let b), _),
       .split(.horizontal, .leaf(let c), .leaf(let d), _),
       _) = node

@@ -11,7 +11,8 @@ struct HighlightedText: View {
     } else {
       text.enumerated().reduce(Text("")) { result, pair in
         let char = String(pair.element)
-        return result + Text(char)
+        return result
+          + Text(char)
           .foregroundColor(indices.contains(pair.offset) ? .accentColor : .primary)
       }
     }
@@ -155,7 +156,9 @@ struct FocusableTextField: NSViewRepresentable {
       text.wrappedValue = field.stringValue
     }
 
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector)
+      -> Bool
+    {
       if commandSelector == #selector(NSResponder.insertTab(_:)) {
         onComplete?()
         return true

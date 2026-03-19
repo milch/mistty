@@ -21,7 +21,10 @@ final class MisttySession: Identifiable {
   @ObservationIgnored
   private(set) var popupIDGenerator: () -> Int
 
-  init(id: Int, name: String, directory: URL, exec: String? = nil, tabIDGenerator: @escaping () -> Int, paneIDGenerator: @escaping () -> Int, popupIDGenerator: @escaping () -> Int) {
+  init(
+    id: Int, name: String, directory: URL, exec: String? = nil, tabIDGenerator: @escaping () -> Int,
+    paneIDGenerator: @escaping () -> Int, popupIDGenerator: @escaping () -> Int
+  ) {
     self.id = id
     self.name = name
     self.directory = directory
@@ -32,7 +35,8 @@ final class MisttySession: Identifiable {
   }
 
   func addTab(exec: String? = nil) {
-    let tab = MisttyTab(id: tabIDGenerator(), directory: directory, exec: exec, paneIDGenerator: paneIDGenerator)
+    let tab = MisttyTab(
+      id: tabIDGenerator(), directory: directory, exec: exec, paneIDGenerator: paneIDGenerator)
     tabs.append(tab)
     activeTab = tab
   }
@@ -110,14 +114,14 @@ final class MisttySession: Identifiable {
 
   func nextTab() {
     guard let current = activeTab,
-          let index = tabs.firstIndex(where: { $0.id == current.id })
+      let index = tabs.firstIndex(where: { $0.id == current.id })
     else { return }
     activeTab = tabs[(index + 1) % tabs.count]
   }
 
   func prevTab() {
     guard let current = activeTab,
-          let index = tabs.firstIndex(where: { $0.id == current.id })
+      let index = tabs.firstIndex(where: { $0.id == current.id })
     else { return }
     activeTab = tabs[(index - 1 + tabs.count) % tabs.count]
   }

@@ -21,8 +21,8 @@ final class FuzzyMatcherTests: XCTestCase {
     let result = FuzzyMatcher.match(query: "fb", target: "foobar")
     XCTAssertNotNil(result)
     XCTAssertEqual(result!.matchedIndices.count, 2)
-    XCTAssertTrue(result!.matchedIndices.contains(0)) // f
-    XCTAssertTrue(result!.matchedIndices.contains(3)) // b
+    XCTAssertTrue(result!.matchedIndices.contains(0))  // f
+    XCTAssertTrue(result!.matchedIndices.contains(3))  // b
   }
 
   func test_caseInsensitive() {
@@ -74,7 +74,7 @@ final class FuzzyMatcherTests: XCTestCase {
   func test_pathBoundaryMatching() {
     let result = FuzzyMatcher.match(query: "proj", target: "~/Developer/project")!
     // "~/Developer/" is 13 chars, so 'p' in 'project' is at index 13
-    XCTAssertTrue(result.matchedIndices.contains(13)) // 'p' after last '/'
+    XCTAssertTrue(result.matchedIndices.contains(13))  // 'p' after last '/'
   }
 
   // MARK: - Typo tolerance

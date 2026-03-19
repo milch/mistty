@@ -61,7 +61,7 @@ var pendingCount: Int?                                    // digit accumulator f
 var pendingFindChar: FindCharKind?                        // set when f/F/t/T pressed, awaiting target char
 var lastFind: (kind: FindCharKind, char: Character)?      // for ; and , repeat
 var pendingG: Bool                                        // set when g pressed, awaiting second key
-var showingHelp: Bool                                     // toggled by ?
+var showingHelp: Bool                                     // toggled by g?
 ```
 
 ### Escape Behavior (tmux-style)
@@ -105,6 +105,7 @@ When `g` is pressed, `pendingG` is set to `true`. The next key resolves it:
 
 - `e` -> ge motion, `E` -> gE motion
 - `g` -> go to top (existing behavior)
+- `?` -> toggle help overlay
 - `0` -> cancels pending g, then executes line-start (since `0` without pending count is line-start)
 - Any other key: cancels pending g, then the key is processed normally (e.g., `g` then `f` cancels pending g and starts a find-char)
 
@@ -198,9 +199,9 @@ Entering any visual sub-mode always sets the anchor to the current cursor positi
 
 ### Activation
 
-`?` in normal sub-mode toggles `showingHelp`. Any other keypress while help is visible hides it and is consumed (does not execute). Escape also hides it.
+`g?` (g then ?) in normal sub-mode toggles `showingHelp`. This is resolved via the `pendingG` state — when `g` is pending and `?` is pressed, help is toggled. Any other keypress while help is visible hides it and is consumed (does not execute). Escape also hides it.
 
-**Note:** In vim, `?` is reverse search. Reverse search is planned for Phase 2. At that point, `?` will be reassigned to reverse search and help will move to a different key (TBD in Phase 2 spec).
+`?` without a `g` prefix is reserved for reverse search in Phase 2.
 
 ### Rendering
 
@@ -222,6 +223,8 @@ ge/gE    end of prev                             y  yank selection
 g/G      top/bottom       t/T    find before
 [count]  repeat motion    ;      repeat find
                           ,      reverse find
+
+                          g?     toggle this help
 ```
 
 ## ContentView Integration

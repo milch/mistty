@@ -249,7 +249,9 @@ struct PaneLayout {
     return target
   }
 
-  private static func swapLeaves(_ node: PaneLayoutNode, pane1: MisttyPane, pane2: MisttyPane) -> PaneLayoutNode {
+  private static func swapLeaves(_ node: PaneLayoutNode, pane1: MisttyPane, pane2: MisttyPane)
+    -> PaneLayoutNode
+  {
     switch node {
     case .leaf(let p):
       if p.id == pane1.id { return .leaf(pane2) }
@@ -258,7 +260,9 @@ struct PaneLayout {
     case .empty:
       return node
     case .split(let dir, let a, let b, let ratio):
-      return .split(dir, swapLeaves(a, pane1: pane1, pane2: pane2), swapLeaves(b, pane1: pane1, pane2: pane2), ratio)
+      return .split(
+        dir, swapLeaves(a, pane1: pane1, pane2: pane2), swapLeaves(b, pane1: pane1, pane2: pane2),
+        ratio)
     }
   }
 
