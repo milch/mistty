@@ -654,7 +654,7 @@ struct ContentView: View {
       // Search mode: keys go to query
       if state.isSearching {
         if event.keyCode == 36 {  // Return — confirm search
-          state.isSearching = false
+          state.subMode = .normal
           self.performSearch(&state)
           store.activeSession?.activeTab?.copyModeState = state
           return nil

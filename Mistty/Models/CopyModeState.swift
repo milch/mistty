@@ -1,72 +1,353 @@
-import Foundation
+import AppKit
 
 struct CopyModeState {
-  let rows: Int
-  let cols: Int
-  var cursorRow: Int
-  var cursorCol: Int = 0
-  var isSelecting = false
-  var selectionStart: (row: Int, col: Int)?
-  var searchQuery: String = ""
-  var isSearching = false
+    let rows: Int
+    let cols: Int
+    var cursorRow: Int
+    var cursorCol: Int = 0
 
-  init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
-    self.rows = rows
-    self.cols = cols
-    self.cursorRow = min(max(cursorRow ?? (rows - 1), 0), rows - 1)
-    self.cursorCol = min(max(cursorCol ?? 0, 0), cols - 1)
-  }
+    // Sub-mode
+    var subMode: CopySubMode = .normal
+    var anchor: (row: Int, col: Int)?
 
-  mutating func moveUp() { cursorRow = max(0, cursorRow - 1) }
-  mutating func moveDown() { cursorRow = min(rows - 1, cursorRow + 1) }
-  mutating func moveLeft() { cursorCol = max(0, cursorCol - 1) }
-  mutating func moveRight() { cursorCol = min(cols - 1, cursorCol + 1) }
-  mutating func moveToLineStart() { cursorCol = 0 }
-  mutating func moveToLineEnd() { cursorCol = cols - 1 }
-  mutating func moveWordForward() {
-    cursorCol = min(cols - 1, cursorCol + 5)
-  }
-  mutating func moveWordBackward() {
-    cursorCol = max(0, cursorCol - 5)
-  }
-  mutating func moveToTop() {
-    cursorRow = 0
-    cursorCol = 0
-  }
-  mutating func moveToBottom() {
-    cursorRow = rows - 1
-    cursorCol = 0
-  }
+    // Search
+    var searchQuery: String = ""
 
-  mutating func toggleSelection() {
-    isSelecting.toggle()
-    if isSelecting {
-      selectionStart = (cursorRow, cursorCol)
-    } else {
-      selectionStart = nil
+    // Pending input
+    var pendingCount: Int?
+    var pendingFindChar: FindCharKind?
+    var lastFind: (kind: FindCharKind, char: Character)?
+    var pendingG: Bool = false
+    var showingHelp: Bool = false
+
+    init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
+        self.rows = rows
+        self.cols = cols
+        self.cursorRow = min(max(cursorRow ?? (rows - 1), 0), rows - 1)
+        self.cursorCol = min(max(cursorCol ?? 0, 0), cols - 1)
     }
-  }
 
-  mutating func startSearch() {
-    isSearching = true
-    searchQuery = ""
-  }
+    // MARK: - Backward compatibility (used by overlay)
 
-  mutating func cancelSearch() {
-    isSearching = false
-    searchQuery = ""
-  }
+    var isSelecting: Bool { subMode == .visual || subMode == .visualLine || subMode == .visualBlock }
+    var isSearching: Bool { subMode == .search }
 
-  mutating func appendSearchChar(_ char: Character) {
-    searchQuery.append(char)
-  }
+    var selectionRange: (start: (row: Int, col: Int), end: (row: Int, col: Int))? {
+        guard isSelecting, let anchor = anchor else { return nil }
+        return (anchor, (cursorRow, cursorCol))
+    }
 
-  mutating func deleteSearchChar() {
-    _ = searchQuery.popLast()
-  }
+    // MARK: - Backward compatibility shims (removed in Task 3)
 
-  var selectionRange: (start: (row: Int, col: Int), end: (row: Int, col: Int))? {
-    guard isSelecting, let start = selectionStart else { return nil }
-    return (start, (cursorRow, cursorCol))
-  }
+    var selectionStart: (row: Int, col: Int)? { anchor }
+
+    mutating func toggleSelection() {
+        if isSelecting {
+            subMode = .normal
+            anchor = nil
+        } else {
+            subMode = .visual
+            anchor = (cursorRow, cursorCol)
+        }
+    }
+
+    mutating func startSearch() {
+        subMode = .search
+        searchQuery = ""
+    }
+
+    mutating func cancelSearch() {
+        subMode = .normal
+        searchQuery = ""
+    }
+
+    mutating func appendSearchChar(_ char: Character) {
+        searchQuery.append(char)
+    }
+
+    mutating func deleteSearchChar() {
+        _ = searchQuery.popLast()
+    }
+
+    mutating func moveUp() { cursorRow = max(0, cursorRow - 1) }
+    mutating func moveDown() { cursorRow = min(rows - 1, cursorRow + 1) }
+    mutating func moveLeft() { cursorCol = max(0, cursorCol - 1) }
+    mutating func moveRight() { cursorCol = min(cols - 1, cursorCol + 1) }
+    mutating func moveToLineStart() { cursorCol = 0 }
+    mutating func moveToLineEnd() { cursorCol = cols - 1 }
+    mutating func moveWordForward() { cursorCol = min(cols - 1, cursorCol + 5) }
+    mutating func moveWordBackward() { cursorCol = max(0, cursorCol - 5) }
+    mutating func moveToTop() { cursorRow = 0; cursorCol = 0 }
+    mutating func moveToBottom() { cursorRow = rows - 1; cursorCol = 0 }
+
+    // MARK: - Key handling
+
+    mutating func handleKey(
+        key: Character,
+        keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags,
+        lineReader: (Int) -> String?
+    ) -> [CopyModeAction] {
+
+        // Help overlay: any key dismisses it (consumed)
+        if showingHelp {
+            showingHelp = false
+            return [.hideHelp]
+        }
+
+        // Escape
+        if keyCode == 53 {
+            return handleEscape()
+        }
+
+        // Search mode
+        if subMode == .search {
+            return handleSearchKey(key: key, keyCode: keyCode)
+        }
+
+        // Pending find char: next key is the target character
+        if pendingFindChar != nil {
+            return handleFindCharTarget(key, lineReader: lineReader)
+        }
+
+        // Pending g: resolve two-key sequence
+        if pendingG {
+            return handlePendingG(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+        }
+
+        // Digit accumulation
+        if let digit = key.wholeNumberValue {
+            if digit != 0 || pendingCount != nil {
+                pendingCount = (pendingCount ?? 0) * 10 + digit
+                return []
+            }
+            // digit == 0 with no pending count -> line start (fall through)
+        }
+
+        return handleNormalKey(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+    }
+
+    // MARK: - Escape
+
+    private mutating func handleEscape() -> [CopyModeAction] {
+        switch subMode {
+        case .visual, .visualLine, .visualBlock:
+            subMode = .normal
+            anchor = nil
+            return [.enterSubMode(.normal)]
+        case .search:
+            subMode = .normal
+            searchQuery = ""
+            return [.cancelSearch, .enterSubMode(.normal)]
+        case .normal:
+            return [.exitCopyMode]
+        }
+    }
+
+    // MARK: - Search keys
+
+    private mutating func handleSearchKey(key: Character, keyCode: UInt16) -> [CopyModeAction] {
+        if keyCode == 36 { // Return
+            subMode = .normal
+            return [.confirmSearch]
+        }
+        if keyCode == 51 { // Backspace
+            _ = searchQuery.popLast()
+            return [.updateSearch(query: searchQuery)]
+        }
+        searchQuery.append(key)
+        return [.updateSearch(query: searchQuery)]
+    }
+
+    // MARK: - Normal key dispatch
+
+    private mutating func handleNormalKey(
+        key: Character,
+        keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags,
+        lineReader: (Int) -> String?
+    ) -> [CopyModeAction] {
+        let hadExplicitCount = pendingCount != nil
+        let count = pendingCount ?? 1
+        pendingCount = nil
+
+        switch key {
+        // Navigation
+        case "h": return repeatMotion(count) { $0.moveLeft() }
+        case "j": return repeatMotion(count) { $0.moveDown() }
+        case "k": return repeatMotion(count) { $0.moveUp() }
+        case "l": return repeatMotion(count) { $0.moveRight() }
+        case "0": moveToLineStart(); return [.cursorMoved]
+        case "$": moveToLineEnd(); return [.cursorMoved]
+        case "G":
+            if hadExplicitCount {
+                cursorRow = min(max(count - 1, 0), rows - 1)
+                cursorCol = 0
+            } else {
+                moveToBottom()
+            }
+            return [.cursorMoved]
+        case "g":
+            pendingG = true
+            return []
+
+        // Visual modes
+        case "v":
+            if modifiers.contains(.control) {
+                return toggleVisualMode(.visualBlock)
+            }
+            return toggleVisualMode(.visual)
+        case "V":
+            return toggleVisualMode(.visualLine)
+
+        // Search
+        case "/":
+            subMode = .search
+            searchQuery = ""
+            return [.startSearch]
+        case "n":
+            if !searchQuery.isEmpty { return [.confirmSearch] }
+            return []
+
+        // Find char
+        case "f": pendingFindChar = .f; return []
+        case "F": pendingFindChar = .F; return []
+        case "t": pendingFindChar = .t; return []
+        case "T": pendingFindChar = .T; return []
+        case ";": return repeatFindChar(count: count, reverse: false, lineReader: lineReader)
+        case ",": return repeatFindChar(count: count, reverse: true, lineReader: lineReader)
+
+        // Word motions (placeholder — replaced in Task 6 with real word motions)
+        case "w": return repeatMotion(count) { $0.cursorCol = min($0.cols - 1, $0.cursorCol + 5) }
+        case "b": return repeatMotion(count) { $0.cursorCol = max(0, $0.cursorCol - 5) }
+
+        // Yank
+        case "y":
+            guard isSelecting else { return [] }
+            return [.exitCopyMode]
+
+        default:
+            return []
+        }
+    }
+
+    // MARK: - Pending g resolution
+
+    private mutating func handlePendingG(
+        key: Character,
+        keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags,
+        lineReader: (Int) -> String?
+    ) -> [CopyModeAction] {
+        pendingG = false
+        switch key {
+        case "g":
+            moveToTop()
+            return [.cursorMoved]
+        case "e":
+            let count = pendingCount ?? 1
+            pendingCount = nil
+            return repeatMotion(count) { state in
+                // ge placeholder — replaced in Task 6
+                state.cursorCol = max(0, state.cursorCol - 5)
+            }
+        case "E":
+            let count = pendingCount ?? 1
+            pendingCount = nil
+            return repeatMotion(count) { state in
+                // gE placeholder — replaced in Task 6
+                state.cursorCol = max(0, state.cursorCol - 5)
+            }
+        case "?":
+            showingHelp.toggle()
+            return showingHelp ? [.showHelp] : [.hideHelp]
+        default:
+            // Cancel g, process key normally
+            return handleNormalKey(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+        }
+    }
+
+    // MARK: - Visual mode toggling
+
+    private mutating func toggleVisualMode(_ target: CopySubMode) -> [CopyModeAction] {
+        if subMode == target {
+            subMode = .normal
+            anchor = nil
+            return [.enterSubMode(.normal)]
+        } else {
+            if anchor == nil {
+                anchor = (cursorRow, cursorCol)
+            }
+            subMode = target
+            return [.enterSubMode(target), .updateSelection]
+        }
+    }
+
+    // MARK: - Find char
+
+    private mutating func handleFindCharTarget(_ char: Character, lineReader: (Int) -> String?) -> [CopyModeAction] {
+        guard let kind = pendingFindChar else { return [] }
+        pendingFindChar = nil
+        lastFind = (kind: kind, char: char)
+
+        let count = pendingCount ?? 1
+        pendingCount = nil
+        return executeFindChar(kind: kind, char: char, count: count, lineReader: lineReader)
+    }
+
+    private mutating func repeatFindChar(count: Int, reverse: Bool, lineReader: (Int) -> String?) -> [CopyModeAction] {
+        guard let last = lastFind else { return [] }
+        let kind = reverse ? last.kind.reversed : last.kind
+        return executeFindChar(kind: kind, char: last.char, count: count, lineReader: lineReader)
+    }
+
+    private mutating func executeFindChar(kind: FindCharKind, char: Character, count: Int, lineReader: (Int) -> String?) -> [CopyModeAction] {
+        guard let line = lineReader(cursorRow) else { return [] }
+        let chars = Array(line)
+
+        var found = 0
+        var targetCol: Int?
+
+        if kind.isForward {
+            for i in (cursorCol + 1)..<chars.count {
+                if chars[i] == char {
+                    found += 1
+                    if found == count {
+                        targetCol = (kind == .t) ? i - 1 : i
+                        break
+                    }
+                }
+            }
+        } else {
+            for i in stride(from: cursorCol - 1, through: 0, by: -1) {
+                if chars[i] == char {
+                    found += 1
+                    if found == count {
+                        targetCol = (kind == .T) ? i + 1 : i
+                        break
+                    }
+                }
+            }
+        }
+
+        if let col = targetCol {
+            cursorCol = col
+            return motionActions()
+        }
+        return []
+    }
+
+    // MARK: - Movement helpers (private, used by handleKey)
+
+    private mutating func repeatMotion(_ count: Int, _ motion: (inout CopyModeState) -> Void) -> [CopyModeAction] {
+        for _ in 0..<count { motion(&self) }
+        return motionActions()
+    }
+
+    private func motionActions() -> [CopyModeAction] {
+        if isSelecting {
+            return [.cursorMoved, .updateSelection]
+        }
+        return [.cursorMoved]
+    }
 }
