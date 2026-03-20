@@ -82,13 +82,14 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
 /// Clipboard read callback (stub).
 private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = {
   userdata, clipboard, state in
-  guard let state else { return }
+  guard let state else { return false }
   let pasteboard = NSPasteboard.general
   if let str = pasteboard.string(forType: .string) {
     str.withCString { ptr in
       // TODO: complete clipboard read
     }
   }
+  return false
 }
 
 /// Clipboard confirm read callback (stub).
