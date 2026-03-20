@@ -29,6 +29,7 @@ struct CopyModeState {
   var searchMatchIndex: Int?
   var searchMatchTotal: Int?
   var pendingContinuation: ContinuationState?
+  var scrollGeneration: Int = 0  // incremented on scroll to force UI refresh
 
   init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
     self.rows = rows

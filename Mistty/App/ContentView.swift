@@ -641,6 +641,7 @@ struct ContentView: View {
     if let anchor = state.anchor {
       state.anchor = (row: anchor.row - delta, col: anchor.col)
     }
+    state.scrollGeneration &+= 1
   }
 
   private func exitCopyMode() {
