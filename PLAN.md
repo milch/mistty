@@ -42,6 +42,7 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Search hit highlighting (all matches visible, not just current)
 - ? support (reverse search) — `?` key reassigned from help overlay to reverse search
 - Cross-line word motion wrapping into scrollback
+- Handle Ctrl-D/U and other paging shortcuts
 
 #### Phase 3: Yank mode
 
