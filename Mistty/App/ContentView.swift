@@ -827,7 +827,7 @@ struct ContentView: View {
         screenRow = (cursorScreenRow - i + totalRows) % totalRows
       }
 
-      guard let line = readScreenLine(row: screenRow) else { continue }
+      guard let line = readLineByScreenRow(screenRow) else { continue }
 
       // Find the right match on this line
       let matchCol: Int?
@@ -900,7 +900,7 @@ struct ContentView: View {
     var currentIndex = 0
 
     for row in 0..<totalRows {
-      guard let line = readScreenLine(row: row) else { continue }
+      guard let line = readLineByScreenRow(row) else { continue }
       var searchStart = line.startIndex
       while let range = line.range(
         of: state.searchQuery, options: .caseInsensitive,
@@ -942,6 +942,18 @@ struct ContentView: View {
     defer { ghostty_surface_free_text(surface, &text) }
     guard let ptr = text.text else { return nil }
     return String(cString: ptr)
+  }
+
+  /// Read a line by screen row, preferring VIEWPORT reading when the row is visible.
+  /// This ensures consistency with the highlight overlay (which uses VIEWPORT).
+  private func readLineByScreenRow(_ screenRow: Int) -> String? {
+    guard let pane = store.activeSession?.activeTab?.activePane else { return nil }
+    let scrollbar = pane.surfaceView.scrollbarState
+    let viewportRow = screenRow - Int(scrollbar.offset)
+    if viewportRow >= 0 && viewportRow < Int(scrollbar.len) {
+      return readTerminalLine(row: viewportRow)
+    }
+    return readScreenLine(row: screenRow)
   }
 
   private func readScreenLine(row: Int) -> String? {
