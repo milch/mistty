@@ -110,7 +110,7 @@ struct SelectionHighlightView: View {
   let cellHeight: CGFloat
   let mode: CopySubMode
   let lineReader: ((Int) -> String?)?
-  var viewportRows: Int = Int.max
+  let viewportRows: Int
 
   var body: some View {
     Canvas { context, size in

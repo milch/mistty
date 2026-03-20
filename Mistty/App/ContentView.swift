@@ -192,7 +192,9 @@ struct ContentView: View {
       removeCopyModeMonitor()
       removeCtrlNavMonitor()
       store.activeSession?.activeTab?.windowModeState = .inactive
-      store.activeSession?.activeTab?.copyModeState = nil
+      if store.activeSession?.activeTab?.isCopyModeActive == true {
+        exitCopyMode()
+      }
       showingSessionManager = false
     }
   }
@@ -631,6 +633,16 @@ struct ContentView: View {
     installCopyModeMonitor()
   }
 
+  private func scrollViewport(_ state: inout CopyModeState, delta: Int) {
+    guard let pane = store.activeSession?.activeTab?.activePane,
+          let surface = pane.surfaceView.surface else { return }
+    let actionStr = "scroll_page_lines:\(delta)"
+    _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+    if let anchor = state.anchor {
+      state.anchor = (row: anchor.row - delta, col: anchor.col)
+    }
+  }
+
   private func exitCopyMode() {
     // Scroll back to bottom (active area) when leaving copy mode
     if let pane = store.activeSession?.activeTab?.activePane,
@@ -705,40 +717,18 @@ struct ContentView: View {
           performSearch(&state)
           state.searchDirection = original
         case .scroll(let deltaRows):
-          if let pane = store.activeSession?.activeTab?.activePane,
-             let surface = pane.surfaceView.surface {
-            let actionStr = "scroll_page_lines:\(deltaRows)"
-            _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
-            // Adjust anchor by requested delta (scrollbar state update is async,
-            // so we can't measure actual delta here)
-            if let anchor = state.anchor {
-              state.anchor = (row: anchor.row - deltaRows, col: anchor.col)
-            }
-          }
+          scrollViewport(&state, delta: deltaRows)
         case .needsContinuation:
           let continuationActions = state.continuePendingMotion(lineReader: lineReader)
           for contAction in continuationActions {
             switch contAction {
             case .scroll(let delta):
-              if let pane = store.activeSession?.activeTab?.activePane,
-                 let surface = pane.surfaceView.surface {
-                let actionStr2 = "scroll_page_lines:\(delta)"
-                _ = ghostty_surface_binding_action(surface, actionStr2, UInt(actionStr2.utf8.count))
-                if let anchor = state.anchor {
-                  state.anchor = (row: anchor.row - delta, col: anchor.col)
-                }
-              }
+              scrollViewport(&state, delta: delta)
             case .needsContinuation:
               let more = state.continuePendingMotion(lineReader: lineReader)
               for a in more {
-                if case .scroll(let d) = a,
-                   let pane = store.activeSession?.activeTab?.activePane,
-                   let surface = pane.surfaceView.surface {
-                  if let anchor = state.anchor {
-                    state.anchor = (row: anchor.row - d, col: anchor.col)
-                  }
-                  let s = "scroll_page_lines:\(d)"
-                  _ = ghostty_surface_binding_action(surface, s, UInt(s.utf8.count))
+                if case .scroll(let d) = a {
+                  scrollViewport(&state, delta: d)
                 }
               }
             default:
