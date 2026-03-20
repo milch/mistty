@@ -707,13 +707,12 @@ struct ContentView: View {
         case .scroll(let deltaRows):
           if let pane = store.activeSession?.activeTab?.activePane,
              let surface = pane.surfaceView.surface {
-            let offsetBefore = pane.surfaceView.scrollbarState.offset
             let actionStr = "scroll_page_lines:\(deltaRows)"
             _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
-            let offsetAfter = pane.surfaceView.scrollbarState.offset
-            let actualDelta = Int(offsetAfter) - Int(offsetBefore)
+            // Adjust anchor by requested delta (scrollbar state update is async,
+            // so we can't measure actual delta here)
             if let anchor = state.anchor {
-              state.anchor = (row: anchor.row - actualDelta, col: anchor.col)
+              state.anchor = (row: anchor.row - deltaRows, col: anchor.col)
             }
           }
         case .needsContinuation:
@@ -723,25 +722,13 @@ struct ContentView: View {
             case .scroll(let delta):
               if let pane = store.activeSession?.activeTab?.activePane,
                  let surface = pane.surfaceView.surface {
-                let ob = pane.surfaceView.scrollbarState.offset
                 let actionStr2 = "scroll_page_lines:\(delta)"
                 _ = ghostty_surface_binding_action(surface, actionStr2, UInt(actionStr2.utf8.count))
-                let oa = pane.surfaceView.scrollbarState.offset
-                let ad = Int(oa) - Int(ob)
                 if let anchor = state.anchor {
-                  state.anchor = (row: anchor.row - ad, col: anchor.col)
+                  state.anchor = (row: anchor.row - delta, col: anchor.col)
                 }
               }
             case .needsContinuation:
-              // Recursive — just call again (scroll boundaries will stop infinite loops)
-              if let pane = store.activeSession?.activeTab?.activePane {
-                let ob = pane.surfaceView.scrollbarState.offset
-                let oa = pane.surfaceView.scrollbarState.offset
-                if ob == oa && state.pendingContinuation != nil {
-                  state.pendingContinuation = nil
-                  break
-                }
-              }
               let more = state.continuePendingMotion(lineReader: lineReader)
               for a in more {
                 if case .scroll(let d) = a,
