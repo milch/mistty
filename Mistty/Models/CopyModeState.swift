@@ -81,13 +81,17 @@ struct CopyModeState {
 
     // Pending find char: next key is the target character
     if pendingFindChar != nil {
-      return handleFindCharTarget(key, lineReader: lineReader)
+      let actions = handleFindCharTarget(key, lineReader: lineReader)
+      clampCursorToLineContent(lineReader: lineReader)
+      return actions
     }
 
     // Pending g: resolve two-key sequence
     if pendingG {
-      return handlePendingG(
+      let actions = handlePendingG(
         key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+      clampCursorToLineContent(lineReader: lineReader)
+      return actions
     }
 
     // Digit accumulation
@@ -99,7 +103,10 @@ struct CopyModeState {
       // digit == 0 with no pending count -> line start (fall through)
     }
 
-    return handleNormalKey(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+    let actions = handleNormalKey(
+      key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+    clampCursorToLineContent(lineReader: lineReader)
+    return actions
   }
 
   // MARK: - Escape
@@ -364,6 +371,24 @@ struct CopyModeState {
   {
     for _ in 0..<count { motion(&self) }
     return motionActions()
+  }
+
+  /// Clamp cursorCol to the last non-whitespace character on the current line.
+  private mutating func clampCursorToLineContent(lineReader: (Int) -> String?) {
+    guard let line = lineReader(cursorRow) else { return }
+    let lastContent = lastNonWhitespaceIndex(in: line)
+    if lastContent >= 0 {
+      cursorCol = min(cursorCol, lastContent)
+    } else {
+      cursorCol = 0  // empty/whitespace-only line
+    }
+  }
+
+  private func lastNonWhitespaceIndex(in line: String) -> Int {
+    let chars = Array(line)
+    var i = chars.count - 1
+    while i >= 0 && chars[i].isWhitespace { i -= 1 }
+    return i
   }
 
   private func motionActions() -> [CopyModeAction] {
