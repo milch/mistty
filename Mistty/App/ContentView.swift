@@ -960,14 +960,20 @@ struct ContentView: View {
     let cols = Int(size.columns)
     var textToCopy: String?
 
+    let anchorOutOfViewport = anchor.row < 0 || anchor.row >= state.rows
+    let useScreenCoords = anchorOutOfViewport
+    let tag: ghostty_point_tag_e = useScreenCoords ? GHOSTTY_POINT_SCREEN : GHOSTTY_POINT_VIEWPORT
+    let offset = useScreenCoords ? Int(pane.surfaceView.scrollbarState.offset) : 0
+
     switch state.subMode {
     case .visual:
       // Character-wise: read from anchor to cursor
       textToCopy = readGhosttyText(
         surface: surface,
-        startRow: anchor.row, startCol: anchor.col,
-        endRow: state.cursorRow, endCol: state.cursorCol,
-        rectangle: false
+        startRow: anchor.row + offset, startCol: anchor.col,
+        endRow: state.cursorRow + offset, endCol: state.cursorCol,
+        rectangle: false,
+        pointTag: tag
       )
 
     case .visualLine:
@@ -976,9 +982,10 @@ struct ContentView: View {
       let maxRow = max(anchor.row, state.cursorRow)
       textToCopy = readGhosttyText(
         surface: surface,
-        startRow: minRow, startCol: 0,
-        endRow: maxRow, endCol: cols - 1,
-        rectangle: false
+        startRow: minRow + offset, startCol: 0,
+        endRow: maxRow + offset, endCol: cols - 1,
+        rectangle: false,
+        pointTag: tag
       )
 
     case .visualBlock:
@@ -989,7 +996,14 @@ struct ContentView: View {
       var lines: [String] = []
       let logicalRightCol = max(anchor.col, state.cursorCol)
       for row in minRow...maxRow {
-        if let line = readTerminalLine(row: row) {
+        let readRow = row + offset
+        let line: String?
+        if useScreenCoords {
+          line = readScreenLine(row: readRow)
+        } else {
+          line = readTerminalLine(row: readRow)
+        }
+        if let line = line {
           let contentEnd = WordMotion.lastNonWhitespaceIndex(in: line)
           guard contentEnd >= minCol else {
             lines.append("")
@@ -1022,14 +1036,15 @@ struct ContentView: View {
     surface: ghostty_surface_t,
     startRow: Int, startCol: Int,
     endRow: Int, endCol: Int,
-    rectangle: Bool
+    rectangle: Bool,
+    pointTag: ghostty_point_tag_e = GHOSTTY_POINT_VIEWPORT
   ) -> String? {
     var sel = ghostty_selection_s()
-    sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
+    sel.top_left.tag = pointTag
     sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
     sel.top_left.x = UInt32(startCol)
     sel.top_left.y = UInt32(startRow)
-    sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
+    sel.bottom_right.tag = pointTag
     sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
     sel.bottom_right.x = UInt32(endCol)
     sel.bottom_right.y = UInt32(endRow)

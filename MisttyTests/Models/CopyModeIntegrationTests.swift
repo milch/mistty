@@ -160,4 +160,35 @@ final class CopyModeIntegrationTests: XCTestCase {
     // cursor NOT moved — key was consumed by help dismissal
     XCTAssertEqual(state.cursorRow, 23)
   }
+
+  // MARK: - Phase 2: Search direction
+
+  func test_questionMark_entersReverseSearch() {
+    var state = makeState(cursorRow: 10, cursorCol: 5)
+    let actions = state.handleKey(key: "?", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.startSearch))
+    XCTAssertEqual(state.subMode, .searchReverse)
+    XCTAssertEqual(state.searchDirection, .reverse)
+  }
+
+  func test_N_returnsSearchPrev() {
+    var state = makeState(cursorRow: 10, cursorCol: 5)
+    state.searchQuery = "test"
+    let actions = state.handleKey(key: "N", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.searchPrev))
+  }
+
+  func test_ctrlD_returnsHalfPageScroll() {
+    var state = makeState(cursorRow: 10, cursorCol: 0)
+    let actions = state.handleKey(key: "d", keyCode: 0, modifiers: .control, lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: 12)))
+  }
+
+  func test_escape_clearsContinuation() {
+    var state = makeState(cursorRow: 10, cursorCol: 0)
+    state.pendingContinuation = ContinuationState(motion: .lineDown, remaining: 1)
+    let actions = state.handleKey(key: "\u{1B}", keyCode: 53, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertNil(state.pendingContinuation)
+    XCTAssertTrue(actions.contains(.exitCopyMode))
+  }
 }

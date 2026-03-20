@@ -23,6 +23,20 @@ struct CopyModeOverlay: View {
         .offset(x: gridOffsetX, y: gridOffsetY)
       }
 
+      // Search highlights
+      if !state.searchQuery.isEmpty, let reader = lineReader {
+        SearchHighlightView(
+          query: state.searchQuery,
+          currentMatchRow: state.cursorRow,
+          currentMatchCol: state.cursorCol,
+          lineReader: reader,
+          cellWidth: cellWidth,
+          cellHeight: cellHeight,
+          rows: state.rows
+        )
+        .offset(x: gridOffsetX, y: gridOffsetY)
+      }
+
       // Cursor
       Rectangle()
         .fill(Color.yellow.opacity(0.7))
