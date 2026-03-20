@@ -711,11 +711,13 @@ struct ContentView: View {
           break  // Already handled in state
         case .searchNext:
           performSearch(&state)
+          countSearchMatches(&state)
         case .searchPrev:
           let original = state.searchDirection
           state.searchDirection = original == .forward ? .reverse : .forward
           performSearch(&state)
           state.searchDirection = original
+          countSearchMatches(&state)
         case .scroll(let deltaRows):
           scrollViewport(&state, delta: deltaRows)
         case .needsContinuation:
@@ -811,12 +813,12 @@ struct ContentView: View {
     let cols = Int(ghostty_surface_size(surface).columns)
     guard totalRows > 0 else { return }
 
-    // Convert cursor to screen coordinates
     let cursorScreenRow = state.cursorRow + viewportOffset
     let isForward = state.searchDirection == .forward
 
-    // Scan from cursor position in the search direction, wrapping around
-    for i in 1...totalRows {
+    // Search all rows, starting from the current row.
+    // On the current row, only consider matches AFTER (forward) or BEFORE (reverse) the cursor.
+    for i in 0...totalRows {
       let screenRow: Int
       if isForward {
         screenRow = (cursorScreenRow + i) % totalRows
@@ -826,26 +828,56 @@ struct ContentView: View {
 
       guard let line = readScreenLine(row: screenRow) else { continue }
 
-      let options: String.CompareOptions = isForward
-        ? .caseInsensitive
-        : [.caseInsensitive, .backwards]
+      // Find the right match on this line
+      let matchCol: Int?
+      if i == 0 {
+        // Current row: find the next/prev match relative to cursor column
+        matchCol = findMatchOnLine(
+          line, query: state.searchQuery, cursorCol: state.cursorCol, forward: isForward)
+      } else {
+        // Other rows: find the first (forward) or last (reverse) match
+        matchCol = findMatchOnLine(
+          line, query: state.searchQuery, cursorCol: isForward ? -1 : Int.max, forward: isForward)
+      }
 
-      if let range = line.range(of: state.searchQuery, options: options) {
-        let col = line.distance(from: line.startIndex, to: range.lowerBound)
-
+      if let col = matchCol {
         // Scroll to make the match visible — center it in viewport
         let viewportRows = Int(scrollbar.len)
         let targetOffset = max(0, min(screenRow - viewportRows / 2, totalRows - viewportRows))
         let actionStr = "scroll_to_row:\(targetOffset)"
         _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
 
-        // Set cursor to viewport-relative position
         state.cursorRow = screenRow - targetOffset
         state.cursorCol = min(col, cols - 1)
         state.desiredCol = nil
         return
       }
     }
+  }
+
+  /// Find the next (forward) or previous (reverse) match on a line relative to cursorCol.
+  /// Returns the column of the match, or nil if none found.
+  private func findMatchOnLine(
+    _ line: String, query: String, cursorCol: Int, forward: Bool
+  ) -> Int? {
+    var bestCol: Int?
+    var searchStart = line.startIndex
+    while let range = line.range(of: query, options: .caseInsensitive, range: searchStart..<line.endIndex) {
+      let col = line.distance(from: line.startIndex, to: range.lowerBound)
+      if forward {
+        // Find first match with col > cursorCol
+        if col > cursorCol {
+          return col
+        }
+      } else {
+        // Find last match with col < cursorCol
+        if col < cursorCol {
+          bestCol = col
+        }
+      }
+      searchStart = range.upperBound
+    }
+    return bestCol
   }
 
   private func countSearchMatches(_ state: inout CopyModeState) {
