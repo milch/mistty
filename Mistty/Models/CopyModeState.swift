@@ -293,27 +293,27 @@ struct CopyModeState {
 
     // Word motions
     case "w":
-      return wordMotion(count: count, lineReader: lineReader) { line, col in
+      return wordMotion(count: count, pendingMotionType: .wordForward(bigWord: false), lineReader: lineReader) { line, col in
         WordMotion.nextWordStart(in: line, from: col, bigWord: false)
       }
     case "W":
-      return wordMotion(count: count, lineReader: lineReader) { line, col in
+      return wordMotion(count: count, pendingMotionType: .wordForward(bigWord: true), lineReader: lineReader) { line, col in
         WordMotion.nextWordStart(in: line, from: col, bigWord: true)
       }
     case "b":
-      return wordMotionBackward(count: count, lineReader: lineReader) { line, col in
+      return wordMotionBackward(count: count, pendingMotionType: .wordBackward(bigWord: false), lineReader: lineReader) { line, col in
         WordMotion.prevWordStart(in: line, from: col, bigWord: false)
       }
     case "B":
-      return wordMotionBackward(count: count, lineReader: lineReader) { line, col in
+      return wordMotionBackward(count: count, pendingMotionType: .wordBackward(bigWord: true), lineReader: lineReader) { line, col in
         WordMotion.prevWordStart(in: line, from: col, bigWord: true)
       }
     case "e":
-      return wordMotion(count: count, lineReader: lineReader) { line, col in
+      return wordMotion(count: count, pendingMotionType: .wordEndForward(bigWord: false), lineReader: lineReader) { line, col in
         WordMotion.nextWordEnd(in: line, from: col, bigWord: false)
       }
     case "E":
-      return wordMotion(count: count, lineReader: lineReader) { line, col in
+      return wordMotion(count: count, pendingMotionType: .wordEndForward(bigWord: true), lineReader: lineReader) { line, col in
         WordMotion.nextWordEnd(in: line, from: col, bigWord: true)
       }
 
@@ -344,13 +344,13 @@ struct CopyModeState {
     case "e":
       let count = pendingCount ?? 1
       pendingCount = nil
-      return wordMotionBackward(count: count, lineReader: lineReader) { line, col in
+      return wordMotionBackward(count: count, pendingMotionType: .wordEndBackward(bigWord: false), lineReader: lineReader) { line, col in
         WordMotion.prevWordEnd(in: line, from: col, bigWord: false)
       }
     case "E":
       let count = pendingCount ?? 1
       pendingCount = nil
-      return wordMotionBackward(count: count, lineReader: lineReader) { line, col in
+      return wordMotionBackward(count: count, pendingMotionType: .wordEndBackward(bigWord: true), lineReader: lineReader) { line, col in
         WordMotion.prevWordEnd(in: line, from: col, bigWord: true)
       }
     case "?":
@@ -474,27 +474,32 @@ struct CopyModeState {
   /// Execute a forward word motion with cross-line wrapping.
   private mutating func wordMotion(
     count: Int,
+    pendingMotionType: PendingMotion,
     lineReader: (Int) -> String?,
     motion: (String, Int) -> Int?
   ) -> [CopyModeAction] {
-    for _ in 0..<count {
+    for i in 0..<count {
       guard let line = lineReader(cursorRow) else { break }
       if let newCol = motion(line, cursorCol) {
         cursorCol = newCol
       } else {
-        // Wrap to next line
+        // Need to wrap to next line
         if cursorRow < rows - 1 {
           cursorRow += 1
           cursorCol = 0
           // Skip leading whitespace on the new line
           if let nextLine = lineReader(cursorRow) {
             let chars = Array(nextLine)
-            var i = 0
-            while i < chars.count && chars[i].isWhitespace { i += 1 }
-            if i < chars.count {
-              cursorCol = i
-            }
+            var j = 0
+            while j < chars.count && chars[j].isWhitespace { j += 1 }
+            if j < chars.count { cursorCol = j }
           }
+        } else {
+          // At viewport bottom — scroll and continue
+          let remaining = count - i
+          pendingContinuation = ContinuationState(
+            motion: pendingMotionType, remaining: remaining)
+          return [.scroll(deltaRows: 1), .needsContinuation]
         }
       }
     }
@@ -504,15 +509,15 @@ struct CopyModeState {
   /// Execute a backward word motion with cross-line wrapping
   private mutating func wordMotionBackward(
     count: Int,
+    pendingMotionType: PendingMotion,
     lineReader: (Int) -> String?,
     motion: (String, Int) -> Int?
   ) -> [CopyModeAction] {
-    for _ in 0..<count {
+    for i in 0..<count {
       guard let line = lineReader(cursorRow) else { break }
       if let newCol = motion(line, cursorCol) {
         cursorCol = newCol
       } else {
-        // Wrap to previous line
         if cursorRow > 0 {
           cursorRow -= 1
           if let prevLine = lineReader(cursorRow) {
@@ -520,9 +525,78 @@ struct CopyModeState {
           } else {
             cursorCol = 0
           }
+        } else {
+          // At viewport top — scroll and continue
+          let remaining = count - i
+          pendingContinuation = ContinuationState(
+            motion: pendingMotionType, remaining: remaining)
+          return [.scroll(deltaRows: -1), .needsContinuation]
         }
       }
     }
+    return motionActions()
+  }
+
+  // MARK: - Continuation
+
+  mutating func continuePendingMotion(
+    lineReader: (Int) -> String?
+  ) -> [CopyModeAction] {
+    guard let continuation = pendingContinuation else { return [] }
+    pendingContinuation = nil
+
+    // Position cursor appropriately for the continued motion
+    switch continuation.motion {
+    case .wordForward, .wordEndForward:
+      cursorCol = 0
+      // Skip to first non-whitespace
+      if let line = lineReader(cursorRow) {
+        let chars = Array(line)
+        var i = 0
+        while i < chars.count && chars[i].isWhitespace { i += 1 }
+        if i < chars.count { cursorCol = i }
+      }
+    case .wordBackward, .wordEndBackward:
+      if let line = lineReader(cursorRow) {
+        cursorCol = max(0, line.count - 1)
+      } else {
+        cursorCol = 0
+      }
+    case .lineDown, .lineUp:
+      clampCursorToLineContent(lineReader: lineReader)
+      return motionActions()
+    }
+
+    // If remaining count > 1, continue the motion
+    if continuation.remaining > 1 {
+      let motionFn: (String, Int) -> Int?
+      let isForward: Bool
+
+      switch continuation.motion {
+      case .wordForward(let bigWord):
+        motionFn = { line, col in WordMotion.nextWordStart(in: line, from: col, bigWord: bigWord) }
+        isForward = true
+      case .wordBackward(let bigWord):
+        motionFn = { line, col in WordMotion.prevWordStart(in: line, from: col, bigWord: bigWord) }
+        isForward = false
+      case .wordEndForward(let bigWord):
+        motionFn = { line, col in WordMotion.nextWordEnd(in: line, from: col, bigWord: bigWord) }
+        isForward = true
+      case .wordEndBackward(let bigWord):
+        motionFn = { line, col in WordMotion.prevWordEnd(in: line, from: col, bigWord: bigWord) }
+        isForward = false
+      case .lineDown, .lineUp:
+        return motionActions()  // already handled above
+      }
+
+      if isForward {
+        return wordMotion(count: continuation.remaining - 1, pendingMotionType: continuation.motion, lineReader: lineReader, motion: motionFn)
+      } else {
+        return wordMotionBackward(count: continuation.remaining - 1, pendingMotionType: continuation.motion, lineReader: lineReader, motion: motionFn)
+      }
+    }
+
+    clampCursorToLineContent(lineReader: lineReader)
     return motionActions()
   }
 }

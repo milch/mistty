@@ -429,4 +429,51 @@ final class CopyModeStateTests: XCTestCase {
     let state = makeState()
     XCTAssertNil(state.pendingContinuation)
   }
+
+  // MARK: - Phase 2: Word motion at viewport edge
+
+  func test_w_atLastRow_returnsScrollAndContinuation() {
+    // "hello world" — cursor at col 6 (on "w"), w should find nothing after "world" and try next line
+    // At row 23 (last), should scroll instead
+    let lines = Array(repeating: "hello world", count: 24)
+    let lineReader: (Int) -> String? = { row in
+      row >= 0 && row < lines.count ? lines[row] : nil
+    }
+    var state = makeState(rows: 24, cursorRow: 23, cursorCol: 6)
+    let actions = state.handleKey(key: "w", keyCode: 0, modifiers: [], lineReader: lineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: 1)))
+    XCTAssertTrue(actions.contains(.needsContinuation))
+    XCTAssertNotNil(state.pendingContinuation)
+  }
+
+  func test_b_atFirstRow_returnsScrollAndContinuation() {
+    let lines = Array(repeating: "hello world", count: 24)
+    let lineReader: (Int) -> String? = { row in
+      row >= 0 && row < lines.count ? lines[row] : nil
+    }
+    var state = makeState(rows: 24, cursorRow: 0, cursorCol: 0)
+    let actions = state.handleKey(key: "b", keyCode: 0, modifiers: [], lineReader: lineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: -1)))
+    XCTAssertTrue(actions.contains(.needsContinuation))
+  }
+
+  func test_continuePendingMotion_completesWordForward() {
+    var state = makeState(rows: 24, cursorRow: 23, cursorCol: 0)
+    state.pendingContinuation = ContinuationState(
+      motion: .wordForward(bigWord: false), remaining: 1)
+    let newLines = Array(repeating: "foo bar baz", count: 24)
+    let lineReader: (Int) -> String? = { row in
+      row >= 0 && row < newLines.count ? newLines[row] : nil
+    }
+    let actions = state.continuePendingMotion(lineReader: lineReader)
+    XCTAssertEqual(state.cursorCol, 0)  // "foo" starts at 0
+    XCTAssertTrue(actions.contains(.cursorMoved))
+    XCTAssertNil(state.pendingContinuation)
+  }
+
+  func test_continuePendingMotion_noPending_returnsEmpty() {
+    var state = makeState(rows: 24, cursorRow: 10, cursorCol: 0)
+    let actions = state.continuePendingMotion(lineReader: emptyLineReader)
+    XCTAssertTrue(actions.isEmpty)
+  }
 }

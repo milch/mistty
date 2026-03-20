@@ -707,7 +707,47 @@ struct ContentView: View {
             }
           }
         case .needsContinuation:
-          break  // TODO: implement in later task
+          let continuationActions = state.continuePendingMotion(lineReader: lineReader)
+          for contAction in continuationActions {
+            switch contAction {
+            case .scroll(let delta):
+              if let pane = store.activeSession?.activeTab?.activePane,
+                 let surface = pane.surfaceView.surface {
+                let ob = pane.surfaceView.scrollbarState.offset
+                let actionStr2 = "scroll_page_lines:\(delta)"
+                _ = ghostty_surface_binding_action(surface, actionStr2, UInt(actionStr2.utf8.count))
+                let oa = pane.surfaceView.scrollbarState.offset
+                let ad = Int(oa) - Int(ob)
+                if let anchor = state.anchor {
+                  state.anchor = (row: anchor.row - ad, col: anchor.col)
+                }
+              }
+            case .needsContinuation:
+              // Recursive — just call again (scroll boundaries will stop infinite loops)
+              if let pane = store.activeSession?.activeTab?.activePane {
+                let ob = pane.surfaceView.scrollbarState.offset
+                let oa = pane.surfaceView.scrollbarState.offset
+                if ob == oa && state.pendingContinuation != nil {
+                  state.pendingContinuation = nil
+                  break
+                }
+              }
+              let more = state.continuePendingMotion(lineReader: lineReader)
+              for a in more {
+                if case .scroll(let d) = a,
+                   let pane = store.activeSession?.activeTab?.activePane,
+                   let surface = pane.surfaceView.surface {
+                  if let anchor = state.anchor {
+                    state.anchor = (row: anchor.row - d, col: anchor.col)
+                  }
+                  let s = "scroll_page_lines:\(d)"
+                  _ = ghostty_surface_binding_action(surface, s, UInt(s.utf8.count))
+                }
+              }
+            default:
+              break
+            }
+          }
         }
       }
 
