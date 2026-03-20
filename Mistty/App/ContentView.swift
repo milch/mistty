@@ -638,6 +638,11 @@ struct ContentView: View {
           let surface = pane.surfaceView.surface else { return }
     let actionStr = "scroll_page_lines:\(delta)"
     _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+    // Update scrollbar offset synchronously — the async callback will
+    // eventually arrive, but we need correct offset immediately for
+    // subsequent search coordinate conversion.
+    let newOffset = Int64(pane.surfaceView.scrollbarState.offset) + Int64(delta)
+    pane.surfaceView.scrollbarState.offset = UInt64(max(0, newOffset))
     if let anchor = state.anchor {
       state.anchor = (row: anchor.row - delta, col: anchor.col)
     }
@@ -706,18 +711,16 @@ struct ContentView: View {
         case .updateSearch:
           break  // searchQuery already updated
         case .confirmSearch:
-          performSearch(&state)
+          performSearch(&state, direction: state.searchDirection)
           countSearchMatches(&state)
         case .cancelSearch:
           break  // Already handled in state
         case .searchNext:
-          performSearch(&state)
+          performSearch(&state, direction: state.searchDirection)
           countSearchMatches(&state)
         case .searchPrev:
-          let original = state.searchDirection
-          state.searchDirection = original == .forward ? .reverse : .forward
-          performSearch(&state)
-          state.searchDirection = original
+          let reversed: SearchDirection = state.searchDirection == .forward ? .reverse : .forward
+          performSearch(&state, direction: reversed)
           countSearchMatches(&state)
         case .scroll(let deltaRows):
           scrollViewport(&state, delta: deltaRows)
@@ -802,7 +805,7 @@ struct ContentView: View {
     }
   }
 
-  private func performSearch(_ state: inout CopyModeState) {
+  private func performSearch(_ state: inout CopyModeState, direction: SearchDirection) {
     guard !state.searchQuery.isEmpty,
       let pane = store.activeSession?.activeTab?.activePane,
       let surface = pane.surfaceView.surface
@@ -815,7 +818,7 @@ struct ContentView: View {
     guard totalRows > 0 else { return }
 
     let cursorScreenRow = state.cursorRow + viewportOffset
-    let isForward = state.searchDirection == .forward
+    let isForward = direction == .forward
 
     // Search all rows, starting from the current row.
     // On the current row, only consider matches AFTER (forward) or BEFORE (reverse) the cursor.

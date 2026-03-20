@@ -29,7 +29,10 @@ struct CopyModeState {
   var searchMatchIndex: Int?
   var searchMatchTotal: Int?
   var pendingContinuation: ContinuationState?
-  var scrollGeneration: Int = 0  // incremented on scroll to force UI refresh
+  /// Incremented on every scroll. Forces SwiftUI re-render of CopyModeOverlay
+  /// because the struct value changes, even when cursorRow/cursorCol don't
+  /// (e.g., j at bottom row scrolls viewport but cursor stays at row 23).
+  var scrollGeneration: Int = 0
 
   init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
     self.rows = rows
