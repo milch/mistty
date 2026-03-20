@@ -688,12 +688,16 @@ struct ContentView: View {
           break  // searchQuery already updated
         case .confirmSearch:
           performSearch(&state)
+          countSearchMatches(&state)
         case .cancelSearch:
           break  // Already handled in state
         case .searchNext:
           performSearch(&state)
         case .searchPrev:
+          let original = state.searchDirection
+          state.searchDirection = original == .forward ? .reverse : .forward
           performSearch(&state)
+          state.searchDirection = original
         case .scroll(let deltaRows):
           if let pane = store.activeSession?.activeTab?.activePane,
              let surface = pane.surfaceView.surface {
@@ -818,40 +822,80 @@ struct ContentView: View {
       let surface = pane.surfaceView.surface
     else { return }
 
-    let size = ghostty_surface_size(surface)
-    let rows = Int(size.rows)
-    let cols = Int(size.columns)
+    let scrollbar = pane.surfaceView.scrollbarState
+    let totalRows = Int(scrollbar.total)
+    let viewportOffset = Int(scrollbar.offset)
+    let cols = Int(ghostty_surface_size(surface).columns)
+    guard totalRows > 0 else { return }
 
-    // Read each line from viewport and search for the query
-    // Start searching from the line after the cursor, wrapping around
-    for offset in 1...rows {
-      let row = (state.cursorRow + offset) % rows
+    // Convert cursor to screen coordinates
+    let cursorScreenRow = state.cursorRow + viewportOffset
+    let isForward = state.searchDirection == .forward
 
-      var sel = ghostty_selection_s()
-      sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
-      sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
-      sel.top_left.x = 0
-      sel.top_left.y = UInt32(row)
-      sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
-      sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
-      sel.bottom_right.x = UInt32(cols - 1)
-      sel.bottom_right.y = UInt32(row)
-      sel.rectangle = false
+    // Scan from cursor position in the search direction, wrapping around
+    for i in 1...totalRows {
+      let screenRow: Int
+      if isForward {
+        screenRow = (cursorScreenRow + i) % totalRows
+      } else {
+        screenRow = (cursorScreenRow - i + totalRows) % totalRows
+      }
 
-      var text = ghostty_text_s()
-      guard ghostty_surface_read_text(surface, sel, &text) else { continue }
-      defer { ghostty_surface_free_text(surface, &text) }
-      guard let ptr = text.text else { continue }
+      guard let line = readScreenLine(row: screenRow) else { continue }
 
-      let line = String(cString: ptr)
-      if let range = line.range(of: state.searchQuery, options: .caseInsensitive) {
+      let options: String.CompareOptions = isForward
+        ? .caseInsensitive
+        : [.caseInsensitive, .backwards]
+
+      if let range = line.range(of: state.searchQuery, options: options) {
         let col = line.distance(from: line.startIndex, to: range.lowerBound)
-        state.cursorRow = row
+
+        // Scroll to make the match visible — center it in viewport
+        let viewportRows = Int(scrollbar.len)
+        let targetOffset = max(0, min(screenRow - viewportRows / 2, totalRows - viewportRows))
+        let actionStr = "scroll_to_row:\(targetOffset)"
+        _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+
+        // Set cursor to viewport-relative position
+        state.cursorRow = screenRow - targetOffset
         state.cursorCol = min(col, cols - 1)
         state.desiredCol = nil
         return
       }
     }
+  }
+
+  private func countSearchMatches(_ state: inout CopyModeState) {
+    guard !state.searchQuery.isEmpty,
+      let pane = store.activeSession?.activeTab?.activePane
+    else { return }
+
+    let scrollbar = pane.surfaceView.scrollbarState
+    let totalRows = Int(scrollbar.total)
+    let viewportOffset = Int(scrollbar.offset)
+    let cursorScreenRow = state.cursorRow + viewportOffset
+
+    var total = 0
+    var currentIndex = 0
+
+    for row in 0..<totalRows {
+      guard let line = readScreenLine(row: row) else { continue }
+      var searchStart = line.startIndex
+      while let range = line.range(
+        of: state.searchQuery, options: .caseInsensitive,
+        range: searchStart..<line.endIndex)
+      {
+        total += 1
+        let matchCol = line.distance(from: line.startIndex, to: range.lowerBound)
+        if row < cursorScreenRow || (row == cursorScreenRow && matchCol <= state.cursorCol) {
+          currentIndex = total
+        }
+        searchStart = range.upperBound
+      }
+    }
+
+    state.searchMatchTotal = total > 0 ? total : nil
+    state.searchMatchIndex = total > 0 ? currentIndex : nil
   }
 
   private func readTerminalLine(row: Int) -> String? {
@@ -867,6 +911,31 @@ struct ContentView: View {
     sel.top_left.x = 0
     sel.top_left.y = UInt32(row)
     sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
+    sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.bottom_right.x = UInt32(size.columns - 1)
+    sel.bottom_right.y = UInt32(row)
+    sel.rectangle = false
+
+    var text = ghostty_text_s()
+    guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
+    defer { ghostty_surface_free_text(surface, &text) }
+    guard let ptr = text.text else { return nil }
+    return String(cString: ptr)
+  }
+
+  private func readScreenLine(row: Int) -> String? {
+    guard let pane = store.activeSession?.activeTab?.activePane,
+      let surface = pane.surfaceView.surface
+    else { return nil }
+
+    let size = ghostty_surface_size(surface)
+
+    var sel = ghostty_selection_s()
+    sel.top_left.tag = GHOSTTY_POINT_SCREEN
+    sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.top_left.x = 0
+    sel.top_left.y = UInt32(row)
+    sel.bottom_right.tag = GHOSTTY_POINT_SCREEN
     sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
     sel.bottom_right.x = UInt32(size.columns - 1)
     sel.bottom_right.y = UInt32(row)
