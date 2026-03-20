@@ -694,8 +694,18 @@ struct ContentView: View {
           performSearch(&state)
         case .searchPrev:
           performSearch(&state)
-        case .scroll:
-          break  // TODO: implement in next task
+        case .scroll(let deltaRows):
+          if let pane = store.activeSession?.activeTab?.activePane,
+             let surface = pane.surfaceView.surface {
+            let offsetBefore = pane.surfaceView.scrollbarState.offset
+            let actionStr = "scroll_page_lines:\(deltaRows)"
+            _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+            let offsetAfter = pane.surfaceView.scrollbarState.offset
+            let actualDelta = Int(offsetAfter) - Int(offsetBefore)
+            if let anchor = state.anchor {
+              state.anchor = (row: anchor.row - actualDelta, col: anchor.col)
+            }
+          }
         case .needsContinuation:
           break  // TODO: implement in later task
         }

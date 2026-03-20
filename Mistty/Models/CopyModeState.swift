@@ -49,8 +49,21 @@ struct CopyModeState {
 
   // MARK: - Private movement helpers
 
-  private mutating func moveUp() { cursorRow = max(0, cursorRow - 1) }
-  private mutating func moveDown() { cursorRow = min(rows - 1, cursorRow + 1) }
+  /// Move vertically by delta rows. Returns scroll overflow (0 = no scroll needed).
+  private mutating func moveVertical(delta: Int) -> Int {
+    let targetRow = cursorRow + delta
+    if targetRow < 0 {
+      cursorRow = 0
+      return targetRow  // negative = scroll up
+    } else if targetRow >= rows {
+      cursorRow = rows - 1
+      return targetRow - (rows - 1)  // positive = scroll down
+    } else {
+      cursorRow = targetRow
+      return 0
+    }
+  }
+
   private mutating func moveLeft() { cursorCol = max(0, cursorCol - 1) }
   private mutating func moveRight() { cursorCol = min(cols - 1, cursorCol + 1) }
   private mutating func moveToLineStart() { cursorCol = 0 }
@@ -170,18 +183,47 @@ struct CopyModeState {
     let savedDesiredCol = desiredCol
     desiredCol = nil
 
+    // Ctrl-key paging commands
+    if modifiers.contains(.control) {
+      switch key {
+      case "d":
+        let delta = count * (rows / 2)
+        return [.scroll(deltaRows: delta), .cursorMoved]
+      case "u":
+        let delta = count * (rows / 2)
+        return [.scroll(deltaRows: -delta), .cursorMoved]
+      case "f":
+        let delta = count * rows
+        return [.scroll(deltaRows: delta), .cursorMoved]
+      case "b":
+        let delta = count * rows
+        return [.scroll(deltaRows: -delta), .cursorMoved]
+      default:
+        break
+      }
+    }
+
     switch key {
     // Navigation
     case "h": return repeatMotion(count) { $0.moveLeft() }
     case "j":
-      // Vertical motion: restore desiredCol, preserve it across moves
       cursorCol = savedDesiredCol ?? cursorCol
       desiredCol = savedDesiredCol ?? cursorCol
-      return repeatMotion(count) { $0.moveDown() }
+      let scrollDelta = moveVertical(delta: count)
+      var result = motionActions()
+      if scrollDelta != 0 {
+        result.insert(.scroll(deltaRows: scrollDelta), at: 0)
+      }
+      return result
     case "k":
       cursorCol = savedDesiredCol ?? cursorCol
       desiredCol = savedDesiredCol ?? cursorCol
-      return repeatMotion(count) { $0.moveUp() }
+      let scrollDelta = moveVertical(delta: -count)
+      var result = motionActions()
+      if scrollDelta != 0 {
+        result.insert(.scroll(deltaRows: scrollDelta), at: 0)
+      }
+      return result
     case "l": return repeatMotion(count) { $0.moveRight() }
     case "0":
       moveToLineStart()

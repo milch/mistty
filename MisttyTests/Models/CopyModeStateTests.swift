@@ -354,6 +354,70 @@ final class CopyModeStateTests: XCTestCase {
     XCTAssertEqual(state.cursorCol, 10)
   }
 
+  // MARK: - Phase 2: Paging
+
+  func test_ctrlD_returnsScrollDown() {
+    var state = makeState(rows: 24, cursorRow: 10, cursorCol: 0)
+    let actions = state.handleKey(key: "d", keyCode: 0, modifiers: .control, lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: 12)))
+  }
+
+  func test_ctrlU_returnsScrollUp() {
+    var state = makeState(rows: 24, cursorRow: 10, cursorCol: 0)
+    let actions = state.handleKey(key: "u", keyCode: 0, modifiers: .control, lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: -12)))
+  }
+
+  func test_ctrlF_returnsFullPageDown() {
+    var state = makeState(rows: 24, cursorRow: 10, cursorCol: 0)
+    let actions = state.handleKey(key: "f", keyCode: 0, modifiers: .control, lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: 24)))
+  }
+
+  func test_ctrlB_returnsFullPageUp() {
+    var state = makeState(rows: 24, cursorRow: 10, cursorCol: 0)
+    let actions = state.handleKey(key: "b", keyCode: 0, modifiers: .control, lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: -24)))
+  }
+
+  func test_5ctrlD_pagesDown5HalfScreens() {
+    var state = makeState(rows: 24, cursorRow: 10, cursorCol: 0)
+    _ = state.handleKey(key: "5", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    let actions = state.handleKey(key: "d", keyCode: 0, modifiers: .control, lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: 60)))
+  }
+
+  // MARK: - Phase 2: j/k scrolling at viewport edges
+
+  func test_j_atBottomRow_returnsScroll() {
+    var state = makeState(rows: 24, cursorRow: 23, cursorCol: 0)
+    let actions = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: 1)))
+    XCTAssertEqual(state.cursorRow, 23)
+  }
+
+  func test_k_atTopRow_returnsScroll() {
+    var state = makeState(rows: 24, cursorRow: 0, cursorCol: 0)
+    let actions = state.handleKey(key: "k", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: -1)))
+    XCTAssertEqual(state.cursorRow, 0)
+  }
+
+  func test_3j_atRow22_scrollsBy2() {
+    var state = makeState(rows: 24, cursorRow: 22, cursorCol: 0)
+    _ = state.handleKey(key: "3", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    let actions = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.scroll(deltaRows: 2)))
+    XCTAssertEqual(state.cursorRow, 23)
+  }
+
+  func test_j_inMiddle_noScroll() {
+    var state = makeState(rows: 24, cursorRow: 10, cursorCol: 0)
+    let actions = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertFalse(actions.contains(where: { if case .scroll = $0 { return true }; return false }))
+    XCTAssertEqual(state.cursorRow, 11)
+  }
+
   // MARK: - Phase 2: Search direction and continuation
 
   func test_searchDirection_defaultsToForward() {
