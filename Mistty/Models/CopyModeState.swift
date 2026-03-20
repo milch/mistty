@@ -376,19 +376,12 @@ struct CopyModeState {
   /// Clamp cursorCol to the last non-whitespace character on the current line.
   private mutating func clampCursorToLineContent(lineReader: (Int) -> String?) {
     guard let line = lineReader(cursorRow) else { return }
-    let lastContent = lastNonWhitespaceIndex(in: line)
+    let lastContent = WordMotion.lastNonWhitespaceIndex(in: line)
     if lastContent >= 0 {
       cursorCol = min(cursorCol, lastContent)
     } else {
       cursorCol = 0  // empty/whitespace-only line
     }
-  }
-
-  private func lastNonWhitespaceIndex(in line: String) -> Int {
-    let chars = Array(line)
-    var i = chars.count - 1
-    while i >= 0 && chars[i].isWhitespace { i -= 1 }
-    return i
   }
 
   private func motionActions() -> [CopyModeAction] {

@@ -862,10 +862,7 @@ struct ContentView: View {
       let logicalRightCol = max(anchor.col, state.cursorCol)
       for row in minRow...maxRow {
         if let line = readTerminalLine(row: row) {
-          // Clip to end of line content (last non-whitespace char)
-          let trimmed = line.replacingOccurrences(
-            of: "\\s+$", with: "", options: .regularExpression)
-          let contentEnd = trimmed.count - 1
+          let contentEnd = WordMotion.lastNonWhitespaceIndex(in: line)
           guard contentEnd >= minCol else {
             lines.append("")
             continue

@@ -135,4 +135,22 @@ final class WordMotionTests: XCTestCase {
     let result = WordMotion.nextWordStart(in: "     ", from: 0, bigWord: false)
     XCTAssertNil(result)
   }
+
+  // MARK: - lastNonWhitespaceIndex
+
+  func test_lastNonWhitespace_normalLine() {
+    XCTAssertEqual(WordMotion.lastNonWhitespaceIndex(in: "hello world"), 10)
+  }
+
+  func test_lastNonWhitespace_trailingSpaces() {
+    XCTAssertEqual(WordMotion.lastNonWhitespaceIndex(in: "hello   "), 4)
+  }
+
+  func test_lastNonWhitespace_emptyString() {
+    XCTAssertEqual(WordMotion.lastNonWhitespaceIndex(in: ""), -1)
+  }
+
+  func test_lastNonWhitespace_allWhitespace() {
+    XCTAssertEqual(WordMotion.lastNonWhitespaceIndex(in: "     "), -1)
+  }
 }

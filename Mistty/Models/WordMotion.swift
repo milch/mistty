@@ -2,6 +2,16 @@ import Foundation
 
 enum WordMotion {
 
+  /// Returns the index of the last non-whitespace character in the string, or -1 if empty/whitespace-only.
+  static func lastNonWhitespaceIndex(in line: String) -> Int {
+    var i = line.count - 1
+    for c in line.reversed() {
+      if !c.isWhitespace { return i }
+      i -= 1
+    }
+    return -1
+  }
+
   enum CharClass: Equatable {
     case keyword
     case punctuation

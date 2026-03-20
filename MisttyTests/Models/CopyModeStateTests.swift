@@ -205,4 +205,44 @@ final class CopyModeStateTests: XCTestCase {
     let actions = state.handleKey(key: "y", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
     XCTAssertTrue(actions.isEmpty)
   }
+
+  // MARK: - Cursor clamping to line content
+
+  func test_dollarSign_clampsToEndOfContent() {
+    var state = makeState(cursorCol: 0)
+    // Line has content up to col 10, rest is whitespace padding
+    let reader: (Int) -> String? = { _ in "hello world                " }
+    _ = state.handleKey(key: "$", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorCol, 10)  // 'd' in "world", not col 79
+  }
+
+  func test_l_clampsToEndOfContent() {
+    var state = makeState(cursorCol: 9)
+    let reader: (Int) -> String? = { _ in "hello world                " }
+    _ = state.handleKey(key: "l", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorCol, 10)
+    // pressing l again should not move past content end
+    _ = state.handleKey(key: "l", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorCol, 10)
+  }
+
+  func test_cursorClamped_emptyLine() {
+    var state = makeState(cursorCol: 10)
+    let reader: (Int) -> String? = { _ in "          " }  // whitespace only
+    _ = state.handleKey(key: "l", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorCol, 0)
+  }
+
+  // MARK: - Find char crash fix (cursor beyond line content)
+
+  func test_F_withCursorBeyondLineLength_noCrash() {
+    var state = makeState(cursorCol: 50)
+    // Line is only 11 chars but cursor is at col 50 (can happen before clamping kicks in)
+    let reader: (Int) -> String? = { _ in "hello world" }
+    // This should not crash — just no match found
+    let actions = state.handleKey(key: "F", keyCode: 0, modifiers: [], lineReader: reader)
+    _ = state.handleKey(key: "x", keyCode: 0, modifiers: [], lineReader: reader)
+    // cursor gets clamped to content end
+    XCTAssertEqual(state.cursorCol, 10)
+  }
 }
