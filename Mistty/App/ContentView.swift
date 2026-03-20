@@ -632,6 +632,12 @@ struct ContentView: View {
   }
 
   private func exitCopyMode() {
+    // Scroll back to bottom (active area) when leaving copy mode
+    if let pane = store.activeSession?.activeTab?.activePane,
+       let surface = pane.surfaceView.surface {
+      let actionStr = "scroll_to_bottom"
+      _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+    }
     store.activeSession?.activeTab?.copyModeState = nil
     removeCopyModeMonitor()
   }
