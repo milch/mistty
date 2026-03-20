@@ -859,9 +859,18 @@ struct ContentView: View {
       let maxRow = max(anchor.row, state.cursorRow)
       let minCol = min(anchor.col, state.cursorCol)
       var lines: [String] = []
-      let rightCol = max(anchor.col, state.cursorCol)
+      let logicalRightCol = max(anchor.col, state.cursorCol)
       for row in minRow...maxRow {
         if let line = readTerminalLine(row: row) {
+          // Clip to end of line content (last non-whitespace char)
+          let trimmed = line.replacingOccurrences(
+            of: "\\s+$", with: "", options: .regularExpression)
+          let contentEnd = trimmed.count - 1
+          guard contentEnd >= minCol else {
+            lines.append("")
+            continue
+          }
+          let rightCol = min(logicalRightCol, contentEnd)
           let chars = Array(line)
           let start = min(minCol, chars.count)
           let end = min(rightCol + 1, chars.count)

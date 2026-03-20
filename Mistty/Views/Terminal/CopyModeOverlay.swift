@@ -141,8 +141,15 @@ struct SelectionHighlightView: View {
     let logicalRightCol = max(start.col, end.col)
 
     for row in minRow...maxRow {
+      // Clip right edge to end of line content (last non-whitespace char)
+      let line = lineReader?(row) ?? ""
+      let contentEnd = line.last(where: { !$0.isWhitespace }) != nil
+        ? line.count - 1 - line.reversed().prefix(while: { $0.isWhitespace }).count
+        : -1
+      guard contentEnd >= minCol else { continue }  // line too short, skip row
+      let rightCol = min(logicalRightCol, contentEnd)
       let x0 = CGFloat(minCol) * cellWidth
-      let x1 = CGFloat(logicalRightCol + 1) * cellWidth
+      let x1 = CGFloat(rightCol + 1) * cellWidth
       let rect = CGRect(x: x0, y: CGFloat(row) * cellHeight, width: x1 - x0, height: cellHeight)
       context.fill(Path(rect), with: .color(.blue.opacity(0.3)))
     }
