@@ -114,7 +114,7 @@ final class CopyModeStateTests: XCTestCase {
   func test_escape_inSearch_returnsToNormal() {
     var state = makeState()
     _ = state.handleKey(key: "/", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
-    XCTAssertEqual(state.subMode, .search)
+    XCTAssertEqual(state.subMode, .searchForward)
 
     let actions = state.handleKey(
       key: "\u{1b}", keyCode: 53, modifiers: [], lineReader: emptyLineReader)
@@ -146,7 +146,7 @@ final class CopyModeStateTests: XCTestCase {
     var state = makeState()
     let actions = state.handleKey(key: "/", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
     XCTAssertTrue(actions.contains(.startSearch))
-    XCTAssertEqual(state.subMode, .search)
+    XCTAssertEqual(state.subMode, .searchForward)
     XCTAssertEqual(state.searchQuery, "")
   }
 
@@ -352,5 +352,17 @@ final class CopyModeStateTests: XCTestCase {
     _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
     XCTAssertEqual(state.cursorRow, 7)
     XCTAssertEqual(state.cursorCol, 10)
+  }
+
+  // MARK: - Phase 2: Search direction and continuation
+
+  func test_searchDirection_defaultsToForward() {
+    let state = makeState()
+    XCTAssertEqual(state.searchDirection, .forward)
+  }
+
+  func test_pendingContinuation_defaultsToNil() {
+    let state = makeState()
+    XCTAssertNil(state.pendingContinuation)
   }
 }

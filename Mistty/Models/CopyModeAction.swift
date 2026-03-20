@@ -5,7 +5,8 @@ enum CopySubMode: Equatable {
   case visual
   case visualLine
   case visualBlock
-  case search
+  case searchForward
+  case searchReverse
 }
 
 enum FindCharKind: Equatable {
@@ -28,6 +29,25 @@ enum FindCharKind: Equatable {
   }
 }
 
+enum SearchDirection: Equatable {
+  case forward
+  case reverse
+}
+
+enum PendingMotion: Equatable {
+  case wordForward(bigWord: Bool)
+  case wordBackward(bigWord: Bool)
+  case wordEndForward(bigWord: Bool)
+  case wordEndBackward(bigWord: Bool)
+  case lineDown
+  case lineUp
+}
+
+struct ContinuationState: Equatable {
+  let motion: PendingMotion
+  let remaining: Int
+}
+
 enum CopyModeAction: Equatable {
   case cursorMoved
   case updateSelection
@@ -40,4 +60,8 @@ enum CopyModeAction: Equatable {
   case updateSearch(query: String)
   case confirmSearch
   case cancelSearch
+  case scroll(deltaRows: Int)
+  case needsContinuation
+  case searchNext
+  case searchPrev
 }

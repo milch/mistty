@@ -36,8 +36,8 @@ struct CopyModeOverlay: View {
       VStack {
         Spacer()
         HStack {
-          if state.subMode == .search {
-            Text("/\(state.searchQuery)\u{2588}")
+          if state.subMode == .searchForward || state.subMode == .searchReverse {
+            Text(searchBarText)
               .font(.system(size: 11, weight: .bold, design: .monospaced))
               .foregroundStyle(.white)
               .padding(.horizontal, 8)
@@ -66,13 +66,24 @@ struct CopyModeOverlay: View {
     .allowsHitTesting(false)
   }
 
+  private var searchBarText: String {
+    let prefix = state.subMode == .searchForward ? "/" : "?"
+    let matchInfo: String
+    if let idx = state.searchMatchIndex, let total = state.searchMatchTotal {
+      matchInfo = "  [\(idx)/\(total)]"
+    } else {
+      matchInfo = ""
+    }
+    return "\(prefix)\(state.searchQuery)\u{2588}\(matchInfo)"
+  }
+
   private var modeIndicatorText: String {
     switch state.subMode {
     case .normal: return "-- COPY --"
     case .visual: return "-- VISUAL --"
     case .visualLine: return "-- VISUAL LINE --"
     case .visualBlock: return "-- VISUAL BLOCK --"
-    case .search: return ""  // handled separately
+    case .searchForward, .searchReverse: return ""
     }
   }
 }

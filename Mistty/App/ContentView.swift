@@ -641,7 +641,7 @@ struct ContentView: View {
       guard var state = store.activeSession?.activeTab?.copyModeState else { return event }
 
       // Pass through system shortcuts (Cmd+*) when not searching
-      if event.modifierFlags.contains(.command) && state.subMode != .search {
+      if event.modifierFlags.contains(.command) && !state.isSearching {
         return event
       }
 
@@ -683,13 +683,21 @@ struct ContentView: View {
         case .showHelp, .hideHelp:
           break  // showingHelp already in state
         case .startSearch:
-          break  // subMode already set to .search
+          break  // subMode already set to search
         case .updateSearch:
           break  // searchQuery already updated
         case .confirmSearch:
           performSearch(&state)
         case .cancelSearch:
           break  // Already handled in state
+        case .searchNext:
+          performSearch(&state)
+        case .searchPrev:
+          performSearch(&state)
+        case .scroll:
+          break  // TODO: implement in next task
+        case .needsContinuation:
+          break  // TODO: implement in later task
         }
       }
 

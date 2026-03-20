@@ -24,6 +24,12 @@ struct CopyModeState {
   /// Set to Int.max by $ to mean "end of line". Reset by horizontal motions.
   var desiredCol: Int?
 
+  // Phase 2: Scrollback & search
+  var searchDirection: SearchDirection = .forward
+  var searchMatchIndex: Int?
+  var searchMatchTotal: Int?
+  var pendingContinuation: ContinuationState?
+
   init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
     self.rows = rows
     self.cols = cols
@@ -34,7 +40,7 @@ struct CopyModeState {
   // MARK: - Backward compatibility (used by overlay)
 
   var isSelecting: Bool { subMode == .visual || subMode == .visualLine || subMode == .visualBlock }
-  var isSearching: Bool { subMode == .search }
+  var isSearching: Bool { subMode == .searchForward || subMode == .searchReverse }
 
   var selectionRange: (start: (row: Int, col: Int), end: (row: Int, col: Int))? {
     guard isSelecting, let anchor = anchor else { return nil }
@@ -79,7 +85,7 @@ struct CopyModeState {
     }
 
     // Search mode
-    if subMode == .search {
+    if isSearching {
       return handleSearchKey(key: key, keyCode: keyCode)
     }
 
@@ -120,12 +126,15 @@ struct CopyModeState {
     case .visual, .visualLine, .visualBlock:
       subMode = .normal
       anchor = nil
+      pendingContinuation = nil
       return [.enterSubMode(.normal)]
-    case .search:
+    case .searchForward, .searchReverse:
       subMode = .normal
       searchQuery = ""
+      pendingContinuation = nil
       return [.cancelSearch, .enterSubMode(.normal)]
     case .normal:
+      pendingContinuation = nil
       return [.exitCopyMode]
     }
   }
@@ -204,11 +213,20 @@ struct CopyModeState {
 
     // Search
     case "/":
-      subMode = .search
+      subMode = .searchForward
+      searchDirection = .forward
+      searchQuery = ""
+      return [.startSearch]
+    case "?":
+      subMode = .searchReverse
+      searchDirection = .reverse
       searchQuery = ""
       return [.startSearch]
     case "n":
-      if !searchQuery.isEmpty { return [.confirmSearch] }
+      if !searchQuery.isEmpty { return [.searchNext] }
+      return []
+    case "N":
+      if !searchQuery.isEmpty { return [.searchPrev] }
       return []
 
     // Find char (restore count so handleFindCharTarget can use it)

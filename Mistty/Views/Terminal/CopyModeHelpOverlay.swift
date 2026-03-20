@@ -25,9 +25,21 @@ struct CopyModeHelpOverlay: View {
     (",", "reverse find"),
   ]
 
-  private let actionHints: [(key: String, label: String)] = [
+  private let searchHints: [(key: String, label: String)] = [
     ("/", "search forward"),
+    ("?", "search backward"),
     ("n", "next match"),
+    ("N", "prev match"),
+  ]
+
+  private let scrollHints: [(key: String, label: String)] = [
+    ("Ctrl-D", "half page down"),
+    ("Ctrl-U", "half page up"),
+    ("Ctrl-F", "full page down"),
+    ("Ctrl-B", "full page up"),
+  ]
+
+  private let actionHints: [(key: String, label: String)] = [
     ("y", "yank selection"),
     ("g?", "toggle this help"),
     ("Esc", "exit copy mode"),
@@ -42,6 +54,8 @@ struct CopyModeHelpOverlay: View {
         hintColumn(title: "Navigation", hints: navHints)
         hintColumn(title: "Selection", hints: selectionHints)
         hintColumn(title: "Find on Line", hints: findHints)
+        hintColumn(title: "Search", hints: searchHints)
+        hintColumn(title: "Scrolling", hints: scrollHints)
         hintColumn(title: "Actions", hints: actionHints)
       }
     }
