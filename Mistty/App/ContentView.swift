@@ -790,6 +790,7 @@ struct ContentView: View {
         let col = line.distance(from: line.startIndex, to: range.lowerBound)
         state.cursorRow = row
         state.cursorCol = min(col, cols - 1)
+        state.desiredCol = nil
         return
       }
     }

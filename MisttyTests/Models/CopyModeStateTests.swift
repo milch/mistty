@@ -312,4 +312,45 @@ final class CopyModeStateTests: XCTestCase {
     XCTAssertEqual(state.cursorRow, 7)
     XCTAssertEqual(state.cursorCol, 3)
   }
+
+  func test_5j_desiredCol_acrossVaryingLines() {
+    var state = makeState(cursorRow: 0, cursorCol: 15)
+    let reader: (Int) -> String? = { row in
+      switch row {
+      case 0: return "01234567890123456789"  // 20 chars
+      case 1: return "abc"                    // 3 chars
+      case 2: return "abcde"                  // 5 chars
+      case 3: return "ab"                     // 2 chars
+      case 4: return "abcdefghij"             // 10 chars
+      case 5: return "01234567890123456789"  // 20 chars
+      default: return ""
+      }
+    }
+    // 5j should land on row 5 with col 15 restored (skips intermediate short lines)
+    _ = state.handleKey(key: "5", keyCode: 0, modifiers: [], lineReader: reader)
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorRow, 5)
+    XCTAssertEqual(state.cursorCol, 15)
+  }
+
+  func test_desiredCol_acrossEmptyLine() {
+    var state = makeState(cursorRow: 5, cursorCol: 10)
+    let reader: (Int) -> String? = { row in
+      switch row {
+      case 5: return "hello world!!"          // 13 chars
+      case 6: return "               "        // whitespace-only
+      case 7: return "another long line here"  // 22 chars
+      default: return ""
+      }
+    }
+    // j to empty line — cursor forced to 0, desiredCol preserved
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorRow, 6)
+    XCTAssertEqual(state.cursorCol, 0)
+
+    // j again — restored to col 10
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorRow, 7)
+    XCTAssertEqual(state.cursorCol, 10)
+  }
 }
