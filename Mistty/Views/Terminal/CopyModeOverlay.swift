@@ -18,7 +18,8 @@ struct CopyModeOverlay: View {
           cellWidth: cellWidth,
           cellHeight: cellHeight,
           mode: state.subMode,
-          lineReader: lineReader
+          lineReader: lineReader,
+          viewportRows: state.rows
         )
         .offset(x: gridOffsetX, y: gridOffsetY)
       }
@@ -109,41 +110,50 @@ struct SelectionHighlightView: View {
   let cellHeight: CGFloat
   let mode: CopySubMode
   let lineReader: ((Int) -> String?)?
+  var viewportRows: Int = Int.max
 
   var body: some View {
     Canvas { context, size in
       let minRow = min(start.row, end.row)
       let maxRow = max(start.row, end.row)
+      // Clamp to visible viewport
+      let visibleMin = max(minRow, 0)
+      let visibleMax = min(maxRow, viewportRows - 1)
+      guard visibleMin <= visibleMax else { return }
 
       switch mode {
       case .visual:
-        drawCharacterWise(context: context, size: size, minRow: minRow, maxRow: maxRow)
+        drawCharacterWise(context: context, size: size, minRow: minRow, maxRow: maxRow, visibleMin: visibleMin, visibleMax: visibleMax)
       case .visualLine:
-        drawLineWise(context: context, size: size, minRow: minRow, maxRow: maxRow)
+        drawLineWise(context: context, size: size, visibleMin: visibleMin, visibleMax: visibleMax)
       case .visualBlock:
-        drawBlockWise(context: context, size: size, minRow: minRow, maxRow: maxRow)
+        drawBlockWise(context: context, size: size, visibleMin: visibleMin, visibleMax: visibleMax)
       default:
         break
       }
     }
   }
 
-  private func drawCharacterWise(context: GraphicsContext, size: CGSize, minRow: Int, maxRow: Int) {
-    for row in minRow...maxRow {
+  private func drawCharacterWise(context: GraphicsContext, size: CGSize, minRow: Int, maxRow: Int, visibleMin: Int, visibleMax: Int) {
+    for row in visibleMin...visibleMax {
       let x0: CGFloat
       let x1: CGFloat
       if row == minRow && row == maxRow {
+        // Entire selection on one row
         x0 = CGFloat(min(start.col, end.col)) * cellWidth
         x1 = CGFloat(max(start.col, end.col) + 1) * cellWidth
       } else if row == minRow {
+        // First row of selection — from start col to end of line
         let startCol = start.row <= end.row ? start.col : end.col
         x0 = CGFloat(startCol) * cellWidth
         x1 = size.width
       } else if row == maxRow {
+        // Last row of selection — from start of line to end col
         let endCol = start.row <= end.row ? end.col : start.col
         x0 = 0
         x1 = CGFloat(endCol + 1) * cellWidth
       } else {
+        // Middle rows or rows where the actual start/end scrolled off-screen
         x0 = 0
         x1 = size.width
       }
@@ -152,8 +162,8 @@ struct SelectionHighlightView: View {
     }
   }
 
-  private func drawLineWise(context: GraphicsContext, size: CGSize, minRow: Int, maxRow: Int) {
-    for row in minRow...maxRow {
+  private func drawLineWise(context: GraphicsContext, size: CGSize, visibleMin: Int, visibleMax: Int) {
+    for row in visibleMin...visibleMax {
       let lineLen = lineReader?(row)?.count ?? 0
       let x1 = lineLen > 0 ? CGFloat(lineLen) * cellWidth : size.width
       let rect = CGRect(x: 0, y: CGFloat(row) * cellHeight, width: x1, height: cellHeight)
@@ -161,15 +171,14 @@ struct SelectionHighlightView: View {
     }
   }
 
-  private func drawBlockWise(context: GraphicsContext, size: CGSize, minRow: Int, maxRow: Int) {
+  private func drawBlockWise(context: GraphicsContext, size: CGSize, visibleMin: Int, visibleMax: Int) {
     let minCol = min(start.col, end.col)
     let logicalRightCol = max(start.col, end.col)
 
-    for row in minRow...maxRow {
-      // Clip right edge to end of line content (last non-whitespace char)
+    for row in visibleMin...visibleMax {
       let line = lineReader?(row) ?? ""
       let contentEnd = WordMotion.lastNonWhitespaceIndex(in: line)
-      guard contentEnd >= minCol else { continue }  // line too short, skip row
+      guard contentEnd >= minCol else { continue }
       let rightCol = min(logicalRightCol, contentEnd)
       let x0 = CGFloat(minCol) * cellWidth
       let x1 = CGFloat(rightCol + 1) * cellWidth
