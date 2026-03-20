@@ -154,10 +154,10 @@ struct CopyModeState {
     case "l": return repeatMotion(count) { $0.moveRight() }
     case "0":
       moveToLineStart()
-      return [.cursorMoved]
+      return motionActions()
     case "$":
       moveToLineEnd()
-      return [.cursorMoved]
+      return motionActions()
     case "G":
       if hadExplicitCount {
         cursorRow = min(max(count - 1, 0), rows - 1)
@@ -165,7 +165,7 @@ struct CopyModeState {
       } else {
         moveToBottom()
       }
-      return [.cursorMoved]
+      return motionActions()
     case "g":
       pendingG = true
       return []
@@ -256,7 +256,7 @@ struct CopyModeState {
     switch key {
     case "g":
       moveToTop()
-      return [.cursorMoved]
+      return motionActions()
     case "e":
       let count = pendingCount ?? 1
       pendingCount = nil
@@ -327,7 +327,8 @@ struct CopyModeState {
     var targetCol: Int?
 
     if kind.isForward {
-      for i in (cursorCol + 1)..<chars.count {
+      let searchStart = min(cursorCol + 1, chars.count)
+      for i in searchStart..<chars.count {
         if chars[i] == char {
           found += 1
           if found == count {
@@ -337,7 +338,8 @@ struct CopyModeState {
         }
       }
     } else {
-      for i in stride(from: cursorCol - 1, through: 0, by: -1) {
+      let searchStart = min(cursorCol - 1, chars.count - 1)
+      for i in stride(from: searchStart, through: 0, by: -1) {
         if chars[i] == char {
           found += 1
           if found == count {

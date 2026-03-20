@@ -141,10 +141,8 @@ struct SelectionHighlightView: View {
     let logicalRightCol = max(start.col, end.col)
 
     for row in minRow...maxRow {
-      let lineLen = lineReader?(row)?.count ?? 0
-      let rightCol = max(logicalRightCol, lineLen > 0 ? lineLen - 1 : 0)
       let x0 = CGFloat(minCol) * cellWidth
-      let x1 = CGFloat(rightCol + 1) * cellWidth
+      let x1 = CGFloat(logicalRightCol + 1) * cellWidth
       let rect = CGRect(x: x0, y: CGFloat(row) * cellHeight, width: x1 - x0, height: cellHeight)
       context.fill(Path(rect), with: .color(.blue.opacity(0.3)))
     }

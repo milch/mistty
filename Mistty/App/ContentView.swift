@@ -859,11 +859,10 @@ struct ContentView: View {
       let maxRow = max(anchor.row, state.cursorRow)
       let minCol = min(anchor.col, state.cursorCol)
       var lines: [String] = []
+      let rightCol = max(anchor.col, state.cursorCol)
       for row in minRow...maxRow {
         if let line = readTerminalLine(row: row) {
           let chars = Array(line)
-          let rightCol = max(
-            max(anchor.col, state.cursorCol), chars.count > 0 ? chars.count - 1 : 0)
           let start = min(minCol, chars.count)
           let end = min(rightCol + 1, chars.count)
           if start < end {
