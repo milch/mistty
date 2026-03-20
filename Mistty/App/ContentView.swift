@@ -847,6 +847,11 @@ struct ContentView: View {
         let actionStr = "scroll_to_row:\(targetOffset)"
         _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
 
+        // Update scrollbar state synchronously — the async callback will
+        // eventually arrive with the same value, but we need it now for
+        // subsequent searches (n/N) to compute correct screen coordinates.
+        pane.surfaceView.scrollbarState.offset = UInt64(targetOffset)
+
         state.cursorRow = screenRow - targetOffset
         state.cursorCol = min(col, cols - 1)
         state.desiredCol = nil
