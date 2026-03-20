@@ -4,6 +4,7 @@ import GhosttyKit
 final class TerminalSurfaceView: NSView {
   nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
   var onSelect: (() -> Void)?
+  var scrollbarState = ScrollbarState()
 
   /// Back-reference to the owning pane (set by MisttyPane).
   weak var pane: MisttyPane?

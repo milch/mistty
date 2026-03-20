@@ -65,3 +65,9 @@ enum CopyModeAction: Equatable {
   case searchNext
   case searchPrev
 }
+
+struct ScrollbarState: Equatable {
+  var total: UInt64 = 0
+  var offset: UInt64 = 0
+  var len: UInt64 = 0
+}

@@ -62,6 +62,18 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
     }
     return true
 
+  case GHOSTTY_ACTION_SCROLLBAR:
+    if target.tag == GHOSTTY_TARGET_SURFACE {
+      let surface = target.target.surface
+      let sb = action.action.scrollbar
+      DispatchQueue.main.async {
+        guard let userdata = ghostty_surface_userdata(surface) else { return }
+        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+        view.scrollbarState = ScrollbarState(total: sb.total, offset: sb.offset, len: sb.len)
+      }
+    }
+    return true
+
   default:
     return false
   }
