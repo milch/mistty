@@ -245,4 +245,71 @@ final class CopyModeStateTests: XCTestCase {
     // cursor gets clamped to content end
     XCTAssertEqual(state.cursorCol, 10)
   }
+
+  // MARK: - Desired column (j/k remember column across short lines)
+
+  func test_jk_restoresDesiredCol() {
+    // Line 5 has 20 chars, line 6 has 5 chars, line 7 has 20 chars
+    var state = makeState(cursorRow: 5, cursorCol: 15)
+    let reader: (Int) -> String? = { row in
+      switch row {
+      case 5: return "01234567890123456789"
+      case 6: return "abcde"
+      case 7: return "01234567890123456789"
+      default: return ""
+      }
+    }
+    // Move down to short line — cursor clamps to col 4
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorRow, 6)
+    XCTAssertEqual(state.cursorCol, 4)  // clamped to "abcde" end
+
+    // Move down again to long line — cursor restores to col 15
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorRow, 7)
+    XCTAssertEqual(state.cursorCol, 15)  // restored
+  }
+
+  func test_dollarThenJ_goesToEndOfEachLine() {
+    var state = makeState(cursorRow: 5, cursorCol: 0)
+    let reader: (Int) -> String? = { row in
+      switch row {
+      case 5: return "short"
+      case 6: return "a longer line here"
+      default: return ""
+      }
+    }
+    // $ goes to end of "short"
+    _ = state.handleKey(key: "$", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorCol, 4)
+
+    // j should go to end of next line ($ sets desiredCol to Int.max)
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorRow, 6)
+    XCTAssertEqual(state.cursorCol, 17)  // end of "a longer line here"
+  }
+
+  func test_horizontalMotion_resetsDesiredCol() {
+    var state = makeState(cursorRow: 5, cursorCol: 15)
+    let reader: (Int) -> String? = { row in
+      switch row {
+      case 5: return "01234567890123456789"
+      case 6: return "abcde"
+      case 7: return "01234567890123456789"
+      default: return ""
+      }
+    }
+    // j to short line
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorCol, 4)
+
+    // h resets desiredCol
+    _ = state.handleKey(key: "h", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorCol, 3)
+
+    // j again — should use cursorCol 3, NOT restore to 15
+    _ = state.handleKey(key: "j", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.cursorRow, 7)
+    XCTAssertEqual(state.cursorCol, 3)
+  }
 }

@@ -20,6 +20,10 @@ struct CopyModeState {
   var pendingG: Bool = false
   var showingHelp: Bool = false
 
+  /// Vim "desired column" — remembered during vertical movement (j/k).
+  /// Set to Int.max by $ to mean "end of line". Reset by horizontal motions.
+  var desiredCol: Int?
+
   init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
     self.rows = rows
     self.cols = cols
@@ -153,16 +157,28 @@ struct CopyModeState {
     let count = pendingCount ?? 1
     pendingCount = nil
 
+    // Most motions reset desiredCol; j/k/$ override below
+    let savedDesiredCol = desiredCol
+    desiredCol = nil
+
     switch key {
     // Navigation
     case "h": return repeatMotion(count) { $0.moveLeft() }
-    case "j": return repeatMotion(count) { $0.moveDown() }
-    case "k": return repeatMotion(count) { $0.moveUp() }
+    case "j":
+      // Vertical motion: restore desiredCol, preserve it across moves
+      cursorCol = savedDesiredCol ?? cursorCol
+      desiredCol = savedDesiredCol ?? cursorCol
+      return repeatMotion(count) { $0.moveDown() }
+    case "k":
+      cursorCol = savedDesiredCol ?? cursorCol
+      desiredCol = savedDesiredCol ?? cursorCol
+      return repeatMotion(count) { $0.moveUp() }
     case "l": return repeatMotion(count) { $0.moveRight() }
     case "0":
       moveToLineStart()
       return motionActions()
     case "$":
+      desiredCol = Int.max
       moveToLineEnd()
       return motionActions()
     case "G":
@@ -260,6 +276,7 @@ struct CopyModeState {
     lineReader: (Int) -> String?
   ) -> [CopyModeAction] {
     pendingG = false
+    desiredCol = nil
     switch key {
     case "g":
       moveToTop()
@@ -309,6 +326,7 @@ struct CopyModeState {
   {
     guard let kind = pendingFindChar else { return [] }
     pendingFindChar = nil
+    desiredCol = nil
     lastFind = (kind: kind, char: char)
 
     let count = pendingCount ?? 1
