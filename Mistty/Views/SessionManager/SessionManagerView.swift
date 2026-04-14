@@ -22,24 +22,27 @@ struct HighlightedText: View {
 struct SessionManagerView: View {
   @Bindable var vm: SessionManagerViewModel
   @Binding var isPresented: Bool
-  @State private var queryText = ""
+
+  private var queryBinding: Binding<String> {
+    Binding(
+      get: { vm.query },
+      set: { vm.updateQuery($0) }
+    )
+  }
 
   var body: some View {
     VStack(spacing: 0) {
       FocusableTextField(
-        text: $queryText,
+        text: queryBinding,
         placeholder: "Search sessions, directories, hosts...",
         onComplete: {
           if let value = vm.completionValue() {
-            queryText = value
+            vm.updateQuery(value)
           }
         }
       )
       .font(.title3)
       .padding(14)
-      .onChange(of: queryText) { _, newValue in
-        vm.updateQuery(newValue)
-      }
 
       Divider()
 
@@ -95,7 +98,7 @@ struct SessionManagerView: View {
           }
         }
         .frame(maxHeight: 360)
-        .id(queryText)
+        .id(vm.query)
         .onChange(of: vm.selectedIndex) { _, newValue in
           proxy.scrollTo(newValue, anchor: .center)
         }
