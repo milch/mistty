@@ -49,30 +49,6 @@ struct ContinuationState: Equatable {
   let remaining: Int
 }
 
-enum CopyModeAction: Equatable {
-  case cursorMoved
-  case updateSelection
-  case yank(text: String)
-  case exitCopyMode
-  case enterSubMode(CopySubMode)
-  case showHelp
-  case hideHelp
-  case startSearch
-  case updateSearch(query: String)
-  case confirmSearch
-  case cancelSearch
-  case scroll(deltaRows: Int)
-  case needsContinuation
-  case searchNext
-  case searchPrev
-  case enterHintMode(HintAction, HintSource)
-  case hintInput(Character)
-  case exitHintMode
-  case copyText(String)
-  case openItem(String)
-  case requestHintScan
-}
-
 // MARK: - Phase 3: Hint mode
 
 enum HintAction: Equatable {
@@ -119,6 +95,30 @@ struct HintState: Equatable {
   var matches: [HintMatch]     // bottom→top, left→right
   var labels: [String]         // index-aligned with matches
   var typedPrefix: String = "" // "" or single char
+}
+
+enum CopyModeAction: Equatable {
+  case cursorMoved
+  case updateSelection
+  case yank(text: String)
+  case exitCopyMode
+  case enterSubMode(CopySubMode)
+  case showHelp
+  case hideHelp
+  case startSearch
+  case updateSearch(query: String)
+  case confirmSearch
+  case cancelSearch
+  case scroll(deltaRows: Int)
+  case needsContinuation
+  case searchNext
+  case searchPrev
+  case enterHintMode(HintAction, HintSource)
+  case hintInput(Character)
+  case exitHintMode
+  case copyText(String)
+  case openItem(String)
+  case requestHintScan
 }
 
 struct ScrollbarState: Equatable {
