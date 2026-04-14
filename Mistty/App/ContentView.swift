@@ -53,6 +53,9 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .misttyCopyMode)) { _ in
         handleCopyMode()
       }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHints)) { _ in
+        handleYankHints()
+      }
       .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
         handleCloseTab()
       }
@@ -336,6 +339,17 @@ struct ContentView: View {
     } else {
       enterCopyMode()
     }
+  }
+
+  private func handleYankHints() {
+    guard let tab = store.activeSession?.activeTab else { return }
+    if !tab.isCopyModeActive {
+      enterCopyMode()
+    }
+    guard var state = store.activeSession?.activeTab?.copyModeState else { return }
+    state.applyHintEntry(action: .copy, source: .patterns)
+    populateHintMatches(&state, source: .patterns)
+    store.activeSession?.activeTab?.copyModeState = state
   }
 
   private func handleCloseTab() {
