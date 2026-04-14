@@ -13,6 +13,7 @@ struct ContentView: View {
   @State private var windowModeMonitor: Any?
   @State private var copyModeMonitor: Any?
   @State private var ctrlNavMonitor: Any?
+  @State private var closeMonitor: Any?
 
   var body: some View {
     contentWithNotifications
@@ -180,6 +181,9 @@ struct ContentView: View {
       if ctrlNavMonitor == nil {
         installCtrlNavMonitor()
       }
+      if closeMonitor == nil {
+        installCloseMonitor()
+      }
     }
     .onDisappear {
       DispatchQueue.main.async { [store] in
@@ -191,6 +195,7 @@ struct ContentView: View {
       removeWindowModeMonitor()
       removeCopyModeMonitor()
       removeCtrlNavMonitor()
+      removeCloseMonitor()
       store.activeSession?.activeTab?.windowModeState = .inactive
       if store.activeSession?.activeTab?.isCopyModeActive == true {
         exitCopyMode()
@@ -802,6 +807,26 @@ struct ContentView: View {
     if let monitor = ctrlNavMonitor {
       NSEvent.removeMonitor(monitor)
       ctrlNavMonitor = nil
+    }
+  }
+
+  private func installCloseMonitor() {
+    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+      guard flags.contains(.command),
+        event.charactersIgnoringModifiers?.lowercased() == "w"
+      else { return event }
+      let name: Notification.Name =
+        flags.contains(.shift) ? .misttyCloseTab : .misttyClosePane
+      NotificationCenter.default.post(name: name, object: nil)
+      return nil
+    }
+  }
+
+  private func removeCloseMonitor() {
+    if let monitor = closeMonitor {
+      NSEvent.removeMonitor(monitor)
+      closeMonitor = nil
     }
   }
 
