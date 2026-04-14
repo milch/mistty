@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name for the release (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+
+      - name: Install Zig 0.15.2
+        run: |
+          curl -fsSL -o zig.tar.xz https://ziglang.org/download/0.15.2/zig-macos-aarch64-0.15.2.tar.xz
+          mkdir -p "$RUNNER_TOOL_CACHE/zig"
+          tar -xf zig.tar.xz -C "$RUNNER_TOOL_CACHE/zig" --strip-components=1
+          echo "$RUNNER_TOOL_CACHE/zig" >> "$GITHUB_PATH"
+
+      - name: Verify tools
+        run: |
+          zig version
+          swift --version
+
+      - name: Cache Zig build
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/ghostty/zig-out
+            vendor/ghostty/.zig-cache
+            ~/.cache/zig
+          key: zig-${{ runner.os }}-${{ hashFiles('vendor/ghostty/build.zig', 'vendor/ghostty/build.zig.zon') }}
+          restore-keys: |
+            zig-${{ runner.os }}-
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Build libghostty
+        working-directory: vendor/ghostty
+        run: zig build -Dapp-runtime=none -Doptimize=ReleaseFast
+
+      - name: Build release + bundle .app
+        run: |
+          swift build -c release
+          APP="build/Mistty.app"
+          rm -rf "$APP"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp .build/release/Mistty "$APP/Contents/MacOS/Mistty"
+          swift build --target MisttyCLI -c release
+          cp .build/release/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
+          cp Mistty/Resources/Info.plist "$APP/Contents/"
+          codesign -s - -f --deep "$APP"
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Zip .app
+        run: |
+          cd build
+          ditto -c -k --sequesterRsrc --keepParent Mistty.app "Mistty-${{ steps.tag.outputs.name }}-arm64.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          draft: true
+          generate_release_notes: true
+          files: build/Mistty-${{ steps.tag.outputs.name }}-arm64.zip
