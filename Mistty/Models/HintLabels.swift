@@ -1,14 +1,17 @@
-import Foundation
-
 enum HintLabels {
-  /// Generate `count` unique labels from the given alphabet.
+  /// Generate `count` unique labels from `alphabet`.
+  ///
+  /// Duplicate characters in `alphabet` are ignored. If `count` exceeds
+  /// the alphabet's two-level capacity (k²), the returned array is
+  /// truncated to k² entries (trips a debug assertion).
   ///
   /// If `count` ≤ alphabet size, emit single-char labels from the front of
   /// the alphabet. Otherwise reserve a suffix of the alphabet as two-char
   /// prefixes — the minimum needed so total labels ≥ count.
   static func generate(count: Int, alphabet: String) -> [String] {
     guard count > 0 else { return [] }
-    let chars = Array(alphabet)
+    var seen = Set<Character>()
+    let chars = Array(alphabet).filter { seen.insert($0).inserted }
     let k = chars.count
     precondition(k > 0, "alphabet must not be empty")
 
@@ -50,6 +53,8 @@ enum HintLabels {
         if labels.count == count { return labels }
       }
     }
+    assert(labels.count == count,
+           "HintLabels.generate: requested \(count) labels but alphabet capacity is \(chars.count * chars.count); caller should shorten the match list or widen the alphabet")
     return labels
   }
 }

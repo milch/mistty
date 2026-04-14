@@ -34,4 +34,15 @@ final class HintLabelsTests: XCTestCase {
     let labels = HintLabels.generate(count: 0, alphabet: "asdf")
     XCTAssertEqual(labels, [])
   }
+
+  func test_duplicateCharsInAlphabet_deduplicated() {
+    let labels = HintLabels.generate(count: 3, alphabet: "aabb")
+    XCTAssertEqual(labels.count, 3, "should return requested count")
+    XCTAssertEqual(Set(labels).count, 3, "labels must be unique")
+  }
+
+  func test_countEqualsAlphabet_allSingleChar() {
+    let labels = HintLabels.generate(count: 4, alphabet: "asdf")
+    XCTAssertEqual(labels, ["a", "s", "d", "f"])
+  }
 }
