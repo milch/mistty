@@ -51,17 +51,17 @@ struct ContinuationState: Equatable {
 
 // MARK: - Phase 3: Hint mode
 
-enum HintAction: Equatable {
+enum HintAction: Equatable, Sendable {
   case copy
   case open
 }
 
-enum HintSource: Equatable {
+enum HintSource: Equatable, Sendable {
   case patterns
   case lines
 }
 
-enum HintKind: Equatable {
+enum HintKind: Equatable, Sendable {
   case url
   case email
   case uuid
