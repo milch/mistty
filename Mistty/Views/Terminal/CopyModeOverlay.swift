@@ -47,6 +47,18 @@ struct CopyModeOverlay: View {
           y: gridOffsetY + CGFloat(state.cursorRow) * cellHeight
         )
 
+      // Hint overlay
+      if state.isHinting, let hint = state.hint {
+        CopyModeHintOverlay(
+          hint: hint,
+          viewportRows: state.rows,
+          viewportCols: state.cols,
+          cellWidth: cellWidth,
+          cellHeight: cellHeight
+        )
+        .offset(x: gridOffsetX, y: gridOffsetY)
+      }
+
       // Mode indicator
       VStack {
         Spacer()
@@ -103,7 +115,14 @@ struct CopyModeOverlay: View {
     case .visualLine: return "-- VISUAL LINE --"
     case .visualBlock: return "-- VISUAL BLOCK --"
     case .searchForward, .searchReverse: return ""
-    case .hint: return "-- HINT --"
+    case .hint:
+      let src: String
+      if state.hint?.source == .lines {
+        src = "line"
+      } else {
+        src = state.hint?.action == .open ? "open" : "copy"
+      }
+      return "-- HINT (\(src)) --"
     }
   }
 }
