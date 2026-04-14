@@ -28,13 +28,22 @@ enum HintDetector {
   // MARK: Line source
 
   private static func lineMatch(line: String, row: Int) -> HintMatch? {
-    let chars = Array(line)
+    let ns = line as NSString
+    let len = ns.length
     var first = 0
-    while first < chars.count && chars[first].isWhitespace { first += 1 }
-    guard first < chars.count else { return nil }
-    var last = chars.count - 1
-    while last > first && chars[last].isWhitespace { last -= 1 }
-    let text = String(chars[first...last])
+    while first < len {
+      let s = ns.substring(with: NSRange(location: first, length: 1))
+      if !s.first!.isWhitespace { break }
+      first += 1
+    }
+    guard first < len else { return nil }
+    var last = len - 1
+    while last > first {
+      let s = ns.substring(with: NSRange(location: last, length: 1))
+      if !s.first!.isWhitespace { break }
+      last -= 1
+    }
+    let text = ns.substring(with: NSRange(location: first, length: last - first + 1))
     return HintMatch(
       range: HintRange(startRow: row, startCol: first, endRow: row, endCol: last),
       text: text,
@@ -92,7 +101,7 @@ enum HintDetector {
         if kind == .url {
           let stripped = stripTrailingURL(raw)
           if stripped.count != raw.count {
-            range.length = stripped.count
+            range.length = stripped.utf16.count
           }
           peers.append(RawMatch(kind: kind, range: range, text: stripped))
         } else {
@@ -106,6 +115,8 @@ enum HintDetector {
     for (re, kind) in [(quotedRe, HintKind.quoted), (codeSpanRe, HintKind.codeSpan)] {
       for r in re.matches(in: line, range: full) {
         let raw = ns.substring(with: r.range)
+        let inner = raw.dropFirst().dropLast()
+        if inner.allSatisfy(\.isWhitespace) { continue }
         containers.append(RawMatch(kind: kind, range: r.range, text: raw))
       }
     }
@@ -132,7 +143,9 @@ enum HintDetector {
     }
     let sorted = peers.sorted { a, b in
       if a.range.length != b.range.length { return a.range.length > b.range.length }
-      return prioIndex(a.kind) > prioIndex(b.kind)
+      let pa = prioIndex(a.kind), pb = prioIndex(b.kind)
+      if pa != pb { return pa > pb }
+      return a.range.location < b.range.location
     }
     var claimed: [NSRange] = []
     var out: [RawMatch] = []

@@ -85,4 +85,24 @@ final class HintDetectorTests: XCTestCase {
       "http://two.com", "http://three.com", "http://one.com"
     ])
   }
+
+  func test_url_trailingPunctuationAfterEmoji() {
+    let m = scan(["link https://example.com/😀."])
+    XCTAssertEqual(m.count, 1)
+    XCTAssertEqual(m[0].text, "https://example.com/😀")
+  }
+
+  func test_quotedWhitespace_noMatch() {
+    let m = scan(["empty \"   \" quoted"])
+    XCTAssertTrue(m.allSatisfy { $0.kind != .quoted })
+  }
+
+  func test_line_source_nonAscii_startsAtFirstNonWhitespace() {
+    let matches = HintDetector.detect(lines: ["  😀 hello"], source: .lines)
+    XCTAssertEqual(matches.count, 1)
+    // Two spaces trimmed → startCol = 2 (UTF-16). 😀 spans 2 UTF-16 units.
+    // end is "o" of hello. Full text = "😀 hello".
+    XCTAssertEqual(matches[0].range.startCol, 2)
+    XCTAssertEqual(matches[0].text, "😀 hello")
+  }
 }

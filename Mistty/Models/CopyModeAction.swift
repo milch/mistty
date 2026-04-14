@@ -78,9 +78,11 @@ enum HintKind: Equatable {
 
 struct HintRange: Equatable {
   let startRow: Int
+  /// UTF-16 code-unit offset into the line.
   let startCol: Int
   let endRow: Int  // inclusive
-  let endCol: Int  // inclusive
+  /// UTF-16 code-unit offset into the line (inclusive).
+  let endCol: Int
 }
 
 struct HintMatch: Equatable {
