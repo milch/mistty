@@ -30,10 +30,10 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v27
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Verify tools
         run: |
