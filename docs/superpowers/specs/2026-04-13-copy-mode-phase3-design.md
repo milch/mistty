@@ -27,11 +27,36 @@ short label; typing the label copies or opens the match.
 
 | Trigger | Context | Default action |
 |---|---|---|
-| `y` | In copy mode, no selection | copy |
-| `o` | In copy mode (selection or not) | open |
-| `cmd+shift+y` | Any pane, not in copy mode | enter copy mode + hint mode (copy) |
+| `y` | In copy mode, no selection | copy (pattern hints) |
+| `o` | In copy mode (selection or not) | open (pattern hints) |
+| `Y` | In copy mode, no selection | copy (line hints) |
+| `cmd+shift+y` | Any pane, not in copy mode | enter copy mode + pattern hint mode (copy) |
 
 `y` with an active selection retains existing behavior (yank selection).
+`Y` is unused prior to this feature, so no conflict.
+
+## Line hint mode
+
+A second hint flavor triggered by `Y`. Instead of pattern detectors, it
+generates one match per **non-empty visible line**. The match range is
+the whole line (first non-whitespace column through last non-whitespace
+column); yanking copies the line's text (trimmed of trailing
+whitespace, not indentation).
+
+Labels, alphabet, ordering (bottom-to-top), input handling, case
+semantics, dim/pill rendering, scroll re-scan, and exit behavior are
+**identical to pattern hint mode**. Only differences:
+
+- Detector: "non-empty visible lines" rather than regex patterns.
+- No `open` default — line hint mode only copies. Uppercase still swaps
+  per `uppercase_action`, so a user who configured `uppercase_action =
+  "copy"` with lowercase-open would still be able to open a line's
+  text via lowercase — but realistically lines are noise to `open(1)`;
+  documented as such, not specially prevented.
+- Label pill placed at the left edge of the line (column 0), not in
+  front of the match content.
+
+Mode indicator: `-- HINT (line) --`.
 
 ## Detectors
 
@@ -159,6 +184,7 @@ Extend the existing action-based state machine.
 
 ```swift
 enum HintAction { case copy, open }
+enum HintSource { case patterns, lines }
 
 struct HintMatch {
     let range: TerminalRange
@@ -168,6 +194,7 @@ struct HintMatch {
 
 struct HintState {
     let action: HintAction        // default from entry key
+    let source: HintSource        // patterns or lines
     var matches: [HintMatch]      // bottom→top, left→right
     var labels: [String]          // index-aligned
     var typedPrefix: String       // "" or single char
@@ -177,7 +204,7 @@ struct HintState {
 case hint(HintState)
 
 // CopyModeAction gains:
-case enterHintMode(HintAction)
+case enterHintMode(HintAction, HintSource)
 case hintInput(Character)
 case exitHintMode
 case copyText(String)
@@ -186,8 +213,9 @@ case openItem(String)
 
 `handleKey` routing additions:
 
-- In `.copy`/no-selection with key `y` → emit `.enterHintMode(.copy)`.
-- In any copy mode with key `o` → emit `.enterHintMode(.open)`.
+- In `.copy`/no-selection with key `y` → `.enterHintMode(.copy, .patterns)`.
+- In any copy mode with key `o` → `.enterHintMode(.open, .patterns)`.
+- In `.copy`/no-selection with key `Y` → `.enterHintMode(.copy, .lines)`.
 - In `.hint` → interpret key per Input handling above, emitting
   `.hintInput(c)` (updates `typedPrefix`), or
   `[.copyText(s), .exitHintMode, .exitCopyMode]`, or
@@ -202,7 +230,7 @@ handler emits `[.enterCopyMode, .enterHintMode(.copy)]`.
 
 ### New
 
-- `Mistty/Models/HintDetector.swift` — regex detectors + conflict resolution
+- `Mistty/Models/HintDetector.swift` — regex detectors + conflict resolution + line source
 - `Mistty/Models/HintLabels.swift` — label generation
 - `Mistty/Models/HintState.swift` — sub-state types
 - `Mistty/Views/Terminal/CopyModeHintOverlay.swift`
@@ -229,10 +257,11 @@ var vs number disambiguation.
 single-char labels assigned to bottommost matches, deterministic
 ordering.
 
-**`CopyModeHintIntegrationTests`** — enter via `y`/`o`/`cmd+shift+y`;
+**`CopyModeHintIntegrationTests`** — enter via `y`/`o`/`Y`/`cmd+shift+y`;
 single-char selection copies and exits copy mode; 2-char selection;
 uppercase swaps action; mismatched key exits hint mode (remains in
-copy mode); scroll re-scans.
+copy mode); scroll re-scans; line mode yanks full line text excluding
+trailing whitespace; line mode skips blank lines.
 
 ## Configuration summary
 
