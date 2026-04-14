@@ -198,12 +198,15 @@ final class CopyModeStateTests: XCTestCase {
     XCTAssertEqual(state.cursorCol, 0)
   }
 
-  // MARK: - y without selection is no-op
+  // MARK: - y without selection enters hint mode
 
-  func test_y_withoutSelection_isNoOp() {
+  func test_y_withoutSelection_entersHintMode() {
     var state = makeState()
     let actions = state.handleKey(key: "y", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
-    XCTAssertTrue(actions.isEmpty)
+    XCTAssertTrue(actions.contains(.enterHintMode(.copy, .patterns)))
+    XCTAssertTrue(actions.contains(.requestHintScan))
+    state.applyHintEntry(action: .copy, source: .patterns)
+    XCTAssertEqual(state.subMode, .hint)
   }
 
   // MARK: - Cursor clamping to line content
