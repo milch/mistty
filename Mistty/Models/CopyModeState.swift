@@ -153,6 +153,9 @@ struct CopyModeState {
     case .normal:
       pendingContinuation = nil
       return [.exitCopyMode]
+    case .hint:
+      subMode = .normal
+      return [.exitHintMode, .enterSubMode(.normal)]
     }
   }
 

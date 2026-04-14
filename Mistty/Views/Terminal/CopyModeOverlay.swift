@@ -103,6 +103,7 @@ struct CopyModeOverlay: View {
     case .visualLine: return "-- VISUAL LINE --"
     case .visualBlock: return "-- VISUAL BLOCK --"
     case .searchForward, .searchReverse: return ""
+    case .hint: return "-- HINT --"
     }
   }
 }

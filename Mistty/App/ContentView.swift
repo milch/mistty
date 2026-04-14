@@ -729,6 +729,8 @@ struct ContentView: View {
           countSearchMatches(&state)
         case .scroll(let deltaRows):
           scrollViewport(&state, delta: deltaRows)
+        case .enterHintMode, .hintInput, .exitHintMode, .copyText, .openItem, .requestHintScan:
+          break  // Hint mode handling added in later tasks
         case .needsContinuation:
           let continuationActions = state.continuePendingMotion(lineReader: lineReader)
           for contAction in continuationActions {

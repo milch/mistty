@@ -7,6 +7,7 @@ enum CopySubMode: Equatable {
   case visualBlock
   case searchForward
   case searchReverse
+  case hint
 }
 
 enum FindCharKind: Equatable {
@@ -64,6 +65,60 @@ enum CopyModeAction: Equatable {
   case needsContinuation
   case searchNext
   case searchPrev
+  case enterHintMode(HintAction, HintSource)
+  case hintInput(Character)
+  case exitHintMode
+  case copyText(String)
+  case openItem(String)
+  case requestHintScan
+}
+
+// MARK: - Phase 3: Hint mode
+
+enum HintAction: Equatable {
+  case copy
+  case open
+}
+
+enum HintSource: Equatable {
+  case patterns
+  case lines
+}
+
+enum HintKind: Equatable {
+  case url
+  case email
+  case uuid
+  case path
+  case hash
+  case ipv4
+  case ipv6
+  case envVar
+  case number
+  case quoted
+  case codeSpan
+  case line
+}
+
+struct HintRange: Equatable {
+  let startRow: Int
+  let startCol: Int
+  let endRow: Int  // inclusive
+  let endCol: Int  // inclusive
+}
+
+struct HintMatch: Equatable {
+  let range: HintRange
+  let text: String
+  let kind: HintKind
+}
+
+struct HintState: Equatable {
+  let action: HintAction       // default action from entry key
+  let source: HintSource
+  var matches: [HintMatch]     // bottom→top, left→right
+  var labels: [String]         // index-aligned with matches
+  var typedPrefix: String = "" // "" or single char
 }
 
 struct ScrollbarState: Equatable {
