@@ -29,16 +29,15 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
 
-      - name: Install Zig 0.15.2
-        run: |
-          curl -fsSL -o zig.tar.xz https://ziglang.org/download/0.15.2/zig-macos-aarch64-0.15.2.tar.xz
-          mkdir -p "$RUNNER_TOOL_CACHE/zig"
-          tar -xf zig.tar.xz -C "$RUNNER_TOOL_CACHE/zig" --strip-components=1
-          echo "$RUNNER_TOOL_CACHE/zig" >> "$GITHUB_PATH"
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Verify tools
         run: |
-          zig version
+          nix develop --command zig version
           swift --version
 
       - name: Cache Zig build
@@ -63,8 +62,7 @@ jobs:
             spm-${{ runner.os }}-
 
       - name: Build libghostty
-        working-directory: vendor/ghostty
-        run: zig build -Dapp-runtime=none -Doptimize=ReleaseFast
+        run: nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast"
 
       - name: Build release + bundle .app
         run: |
