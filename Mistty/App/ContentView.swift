@@ -729,8 +729,30 @@ struct ContentView: View {
           countSearchMatches(&state)
         case .scroll(let deltaRows):
           scrollViewport(&state, delta: deltaRows)
-        case .enterHintMode, .hintInput, .exitHintMode, .copyText, .openItem, .requestHintScan:
-          break  // Hint mode handling added in later tasks
+          if state.isHinting, let source = state.hint?.source {
+            populateHintMatches(&state, source: source)
+          }
+        case .enterHintMode(let action, let source):
+          state.applyHintEntry(action: action, source: source)
+        case .requestHintScan:
+          let source = state.hint?.source ?? .patterns
+          populateHintMatches(&state, source: source)
+        case .hintInput:
+          break  // typedPrefix already set in state
+        case .exitHintMode:
+          break  // subMode already reset
+        case .copyText(let text):
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(text, forType: .string)
+        case .openItem(let text):
+          if let url = URL(string: text), url.scheme != nil {
+            NSWorkspace.shared.open(url)
+          } else {
+            let proc = Process()
+            proc.launchPath = "/usr/bin/open"
+            proc.arguments = [text]
+            try? proc.run()
+          }
         case .needsContinuation:
           let continuationActions = state.continuePendingMotion(lineReader: lineReader)
           for contAction in continuationActions {
@@ -1009,6 +1031,21 @@ struct ContentView: View {
     defer { ghostty_surface_free_text(surface, &text) }
     guard let ptr = text.text else { return nil }
     return String(cString: ptr)
+  }
+
+  private func scanViewportForHints(source: HintSource) -> [HintMatch] {
+    guard let state = store.activeSession?.activeTab?.copyModeState else { return [] }
+    var lines: [String] = []
+    for row in 0..<state.rows {
+      lines.append(readTerminalLine(row: row) ?? "")
+    }
+    return HintDetector.detect(lines: lines, source: source)
+  }
+
+  private func populateHintMatches(_ state: inout CopyModeState, source: HintSource) {
+    let matches = scanViewportForHints(source: source)
+    let alphabet = MisttyConfig.load().copyModeHints.alphabet
+    state.setHintMatches(matches, alphabet: alphabet)
   }
 
   private func yankSelection() {
