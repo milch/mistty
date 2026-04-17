@@ -148,6 +148,8 @@ var sidebarLabel: String {
 
 SSH host parser: extract the last non-flag token of the command and split on `@` to take the post-`@` portion, else the token itself.
 
+**Note on CWD liveness:** `MisttyPane.directory` is populated at pane construction and not updated when the shell changes directory. The "active pane CWD basename" branch therefore reflects the initial working directory, not the live `pwd`. Wiring OSC-7 / shell integration to update `pane.directory` on `cd` is tracked as a follow-up and is out of scope for this spec.
+
 Tab row label (sidebar): **no change**. Continues to use `tab.displayTitle` (which honors `customTitle` then `title`, where `title` is the process title pushed by ghostty).
 
 ### Migration
