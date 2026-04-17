@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TabBarView: View {
   @Bindable var session: MisttySession
+  var leadingInset: CGFloat = 0
 
   var body: some View {
     HStack(spacing: 0) {
@@ -18,6 +19,7 @@ struct TabBarView: View {
         }
         .padding(.horizontal, 6)
       }
+      .padding(.leading, leadingInset)
 
       Button(action: { session.addTab() }) {
         Image(systemName: "plus")

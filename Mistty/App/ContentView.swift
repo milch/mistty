@@ -131,8 +131,7 @@ struct ContentView: View {
           VStack(spacing: 0) {
             if session.tabs.count > 1 {
               VStack(spacing: 0) {
-                TabBarView(session: session)
-                  .padding(.leading, sidebarVisible ? 0 : 72)
+                TabBarView(session: session, leadingInset: sidebarVisible ? 0 : 72)
                 Divider()
               }
               .transition(.move(edge: .top).combined(with: .opacity))
