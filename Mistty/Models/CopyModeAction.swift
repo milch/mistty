@@ -99,6 +99,9 @@ struct HintState: Equatable {
   var typedPrefix: String = ""     // "" or single char
   var uppercaseAction: HintAction = .open
   var alphabet: String = "asdfghjkl"
+  /// True if copy mode was entered together with hint mode (cmd+shift+y).
+  /// Escape / mismatch exits copy mode entirely rather than falling back to it.
+  var enteredDirectly: Bool = false
 }
 
 enum CopyModeAction: Equatable {

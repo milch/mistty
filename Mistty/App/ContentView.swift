@@ -360,7 +360,8 @@ struct ContentView: View {
       action: .copy,
       source: .patterns,
       uppercaseAction: config.copyModeHints.uppercaseAction,
-      alphabet: config.copyModeHints.alphabet
+      alphabet: config.copyModeHints.alphabet,
+      enteredDirectly: true
     )
     populateHintMatches(&state, source: .patterns)
     store.activeSession?.activeTab?.copyModeState = state

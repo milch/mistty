@@ -167,9 +167,13 @@ struct CopyModeState {
       pendingContinuation = nil
       return [.exitCopyMode]
     case .hint:
+      let direct = hint?.enteredDirectly ?? false
       subMode = .normal
       hint = nil
       pendingContinuation = nil
+      if direct {
+        return [.exitHintMode, .exitCopyMode]
+      }
       return [.exitHintMode, .enterSubMode(.normal)]
     }
   }
@@ -570,7 +574,8 @@ struct CopyModeState {
     action: HintAction,
     source: HintSource,
     uppercaseAction: HintAction = .open,
-    alphabet: String = "asdfghjkl"
+    alphabet: String = "asdfghjkl",
+    enteredDirectly: Bool = false
   ) {
     subMode = .hint
     anchor = nil
@@ -580,7 +585,8 @@ struct CopyModeState {
       matches: [],
       labels: [],
       uppercaseAction: uppercaseAction,
-      alphabet: alphabet
+      alphabet: alphabet,
+      enteredDirectly: enteredDirectly
     )
   }
 
@@ -638,8 +644,12 @@ struct CopyModeState {
   }
 
   private mutating func exitHintCleanly() -> [CopyModeAction] {
+    let direct = hint?.enteredDirectly ?? false
     subMode = .normal
     hint = nil
+    if direct {
+      return [.exitHintMode, .exitCopyMode]
+    }
     return [.exitHintMode, .enterSubMode(.normal)]
   }
 
