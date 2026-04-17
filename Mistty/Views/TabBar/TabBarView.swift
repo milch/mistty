@@ -16,17 +16,17 @@ struct TabBarView: View {
             )
           }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 6)
       }
 
       Button(action: { session.addTab() }) {
         Image(systemName: "plus")
-          .frame(width: 28, height: 28)
+          .frame(width: 24, height: 24)
       }
       .buttonStyle(.plain)
       .padding(.trailing, 4)
     }
-    .frame(height: 36)
+    .frame(height: 28)
     .background(.bar)
   }
 }
@@ -57,13 +57,14 @@ struct TabBarItem: View {
           }
         )
         .textFieldStyle(.plain)
-        .font(.system(size: 12))
+        .font(.system(size: 11))
         .focused($editFocused)
         .frame(maxWidth: 120)
         .onAppear { editFocused = true }
       } else {
         Text(tab.displayTitle)
-          .font(.system(size: 12))
+          .font(.system(size: 11))
+          .foregroundStyle(isActive ? .primary : .secondary)
           .lineLimit(1)
           .onTapGesture(count: 2) {
             editText = tab.displayTitle
@@ -79,9 +80,9 @@ struct TabBarItem: View {
       .opacity(isActive ? 1 : 0)
     }
     .padding(.horizontal, 10)
-    .padding(.vertical, 6)
-    .background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
-    .cornerRadius(6)
+    .padding(.vertical, 4)
+    .background(isActive ? Color.primary.opacity(0.08) : Color.clear)
+    .cornerRadius(5)
     .onTapGesture { onSelect() }
     .onReceive(NotificationCenter.default.publisher(for: .misttyRenameTab)) { _ in
       if isActive {
