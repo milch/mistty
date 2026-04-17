@@ -15,14 +15,6 @@ struct ContentView: View {
   @State private var ctrlNavMonitor: Any?
   @State private var closeMonitor: Any?
 
-  private var tabBarVisible: Bool {
-    (store.activeSession?.tabs.count ?? 0) > 1
-  }
-
-  private var contentTopInset: CGFloat {
-    tabBarVisible ? 0 : 28
-  }
-
   var body: some View {
     contentWithNotifications
       .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) {
@@ -140,6 +132,7 @@ struct ContentView: View {
             if session.tabs.count > 1 {
               VStack(spacing: 0) {
                 TabBarView(session: session)
+                  .padding(.leading, sidebarVisible ? 0 : 72)
                 Divider()
               }
               .transition(.move(edge: .top).combined(with: .opacity))
@@ -198,7 +191,6 @@ struct ContentView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       }
-      .padding(.top, contentTopInset)
     }
     .onAppear {
       DispatchQueue.main.async {
