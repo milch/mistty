@@ -22,7 +22,9 @@ struct CopyModeHints: View {
     case .visualBlock: return "VISUAL BLOCK"
     case .hint:
       if state.hint?.source == .lines { return "HINT (line)" }
-      return state.hint?.action == .open ? "HINT (open)" : "HINT (copy)"
+      let mode = state.hint?.action == .open ? "open" : "copy"
+      let filter = filterLabel(state.hint?.filter)
+      return "HINT (\(mode) · \(filter))"
     case .searchForward, .searchReverse: return "SEARCH"
     }
   }
@@ -44,13 +46,35 @@ struct CopyModeHints: View {
         ("esc", "cancel"),
       ]
     case .hint:
-      return [
+      var rows: [(key: String, label: String)] = [
         ("a-z", "pick hint"),
         ("A-Z", "swap copy/open"),
-        ("esc", "exit"),
       ]
+      if state.hint?.source == .patterns {
+        rows.append(("tab", "filter kind"))
+      }
+      rows.append(("esc", "exit"))
+      return rows
     case .searchForward, .searchReverse:
       return [("↵", "confirm"), ("esc", "cancel")]
+    }
+  }
+
+  private func filterLabel(_ kind: HintKind?) -> String {
+    guard let k = kind else { return "all" }
+    switch k {
+    case .url: return "url"
+    case .email: return "email"
+    case .uuid: return "uuid"
+    case .path: return "path"
+    case .hash: return "hash"
+    case .ipv4: return "ipv4"
+    case .ipv6: return "ipv6"
+    case .envVar: return "env"
+    case .number: return "num"
+    case .quoted: return "quote"
+    case .codeSpan: return "code"
+    case .line: return "line"
     }
   }
 

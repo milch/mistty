@@ -94,7 +94,8 @@ struct HintMatch: Equatable {
 struct HintState: Equatable {
   let action: HintAction           // default action from entry key
   let source: HintSource
-  var matches: [HintMatch]         // bottom→top, left→right
+  var allMatches: [HintMatch] = [] // unfiltered detector output
+  var matches: [HintMatch]         // filtered & labeled subset (bottom→top, left→right)
   var labels: [String]             // index-aligned with matches
   var typedPrefix: String = ""     // "" or single char
   var uppercaseAction: HintAction = .open
@@ -102,6 +103,8 @@ struct HintState: Equatable {
   /// True if copy mode was entered together with hint mode (cmd+shift+y).
   /// Escape / mismatch exits copy mode entirely rather than falling back to it.
   var enteredDirectly: Bool = false
+  /// Active filter. nil = all kinds shown. Tab cycles.
+  var filter: HintKind? = nil
 }
 
 enum CopyModeAction: Equatable {

@@ -592,12 +592,50 @@ struct CopyModeState {
 
   mutating func setHintMatches(_ matches: [HintMatch], alphabet: String) {
     guard subMode == .hint else { return }
-    hint?.matches = matches
-    hint?.labels = HintLabels.generate(count: matches.count, alphabet: alphabet)
-    hint?.typedPrefix = ""
+    hint?.allMatches = matches
+    applyHintFilter()
+  }
+
+  /// Rebuild `matches` + `labels` from `allMatches` using current `filter`.
+  private mutating func applyHintFilter() {
+    guard var h = hint else { return }
+    let filtered: [HintMatch]
+    if let f = h.filter {
+      filtered = h.allMatches.filter { $0.kind == f }
+    } else {
+      filtered = h.allMatches
+    }
+    h.matches = filtered
+    h.labels = HintLabels.generate(count: filtered.count, alphabet: h.alphabet)
+    h.typedPrefix = ""
+    hint = h
+  }
+
+  /// Cycle hint filter in priority order (highest first), skipping kinds with zero matches.
+  mutating func cycleHintFilter() {
+    guard var h = hint, h.source == .patterns else { return }
+    let order: [HintKind?] = [
+      nil, .url, .email, .uuid, .path, .hash, .ipv4, .ipv6, .envVar, .number, .quoted, .codeSpan,
+    ]
+    let startIdx = order.firstIndex(where: { $0 == h.filter }) ?? 0
+    for step in 1...order.count {
+      let candidate = order[(startIdx + step) % order.count]
+      if candidate == nil || h.allMatches.contains(where: { $0.kind == candidate }) {
+        h.filter = candidate
+        hint = h
+        applyHintFilter()
+        return
+      }
+    }
   }
 
   private mutating func handleHintKey(key: Character) -> [CopyModeAction] {
+    // Tab cycles filter (patterns source only).
+    if key == "\t" {
+      cycleHintFilter()
+      return [.cursorMoved]  // forces overlay re-render
+    }
+
     guard var h = hint else { return [] }
 
     let lower = Character(key.lowercased())
