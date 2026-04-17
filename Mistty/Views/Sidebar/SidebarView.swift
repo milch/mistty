@@ -71,7 +71,7 @@ struct SessionRowView: View {
         }
       }
     } label: {
-      Text(session.name)
+      Text(session.sidebarLabel)
         .fontWeight(isActive ? .semibold : .regular)
         .contentShape(Rectangle())
         .onTapGesture { store.activeSession = session }
