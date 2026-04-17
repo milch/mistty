@@ -15,6 +15,18 @@ struct ContentView: View {
   @State private var ctrlNavMonitor: Any?
   @State private var closeMonitor: Any?
 
+  private var trafficLightLeadingInset: CGFloat {
+    sidebarVisible ? 0 : 72
+  }
+
+  private var tabBarVisible: Bool {
+    (store.activeSession?.tabs.count ?? 0) > 1
+  }
+
+  private var contentTopInset: CGFloat {
+    tabBarVisible ? 0 : 28
+  }
+
   var body: some View {
     contentWithNotifications
       .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) {
@@ -181,6 +193,7 @@ struct ContentView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       }
+      .padding(.leading, trafficLightLeadingInset)
     }
     .onAppear {
       DispatchQueue.main.async {
