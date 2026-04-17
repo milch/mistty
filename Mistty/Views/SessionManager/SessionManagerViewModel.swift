@@ -25,9 +25,9 @@ enum SessionManagerItem {
 
   var displayName: String {
     switch self {
-    case .runningSession(let s): return "▶ \(s.name)"
+    case .runningSession(let s): return s.name
     case .directory(let u): return u.lastPathComponent
-    case .sshHost(let h): return "⌁ \(h.alias)"
+    case .sshHost(let h): return h.alias
     case .newSession(let query, let directory, let createDir, let sshCommand):
       if sshCommand != nil {
         let hostname = query.drop(while: { $0 != " " }).dropFirst().trimmingCharacters(
@@ -63,6 +63,15 @@ enum SessionManagerItem {
     case .directory(let u): return "dir:\(u.path)"
     case .sshHost(let h): return "ssh:\(h.alias)"
     case .newSession: return nil
+    }
+  }
+
+  var symbolName: String {
+    switch self {
+    case .runningSession: return "terminal.fill"
+    case .directory: return "folder"
+    case .sshHost: return "network"
+    case .newSession: return "plus.circle"
     }
   }
 }
@@ -120,11 +129,11 @@ final class SessionManagerViewModel {
   ) {
     switch item {
     case .runningSession(let s):
-      return (s.name, nil, 2)  // "▶ " is 2 chars
+      return (s.name, nil, 0)
     case .directory(let u):
       return (u.lastPathComponent, u.path, 0)
     case .sshHost(let h):
-      return (h.alias, h.hostname, 2)  // "⌁ " is 2 chars
+      return (h.alias, h.hostname, 0)
     case .newSession:
       return ("", nil, 0)
     }
