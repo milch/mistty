@@ -1,3 +1,4 @@
+import CoreText
 import Foundation
 import GhosttyKit
 import SwiftUI
@@ -10,6 +11,23 @@ struct MisttyApp: App {
 
   init() {
     _ = GhosttyAppManager.shared
+    Self.registerBundledFonts()
+  }
+
+  private static func registerBundledFonts() {
+    guard
+      let url = Bundle.module.url(
+        forResource: "SymbolsNerdFontMono-Regular",
+        withExtension: "ttf")
+    else {
+      assertionFailure("SymbolsNerdFontMono-Regular.ttf missing from bundle")
+      return
+    }
+    var error: Unmanaged<CFError>?
+    if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+      let err = error?.takeRetainedValue()
+      assertionFailure("Failed to register bundled Nerd Font: \(String(describing: err))")
+    }
   }
 
   var body: some Scene {
