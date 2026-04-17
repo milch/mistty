@@ -53,6 +53,10 @@ struct SessionRowView: View {
     DisclosureGroup(isExpanded: $isExpanded) {
       ForEach(session.tabs) { tab in
         HStack {
+          Text(String(ProcessIcon.glyph(forProcessTitle: tab.activePane?.processTitle)))
+            .font(.custom(ProcessIcon.fontName, size: 12))
+            .foregroundStyle(.secondary)
+            .frame(width: 14, alignment: .center)
           if tab.hasBell {
             Circle()
               .fill(Color.orange)
@@ -71,10 +75,17 @@ struct SessionRowView: View {
         }
       }
     } label: {
-      Text(session.sidebarLabel)
-        .fontWeight(isActive ? .semibold : .regular)
-        .contentShape(Rectangle())
-        .onTapGesture { store.activeSession = session }
+      HStack(spacing: 6) {
+        Text(String(ProcessIcon.glyph(forSession: session)))
+          .font(.custom(ProcessIcon.fontName, size: 12))
+          .foregroundStyle(.secondary)
+          .frame(width: 14, alignment: .center)
+        Text(session.sidebarLabel)
+          .fontWeight(isActive ? .semibold : .regular)
+        Spacer()
+      }
+      .contentShape(Rectangle())
+      .onTapGesture { store.activeSession = session }
     }
   }
 }
