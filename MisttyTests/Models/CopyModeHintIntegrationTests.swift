@@ -48,8 +48,7 @@ final class CopyModeHintIntegrationTests: XCTestCase {
     _ = simulate(&state, reader: reader, keys: "y")
     state.applyHintEntry(action: .copy, source: .patterns)
     state.setHintMatches(
-      HintDetector.detect(lines: ["see https://example.com"], source: .patterns),
-      alphabet: "asdfghjkl"
+      HintDetector.detect(lines: ["see https://example.com"], source: .patterns)
     )
     let actions = simulate(&state, reader: reader, keys: "a")
     XCTAssertTrue(actions.contains(.copyText("https://example.com")))
@@ -62,8 +61,7 @@ final class CopyModeHintIntegrationTests: XCTestCase {
     _ = simulate(&state, reader: reader, keys: "y")
     state.applyHintEntry(action: .copy, source: .patterns)
     state.setHintMatches(
-      HintDetector.detect(lines: ["see https://example.com"], source: .patterns),
-      alphabet: "asdfghjkl"
+      HintDetector.detect(lines: ["see https://example.com"], source: .patterns)
     )
     let actions = simulate(&state, reader: reader, keys: "A")
     XCTAssertTrue(actions.contains(.openItem("https://example.com")))
@@ -74,8 +72,7 @@ final class CopyModeHintIntegrationTests: XCTestCase {
     _ = simulate(&state, reader: reader, keys: "y")
     state.applyHintEntry(action: .copy, source: .patterns)
     state.setHintMatches(
-      HintDetector.detect(lines: ["see https://example.com"], source: .patterns),
-      alphabet: "asdfghjkl"
+      HintDetector.detect(lines: ["see https://example.com"], source: .patterns)
     )
     let actions = simulate(&state, reader: reader, keys: "z")
     XCTAssertTrue(actions.contains(.exitHintMode))
@@ -94,8 +91,8 @@ final class CopyModeHintIntegrationTests: XCTestCase {
     var (state, reader) = makeState(lines: lines)
     _ = simulate(&state, reader: reader, keys: "y")
     let matches = HintDetector.detect(lines: lines, source: .patterns)
-    state.applyHintEntry(action: .copy, source: .patterns)
-    state.setHintMatches(matches, alphabet: "asdf")
+    state.applyHintEntry(action: .copy, source: .patterns, alphabet: "asdf")
+    state.setHintMatches(matches)
     // With alphabet "asdf" and 12 matches: p reserves prefixes "d","f" → let's
     // just take whatever the label is for the last element and verify it
     // copies that match.
@@ -118,8 +115,8 @@ final class CopyModeHintIntegrationTests: XCTestCase {
       lines: ["first line", "", "  second  "],
       source: .lines
     )
-    state.applyHintEntry(action: .copy, source: .lines)
-    state.setHintMatches(matches, alphabet: "asdf")
+    state.applyHintEntry(action: .copy, source: .lines, alphabet: "asdf")
+    state.setHintMatches(matches)
     // Only 2 non-empty lines; label "a" should point at bottom line (includes leading whitespace)
     let actions = simulate(&state, reader: reader, keys: "a")
     XCTAssertTrue(actions.contains(.copyText("  second")))

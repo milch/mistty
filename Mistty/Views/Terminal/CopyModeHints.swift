@@ -16,7 +16,11 @@ struct CopyModeHints: View {
 
   private var title: String {
     switch state.subMode {
-    case .normal: return "COPY"
+    case .normal:
+      if let idx = state.searchMatchIndex, let total = state.searchMatchTotal {
+        return "COPY [\(idx)/\(total)]"
+      }
+      return "COPY"
     case .visual: return "VISUAL"
     case .visualLine: return "VISUAL LINE"
     case .visualBlock: return "VISUAL BLOCK"

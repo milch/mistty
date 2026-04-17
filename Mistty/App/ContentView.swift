@@ -1079,8 +1079,7 @@ struct ContentView: View {
 
   private func populateHintMatches(_ state: inout CopyModeState, source: HintSource) {
     let matches = scanViewportForHints(source: source)
-    let alphabet = state.hint?.alphabet ?? "asdfghjkl"
-    state.setHintMatches(matches, alphabet: alphabet)
+    state.setHintMatches(matches)
   }
 
   private func yankSelection() {

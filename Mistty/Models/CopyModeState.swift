@@ -590,7 +590,7 @@ struct CopyModeState {
     )
   }
 
-  mutating func setHintMatches(_ matches: [HintMatch], alphabet: String) {
+  mutating func setHintMatches(_ matches: [HintMatch]) {
     guard subMode == .hint else { return }
     hint?.allMatches = matches
     applyHintFilter()
@@ -632,6 +632,7 @@ struct CopyModeState {
   private mutating func handleHintKey(key: Character) -> [CopyModeAction] {
     // Tab cycles filter (patterns source only).
     if key == "\t" {
+      guard hint?.source == .patterns else { return [] }
       cycleHintFilter()
       return [.cursorMoved]  // forces overlay re-render
     }
