@@ -31,10 +31,6 @@ struct CopyModeHints: View {
     switch state.subMode {
     case .normal:
       return [
-        ("hjkl", "move"),
-        ("w/b/e", "word"),
-        ("0/$", "line edge"),
-        ("g/G", "top/bot"),
         ("v/V", "visual"),
         ("/", "search"),
         ("y/o", "hints"),
@@ -44,8 +40,6 @@ struct CopyModeHints: View {
       ]
     case .visual, .visualLine, .visualBlock:
       return [
-        ("hjkl", "extend"),
-        ("w/b/e", "word"),
         ("y", "yank"),
         ("esc", "cancel"),
       ]
