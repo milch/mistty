@@ -44,14 +44,6 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Cross-line word motion wrapping into scrollback
 - Handle Ctrl-D/U and other paging shortcuts
 
-#### Phase 3: Yank mode
-
-- Press y to enter yank mode while in copy mode (when no selection is active)
-- Automatically highlight visible links, file paths, hashes, numbers, etc.
-- They receive a non-movement shortcut label next to them, e.g. "a"
-- Pressing the label copies the text to the system clipboard
-- Variant: pressing `o` instead of `y` to enter yank mode runs `open` on the item instead of copying
-
 ### Save layouts
 
 - There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
@@ -133,12 +125,30 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 
 ### Copy mode
 
-- Enter/exit copy mode
-- Vim navigation: h/j/k/l cursor movement, 0/$ line start/end, g/G top/bottom
-- Visual mode (v) with selection highlighting
-- Search (/) with case-insensitive matching, n for next match
-- Yank selection to clipboard (y) via ghostty_surface_read_text
-- Basic word movement (w/b, simplified 5-char jumps)
+- Enter/exit copy mode (cmd+shift+c)
+- Toast shows keyboard hint badges per submode (mirrors window mode style)
+- Vim navigation: h/j/k/l, w/W/e/E/b/B, ge/gE with vim-exact word boundaries, 0/$ line start/end, g/G top/bottom
+- Count prefix for motions (10j, 3w, 5G)
+- f/F/t/T find-character on current line, ;/, repeat/reverse
+- Visual modes: v (character), V (line), Ctrl-v (block) with proper selection highlighting
+- Yank (y) selection to clipboard via ghostty_surface_read_text
+- Search: / forward, ? reverse, n/N next/prev, match count indicator, all-match highlighting, full scrollback coverage
+- Scrollback navigation: Ctrl-D/U half page, Ctrl-F/B full page, word motions wrap into scrollback
+- Help overlay (g?)
+
+### Copy mode — yank hints (Phase 3)
+
+- `y` (no selection) enters hint mode (copy action)
+- `o` enters hint mode (open action — macOS `open` / NSWorkspace)
+- `Y` enters line hint mode (labels at col 0 of each non-empty visible line)
+- `cmd+shift+y` enters copy + hint mode in one step (esc then exits copy mode entirely)
+- Detectors: URLs, emails, UUIDs, paths (absolute + relative), git hashes, IPv4/IPv6, env vars, numbers; quoted strings and code spans are transparent containers (inner matches still hinted)
+- Longest peer match wins; priority tiebreak (url > email > uuid > path > hash > ipv4 > ipv6 > envVar > number); containers emit alongside inner peers
+- tmux-thumbs label generation (single-char, expanding to 2-char); bottom-to-top left-to-right order
+- Uppercase typed label swaps copy/open action (configurable via `uppercase_action`)
+- Tab cycles filter by kind (url, email, uuid, path, hash, ipv4, ipv6, envVar, number, quoted, codeSpan, all), skipping kinds with no matches
+- Re-scans on keyboard paging (Ctrl-U/D/F/B) and mousewheel scroll
+- Config: `[copy_mode.hints]` alphabet (default `asdfghjkl`) and uppercase_action (default `open`)
 
 ### CLI control (mistty-cli via XPC/Mach service)
 
