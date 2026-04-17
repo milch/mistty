@@ -139,13 +139,11 @@ struct ContentView: View {
         {
           VStack(spacing: 0) {
             if session.tabs.count > 1 {
-              TabBarView(session: session)
-                .transition(.asymmetric(
-                  insertion: .move(edge: .top).combined(with: .opacity),
-                  removal: .move(edge: .top).combined(with: .opacity)
-                ))
-              Divider()
-                .transition(.opacity)
+              VStack(spacing: 0) {
+                TabBarView(session: session)
+                Divider()
+              }
+              .transition(.move(edge: .top).combined(with: .opacity))
             }
             let joinPickTabNames = session.tabs
               .filter { $0.id != tab.id }
