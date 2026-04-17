@@ -24,6 +24,7 @@ struct MisttyApp: App {
           }
         }
     }
+    .windowStyle(.hiddenTitleBar)
     .commands {
       CommandGroup(after: .toolbar) {
         Divider()
