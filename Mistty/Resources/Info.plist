@@ -4,6 +4,8 @@
 <dict>
     <key>CFBundleExecutable</key>
     <string>Mistty</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.mistty.app</string>
     <key>CFBundleName</key>
