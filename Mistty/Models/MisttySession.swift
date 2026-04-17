@@ -129,4 +129,17 @@ final class MisttySession: Identifiable {
     else { return }
     activeTab = tabs[(index - 1 + tabs.count) % tabs.count]
   }
+
+  var sidebarLabel: String {
+    if let customName, !customName.isEmpty {
+      return customName
+    }
+    if let sshCommand, let host = SSHHostParser.host(from: sshCommand), !host.isEmpty {
+      return host
+    }
+    if let cwd = activeTab?.activePane?.directory {
+      return cwd.lastPathComponent
+    }
+    return directory.lastPathComponent
+  }
 }
