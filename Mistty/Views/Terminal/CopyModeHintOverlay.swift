@@ -30,7 +30,11 @@ struct CopyModeHintOverlay: View {
       guard !hint.typedPrefix.isEmpty else { return false }
       return !label.hasPrefix(hint.typedPrefix)
     }()
-    let x = CGFloat(match.range.startCol) * cellWidth
+    // Pattern hints sit to the LEFT of the match (no overlap). Line hints
+    // sit at column 0 where the pill naturally falls in the indentation.
+    let labelWidth = CGFloat(label.count) * cellWidth
+    let baseX = CGFloat(match.range.startCol) * cellWidth
+    let x: CGFloat = match.kind == .line ? baseX : max(0, baseX - labelWidth)
     let y = CGFloat(match.range.startRow) * cellHeight
     return Text(label)
       .font(.system(size: cellHeight * 0.7, weight: .bold, design: .monospaced))

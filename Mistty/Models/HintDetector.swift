@@ -69,7 +69,7 @@ enum HintDetector {
       (.url, make(#"\b(https?|ftp|file|ssh|git)://[^\s<>"')\]]+"#)),
       (.email, make(#"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"#)),
       (.uuid, make(#"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b"#)),
-      (.path, make(#"(?:~|\.{1,2})?/[\w./\-_]+"#)),
+      (.path, make(#"[~\w.\-_]*/[\w./\-_]+"#)),
       (.hash, make(#"\b[0-9a-f]{7,40}\b"#)),
       (.ipv4, make(#"\b(?:\d{1,3}\.){3}\d{1,3}\b"#)),
       (.ipv6, make(#"\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}\b"#)),
