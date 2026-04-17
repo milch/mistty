@@ -166,4 +166,39 @@ final class ChromePolishSnapshotTests: XCTestCase {
       named: "session-manager-mixed"
     )
   }
+
+  // MARK: - Full window
+
+  func test_contentView_fullWindow() {
+    let store = SessionStore()
+
+    // First session: two tabs so the tab bar is visible.
+    let s1 = store.createSession(
+      name: "mistty",
+      directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
+    s1.activeTab?.activePane?.processTitle = "nvim"
+    s1.activeTab?.title = "nvim — mistty"
+    s1.addTab()
+    s1.tabs.last?.title = "zsh"
+    s1.tabs.last?.activePane?.processTitle = "zsh"
+    s1.activeTab = s1.tabs.first
+
+    // Second session: SSH, single tab (tab bar hides when active there).
+    let s2 = store.createSession(
+      name: "prod",
+      directory: FileManager.default.homeDirectoryForCurrentUser)
+    s2.sshCommand = "ssh manu@prod.example.com"
+
+    // Point back to the first session so the snapshot shows the tab bar.
+    store.activeSession = s1
+
+    let view = ContentView(store: store)
+      .frame(width: 1200, height: 800)
+
+    assertSnapshot(
+      of: host(view, size: CGSize(width: 1200, height: 800)),
+      as: .image(size: CGSize(width: 1200, height: 800)),
+      named: "content-view-full-window"
+    )
+  }
 }
