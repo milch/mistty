@@ -27,6 +27,12 @@ struct SSHConfig: Sendable, Equatable {
   }
 }
 
+struct CopyModeHintsConfig: Sendable, Equatable {
+  var alphabet: String = "asdfghjkl"
+  /// Which action uppercase letters trigger. Lowercase default is the other.
+  var uppercaseAction: HintAction = .open
+}
+
 struct MisttyConfig: Sendable, Equatable {
   var fontSize: Int = 13
   var fontFamily: String = "monospace"
@@ -35,6 +41,7 @@ struct MisttyConfig: Sendable, Equatable {
   var sidebarVisible: Bool = true
   var popups: [PopupDefinition] = []
   var ssh: SSHConfig = SSHConfig()
+  var copyModeHints: CopyModeHintsConfig = CopyModeHintsConfig()
 
   static let `default` = MisttyConfig()
 
@@ -71,6 +78,19 @@ struct MisttyConfig: Sendable, Equatable {
             regex: t["regex"]?.string,
             command: t["command"]?.string ?? config.ssh.defaultCommand
           )
+        }
+      }
+    }
+    if let copyMode = table["copy_mode"]?.table,
+       let hints = copyMode["hints"]?.table {
+      if let alpha = hints["alphabet"]?.string, !alpha.isEmpty {
+        config.copyModeHints.alphabet = alpha
+      }
+      if let ua = hints["uppercase_action"]?.string {
+        switch ua {
+        case "open": config.copyModeHints.uppercaseAction = .open
+        case "copy": config.copyModeHints.uppercaseAction = .copy
+        default: break
         }
       }
     }
@@ -137,6 +157,13 @@ struct MisttyConfig: Sendable, Equatable {
         }
         lines.append("command = \"\(tomlEscape(host.command))\"")
       }
+    }
+    if copyModeHints != CopyModeHintsConfig() {
+      lines.append("")
+      lines.append("[copy_mode.hints]")
+      lines.append("alphabet = \"\(tomlEscape(copyModeHints.alphabet))\"")
+      let ua = copyModeHints.uppercaseAction == .open ? "open" : "copy"
+      lines.append("uppercase_action = \"\(ua)\"")
     }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
   }

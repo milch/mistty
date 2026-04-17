@@ -70,6 +70,8 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
         guard let userdata = ghostty_surface_userdata(surface) else { return }
         let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
         view.scrollbarState = ScrollbarState(total: sb.total, offset: sb.offset, len: sb.len)
+        // If copy mode is hinting, re-scan labels after mouse/wheel scroll.
+        NotificationCenter.default.post(name: .misttyScrollChanged, object: nil)
       }
     }
     return true

@@ -33,6 +33,7 @@ struct CopyModeState {
   /// because the struct value changes, even when cursorRow/cursorCol don't
   /// (e.g., j at bottom row scrolls viewport but cursor stays at row 23).
   var scrollGeneration: Int = 0
+  var hint: HintState?
 
   init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {
     self.rows = rows
@@ -45,6 +46,7 @@ struct CopyModeState {
 
   var isSelecting: Bool { subMode == .visual || subMode == .visualLine || subMode == .visualBlock }
   var isSearching: Bool { subMode == .searchForward || subMode == .searchReverse }
+  var isHinting: Bool { subMode == .hint }
 
   var selectionRange: (start: (row: Int, col: Int), end: (row: Int, col: Int))? {
     guard isSelecting, let anchor = anchor else { return nil }
@@ -94,6 +96,17 @@ struct CopyModeState {
     if showingHelp {
       showingHelp = false
       return [.hideHelp]
+    }
+
+    // Hint submode
+    if subMode == .hint {
+      if keyCode == 53 { return handleEscape() }  // Escape works
+      if modifiers.contains(.control) {
+        // Let paging (Ctrl-d/u/f/b) fall through to normal handling so the
+        // viewport scrolls and the hint overlay re-scans.
+        return handleNormalKey(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+      }
+      return handleHintKey(key: key)
     }
 
     // Escape
@@ -153,6 +166,15 @@ struct CopyModeState {
     case .normal:
       pendingContinuation = nil
       return [.exitCopyMode]
+    case .hint:
+      let direct = hint?.enteredDirectly ?? false
+      subMode = .normal
+      hint = nil
+      pendingContinuation = nil
+      if direct {
+        return [.exitHintMode, .exitCopyMode]
+      }
+      return [.exitHintMode, .enterSubMode(.normal)]
     }
   }
 
@@ -321,10 +343,15 @@ struct CopyModeState {
         WordMotion.nextWordEnd(in: line, from: col, bigWord: true)
       }
 
-    // Yank
+    // Yank / hint entry
     case "y":
-      guard isSelecting else { return [] }
-      return [.exitCopyMode]
+      if isSelecting { return [.exitCopyMode] }
+      return [.enterHintMode(.copy, .patterns), .requestHintScan]
+    case "o":
+      return [.enterHintMode(.open, .patterns), .requestHintScan]
+    case "Y":
+      if isSelecting { return [] }
+      return [.enterHintMode(.copy, .lines), .requestHintScan]
 
     default:
       return []
@@ -539,6 +566,130 @@ struct CopyModeState {
       }
     }
     return motionActions()
+  }
+
+  // MARK: - Hint mode
+
+  mutating func applyHintEntry(
+    action: HintAction,
+    source: HintSource,
+    uppercaseAction: HintAction = .open,
+    alphabet: String = "asdfghjkl",
+    enteredDirectly: Bool = false
+  ) {
+    subMode = .hint
+    anchor = nil
+    hint = HintState(
+      action: action,
+      source: source,
+      matches: [],
+      labels: [],
+      uppercaseAction: uppercaseAction,
+      alphabet: alphabet,
+      enteredDirectly: enteredDirectly
+    )
+  }
+
+  mutating func setHintMatches(_ matches: [HintMatch]) {
+    guard subMode == .hint else { return }
+    hint?.allMatches = matches
+    applyHintFilter()
+  }
+
+  /// Rebuild `matches` + `labels` from `allMatches` using current `filter`.
+  private mutating func applyHintFilter() {
+    guard var h = hint else { return }
+    let filtered: [HintMatch]
+    if let f = h.filter {
+      filtered = h.allMatches.filter { $0.kind == f }
+    } else {
+      filtered = h.allMatches
+    }
+    h.matches = filtered
+    h.labels = HintLabels.generate(count: filtered.count, alphabet: h.alphabet)
+    h.typedPrefix = ""
+    hint = h
+  }
+
+  /// Cycle hint filter in priority order (highest first), skipping kinds with zero matches.
+  mutating func cycleHintFilter() {
+    guard var h = hint, h.source == .patterns else { return }
+    let order: [HintKind?] = [
+      nil, .url, .email, .uuid, .path, .hash, .ipv4, .ipv6, .envVar, .number, .quoted, .codeSpan,
+    ]
+    let startIdx = order.firstIndex(where: { $0 == h.filter }) ?? 0
+    for step in 1...order.count {
+      let candidate = order[(startIdx + step) % order.count]
+      if candidate == nil || h.allMatches.contains(where: { $0.kind == candidate }) {
+        h.filter = candidate
+        hint = h
+        applyHintFilter()
+        return
+      }
+    }
+  }
+
+  private mutating func handleHintKey(key: Character) -> [CopyModeAction] {
+    // Tab cycles filter (patterns source only).
+    if key == "\t" {
+      guard hint?.source == .patterns else { return [] }
+      cycleHintFilter()
+      return [.cursorMoved]  // forces overlay re-render
+    }
+
+    guard var h = hint else { return [] }
+
+    let lower = Character(key.lowercased())
+    if !lower.isLetter { return exitHintCleanly() }
+
+    if h.typedPrefix.isEmpty {
+      if let idx = h.labels.firstIndex(where: { $0 == String(lower) }) {
+        return executeHint(at: idx, typedUppercase: key.isUppercase)
+      }
+      let hasPrefix = h.labels.contains(where: { $0.count == 2 && $0.first == lower })
+      if hasPrefix {
+        h.typedPrefix = String(lower)
+        hint = h
+        return [.hintInput(key)]
+      }
+      return exitHintCleanly()
+    } else {
+      let target = h.typedPrefix + String(lower)
+      if let idx = h.labels.firstIndex(where: { $0 == target }) {
+        return executeHint(at: idx, typedUppercase: key.isUppercase)
+      }
+      return exitHintCleanly()
+    }
+  }
+
+  private mutating func executeHint(at index: Int, typedUppercase: Bool) -> [CopyModeAction] {
+    guard let h = hint, index < h.matches.count else { return exitHintCleanly() }
+    let match = h.matches[index]
+
+    // Action swap is driven by the *last* typed character's case.
+    // For 2-char labels the second char carries the signal.
+    // lowercase → h.action (default from entry key); uppercase → h.uppercaseAction (from config)
+    let action: HintAction = typedUppercase ? h.uppercaseAction : h.action
+
+    subMode = .normal
+    hint = nil
+
+    let emitted: CopyModeAction
+    switch action {
+    case .copy: emitted = .copyText(match.text)
+    case .open: emitted = .openItem(match.text)
+    }
+    return [emitted, .exitHintMode, .exitCopyMode]
+  }
+
+  private mutating func exitHintCleanly() -> [CopyModeAction] {
+    let direct = hint?.enteredDirectly ?? false
+    subMode = .normal
+    hint = nil
+    if direct {
+      return [.exitHintMode, .exitCopyMode]
+    }
+    return [.exitHintMode, .enterSubMode(.normal)]
   }
 
   // MARK: - Continuation

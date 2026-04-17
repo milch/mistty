@@ -7,6 +7,7 @@ enum CopySubMode: Equatable {
   case visualBlock
   case searchForward
   case searchReverse
+  case hint
 }
 
 enum FindCharKind: Equatable {
@@ -48,6 +49,64 @@ struct ContinuationState: Equatable {
   let remaining: Int
 }
 
+// MARK: - Phase 3: Hint mode
+
+enum HintAction: Equatable, Sendable {
+  case copy
+  case open
+}
+
+enum HintSource: Equatable, Sendable {
+  case patterns
+  case lines
+}
+
+enum HintKind: Equatable, Sendable {
+  case url
+  case email
+  case uuid
+  case path
+  case hash
+  case ipv4
+  case ipv6
+  case envVar
+  case number
+  case quoted
+  case codeSpan
+  case line
+}
+
+struct HintRange: Equatable {
+  let startRow: Int
+  /// UTF-16 code-unit offset into the line.
+  let startCol: Int
+  let endRow: Int  // inclusive
+  /// UTF-16 code-unit offset into the line (inclusive).
+  let endCol: Int
+}
+
+struct HintMatch: Equatable {
+  let range: HintRange
+  let text: String
+  let kind: HintKind
+}
+
+struct HintState: Equatable {
+  let action: HintAction           // default action from entry key
+  let source: HintSource
+  var allMatches: [HintMatch] = [] // unfiltered detector output
+  var matches: [HintMatch]         // filtered & labeled subset (bottom→top, left→right)
+  var labels: [String]             // index-aligned with matches
+  var typedPrefix: String = ""     // "" or single char
+  var uppercaseAction: HintAction = .open
+  var alphabet: String = "asdfghjkl"
+  /// True if copy mode was entered together with hint mode (cmd+shift+y).
+  /// Escape / mismatch exits copy mode entirely rather than falling back to it.
+  var enteredDirectly: Bool = false
+  /// Active filter. nil = all kinds shown. Tab cycles.
+  var filter: HintKind? = nil
+}
+
 enum CopyModeAction: Equatable {
   case cursorMoved
   case updateSelection
@@ -64,6 +123,12 @@ enum CopyModeAction: Equatable {
   case needsContinuation
   case searchNext
   case searchPrev
+  case enterHintMode(HintAction, HintSource)
+  case hintInput(Character)
+  case exitHintMode
+  case copyText(String)
+  case openItem(String)
+  case requestHintScan
 }
 
 struct ScrollbarState: Equatable {

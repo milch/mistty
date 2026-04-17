@@ -40,9 +40,17 @@ struct CopyModeHelpOverlay: View {
   ]
 
   private let actionHints: [(key: String, label: String)] = [
-    ("y", "yank selection"),
+    ("y", "yank sel / hints"),
     ("g?", "toggle this help"),
     ("Esc", "exit copy mode"),
+  ]
+
+  private let hintHints: [(key: String, label: String)] = [
+    ("y", "yank hints (copy)"),
+    ("o", "yank hints (open)"),
+    ("Y", "line hints"),
+    ("A-Z", "swap copy/open"),
+    ("Esc/misc", "exit hints"),
   ]
 
   var body: some View {
@@ -57,6 +65,7 @@ struct CopyModeHelpOverlay: View {
         hintColumn(title: "Search", hints: searchHints)
         hintColumn(title: "Scrolling", hints: scrollHints)
         hintColumn(title: "Actions", hints: actionHints)
+        hintColumn(title: "Hints", hints: hintHints)
       }
     }
     .font(.system(size: 11, design: .monospaced))

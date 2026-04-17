@@ -75,6 +75,11 @@ struct MisttyApp: App {
         }
         .keyboardShortcut("c", modifiers: [.command, .shift])
 
+        Button("Yank Hints") {
+          NotificationCenter.default.post(name: .misttyYankHints, object: nil)
+        }
+        .keyboardShortcut("y", modifiers: [.command, .shift])
+
         Divider()
 
         Button("Rename Tab") {
@@ -180,10 +185,12 @@ extension Notification.Name {
   static let misttyRenameTab = Notification.Name("misttyRenameTab")
   static let misttyWindowMode = Notification.Name("misttyWindowMode")
   static let misttyCopyMode = Notification.Name("misttyCopyMode")
+  static let misttyYankHints = Notification.Name("misttyYankHints")
   static let misttyPopupToggle = Notification.Name("misttyPopupToggle")
   static let misttyFocusTabByIndex = Notification.Name("misttyFocusTabByIndex")
   static let misttyNextTab = Notification.Name("misttyNextTab")
   static let misttyPrevTab = Notification.Name("misttyPrevTab")
   static let misttyNextSession = Notification.Name("misttyNextSession")
   static let misttyPrevSession = Notification.Name("misttyPrevSession")
+  static let misttyScrollChanged = Notification.Name("misttyScrollChanged")
 }

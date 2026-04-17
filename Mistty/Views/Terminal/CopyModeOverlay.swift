@@ -47,6 +47,18 @@ struct CopyModeOverlay: View {
           y: gridOffsetY + CGFloat(state.cursorRow) * cellHeight
         )
 
+      // Hint overlay
+      if state.isHinting, let hint = state.hint {
+        CopyModeHintOverlay(
+          hint: hint,
+          viewportRows: state.rows,
+          viewportCols: state.cols,
+          cellWidth: cellWidth,
+          cellHeight: cellHeight
+        )
+        .offset(x: gridOffsetX, y: gridOffsetY)
+      }
+
       // Mode indicator
       VStack {
         Spacer()
@@ -59,12 +71,7 @@ struct CopyModeOverlay: View {
               .padding(.vertical, 2)
               .background(Color.blue.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
           } else {
-            Text(modeIndicatorText)
-              .font(.system(size: 11, weight: .bold, design: .monospaced))
-              .foregroundStyle(.white)
-              .padding(.horizontal, 8)
-              .padding(.vertical, 2)
-              .background(Color.orange.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+            CopyModeHints(state: state)
           }
           Spacer()
         }
@@ -92,19 +99,6 @@ struct CopyModeOverlay: View {
     return "\(prefix)\(state.searchQuery)\u{2588}\(matchInfo)"
   }
 
-  private var modeIndicatorText: String {
-    switch state.subMode {
-    case .normal:
-      if let idx = state.searchMatchIndex, let total = state.searchMatchTotal {
-        return "-- COPY --  [\(idx)/\(total)]"
-      }
-      return "-- COPY --"
-    case .visual: return "-- VISUAL --"
-    case .visualLine: return "-- VISUAL LINE --"
-    case .visualBlock: return "-- VISUAL BLOCK --"
-    case .searchForward, .searchReverse: return ""
-    }
-  }
 }
 
 struct SelectionHighlightView: View {
