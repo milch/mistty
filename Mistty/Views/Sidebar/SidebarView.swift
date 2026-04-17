@@ -11,6 +11,7 @@ struct SidebarView: View {
       }
     }
     .listStyle(.sidebar)
+    .padding(.top, 28)
     .frame(width: width)
     .overlay(alignment: .trailing) {
       SidebarDragHandle(width: $width)
