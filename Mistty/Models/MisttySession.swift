@@ -5,6 +5,7 @@ import Foundation
 final class MisttySession: Identifiable {
   let id: Int
   var name: String
+  var customName: String?
   let directory: URL
   var sshCommand: String?
   private(set) var tabs: [MisttyTab] = []
@@ -22,11 +23,14 @@ final class MisttySession: Identifiable {
   private(set) var popupIDGenerator: () -> Int
 
   init(
-    id: Int, name: String, directory: URL, exec: String? = nil, tabIDGenerator: @escaping () -> Int,
+    id: Int, name: String, directory: URL, exec: String? = nil,
+    customName: String? = nil,
+    tabIDGenerator: @escaping () -> Int,
     paneIDGenerator: @escaping () -> Int, popupIDGenerator: @escaping () -> Int
   ) {
     self.id = id
     self.name = name
+    self.customName = customName
     self.directory = directory
     self.tabIDGenerator = tabIDGenerator
     self.paneIDGenerator = paneIDGenerator
