@@ -39,4 +39,10 @@ enum ProcessIcon {
     let firstToken = title.split(separator: " ").first.map(String.init) ?? title
     return firstToken.isEmpty ? nil : firstToken
   }
+
+  @MainActor
+  static func glyph(forSession session: MisttySession) -> Character {
+    if session.sshCommand != nil { return sshGlyph }
+    return glyph(forProcessTitle: session.activeTab?.activePane?.processTitle)
+  }
 }
