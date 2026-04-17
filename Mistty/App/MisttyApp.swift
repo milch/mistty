@@ -32,6 +32,7 @@ struct MisttyApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView(store: store)
+        .ignoresSafeArea(.container, edges: .top)
         .onAppear {
           if ipcListener == nil {
             let service = MisttyIPCService(store: store)
