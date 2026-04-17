@@ -124,13 +124,16 @@ struct ContentView: View {
   private var mainContent: some View {
     HStack(spacing: 0) {
       if sidebarVisible {
-        SidebarView(
-          store: store,
-          width: Binding(
-            get: { CGFloat(sidebarWidth) },
-            set: { sidebarWidth = Double($0) }
-          ))
-        Divider()
+        HStack(spacing: 0) {
+          SidebarView(
+            store: store,
+            width: Binding(
+              get: { CGFloat(sidebarWidth) },
+              set: { sidebarWidth = Double($0) }
+            ))
+          Divider()
+        }
+        .transition(.move(edge: .leading))
       }
 
       Group {

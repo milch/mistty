@@ -30,7 +30,9 @@ struct MisttyApp: App {
         Divider()
 
         Button("Toggle Sidebar") {
-          sidebarVisible.toggle()
+          withAnimation(.easeInOut(duration: 0.18)) {
+            sidebarVisible.toggle()
+          }
         }
         .keyboardShortcut("s", modifiers: .command)
 
