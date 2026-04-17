@@ -192,4 +192,5 @@ extension Notification.Name {
   static let misttyPrevTab = Notification.Name("misttyPrevTab")
   static let misttyNextSession = Notification.Name("misttyNextSession")
   static let misttyPrevSession = Notification.Name("misttyPrevSession")
+  static let misttyScrollChanged = Notification.Name("misttyScrollChanged")
 }

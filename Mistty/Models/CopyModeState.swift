@@ -101,6 +101,11 @@ struct CopyModeState {
     // Hint submode
     if subMode == .hint {
       if keyCode == 53 { return handleEscape() }  // Escape works
+      if modifiers.contains(.control) {
+        // Let paging (Ctrl-d/u/f/b) fall through to normal handling so the
+        // viewport scrolls and the hint overlay re-scans.
+        return handleNormalKey(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
+      }
       return handleHintKey(key: key)
     }
 

@@ -56,6 +56,13 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .misttyYankHints)) { _ in
         handleYankHints()
       }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyScrollChanged)) { _ in
+        guard var state = store.activeSession?.activeTab?.copyModeState,
+              state.isHinting,
+              let source = state.hint?.source else { return }
+        populateHintMatches(&state, source: source)
+        store.activeSession?.activeTab?.copyModeState = state
+      }
       .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
         handleCloseTab()
       }
