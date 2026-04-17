@@ -19,6 +19,9 @@ let package = Package(
             ],
             path: "Mistty",
             exclude: ["Resources/Info.plist"],
+            resources: [
+                .process("Resources/Fonts"),
+            ],
             linkerSettings: [
                 .linkedLibrary("c++"),
                 .linkedFramework("Carbon"),
