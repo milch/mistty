@@ -3,6 +3,25 @@
 # Default recipe
 default: build
 
+# Re-render app icon from assets/AppIcon.svg → Mistty/Resources/AppIcon.icns.
+# Requires: magick (nix devshell), iconutil (macOS).
+icon:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SVG="assets/AppIcon.svg"
+    OUT="Mistty/Resources/AppIcon.icns"
+    ICONSET="build/AppIcon.iconset"
+    rm -rf "$ICONSET"
+    mkdir -p "$ICONSET"
+    for spec in 16:icon_16x16.png 32:icon_16x16@2x.png 32:icon_32x32.png 64:icon_32x32@2x.png \
+                128:icon_128x128.png 256:icon_128x128@2x.png 256:icon_256x256.png \
+                512:icon_256x256@2x.png 512:icon_512x512.png 1024:icon_512x512@2x.png; do
+      size=${spec%%:*}; name=${spec##*:}
+      magick -background none "$SVG" -resize ${size}x${size} "$ICONSET/$name"
+    done
+    iconutil -c icns "$ICONSET" -o "$OUT"
+    echo "Icon: $OUT"
+
 # Build the app (debug)
 build:
     swift build
@@ -38,6 +57,7 @@ bundle: build
     swift build --target MisttyCLI
     cp .build/debug/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
+    cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
 
@@ -52,6 +72,7 @@ bundle-release: build-release
     swift build --target MisttyCLI -c release
     cp .build/release/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
+    cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
 

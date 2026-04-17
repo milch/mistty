@@ -18,7 +18,7 @@ let package = Package(
                 .product(name: "TOMLKit", package: "TOMLKit"),
             ],
             path: "Mistty",
-            exclude: ["Resources/Info.plist"],
+            exclude: ["Resources/Info.plist", "Resources/AppIcon.icns"],
             linkerSettings: [
                 .linkedLibrary("c++"),
                 .linkedFramework("Carbon"),

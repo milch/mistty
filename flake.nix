@@ -29,6 +29,7 @@
           buildInputs = [
             zigPkg
             pkgs.git
+            pkgs.imagemagick   # icon recipe: SVG → PNG iconset
           ];
 
           shellHook = ''
