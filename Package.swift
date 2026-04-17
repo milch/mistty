@@ -7,6 +7,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/LebJe/TOMLKit", from: "0.6.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     ],
     targets: [
         .target(name: "MisttyShared", path: "MisttyShared"),
@@ -47,8 +48,13 @@ let package = Package(
         ),
         .testTarget(
             name: "MisttyTests",
-            dependencies: ["Mistty", "MisttyShared"],
-            path: "MisttyTests"
+            dependencies: [
+                "Mistty",
+                "MisttyShared",
+                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+            ],
+            path: "MisttyTests",
+            exclude: ["Snapshots/__Snapshots__"]
         )
     ]
 )
