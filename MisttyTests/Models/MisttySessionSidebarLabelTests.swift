@@ -37,9 +37,11 @@ final class MisttySessionSidebarLabelTests: XCTestCase {
   }
 
   func test_activePaneCWDBasename() {
-    let dir = URL(fileURLWithPath: "/Users/me/Developer/proj")
-    let s = makeSession(directory: dir)
-    XCTAssertEqual(s.sidebarLabel, "proj")
+    let sessionDir = URL(fileURLWithPath: "/Users/me/Developer/proj")
+    let paneDir = URL(fileURLWithPath: "/tmp/deep/nested/runtime")
+    let s = makeSession(directory: sessionDir)
+    s.activeTab?.activePane?.directory = paneDir
+    XCTAssertEqual(s.sidebarLabel, "runtime")
   }
 
   func test_fallsBackToSessionDirectoryBasename() {
@@ -47,5 +49,21 @@ final class MisttySessionSidebarLabelTests: XCTestCase {
     let s = makeSession(directory: dir)
     s.activeTab?.activePane?.directory = nil
     XCTAssertEqual(s.sidebarLabel, "other")
+  }
+
+  func test_sshCommandWithNoHostFallsThroughToCWD() {
+    let s = makeSession(
+      directory: URL(fileURLWithPath: "/Users/me/Developer/proj"),
+      sshCommand: "ssh -p 22"
+    )
+    XCTAssertEqual(s.sidebarLabel, "proj")
+  }
+
+  func test_emptyCustomNameFallsThroughToCWD() {
+    let s = makeSession(
+      customName: "",
+      directory: URL(fileURLWithPath: "/Users/me/Developer/proj")
+    )
+    XCTAssertEqual(s.sidebarLabel, "proj")
   }
 }

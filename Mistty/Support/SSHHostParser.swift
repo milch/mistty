@@ -10,8 +10,9 @@ import Foundation
 /// whole token.
 enum SSHHostParser {
   private static let flagsTakingValue: Set<String> = [
-    "-p", "-o", "-i", "-l", "-F", "-J", "-b", "-c", "-D",
-    "-e", "-E", "-I", "-L", "-m", "-O", "-Q", "-R", "-S", "-w",
+    "-B", "-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i",
+    "-J", "-L", "-l", "-m", "-O", "-o", "-p", "-Q", "-R",
+    "-S", "-W", "-w",
   ]
 
   static func host(from command: String) -> String? {

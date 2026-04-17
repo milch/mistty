@@ -30,4 +30,16 @@ final class SSHHostParserTests: XCTestCase {
   func test_noHostReturnsNil() {
     XCTAssertNil(SSHHostParser.host(from: "ssh -p 22"))
   }
+
+  func test_withStdioForwarding() {
+    XCTAssertEqual(SSHHostParser.host(from: "ssh -W internal:22 bastion"), "bastion")
+  }
+
+  func test_attachedValueFormShort() {
+    XCTAssertEqual(SSHHostParser.host(from: "ssh -p2222 mybox"), "mybox")
+  }
+
+  func test_attachedValueFormLong() {
+    XCTAssertEqual(SSHHostParser.host(from: "ssh -oPort=22 mybox"), "mybox")
+  }
 }
