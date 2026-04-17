@@ -50,28 +50,20 @@ struct SessionManagerView: View {
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(Array(vm.filteredItems.enumerated()), id: \.element.id) { index, item in
-              HStack {
+              HStack(spacing: 8) {
+                Image(systemName: item.symbolName)
+                  .font(.system(size: 13))
+                  .frame(width: 16, height: 16)
+                  .foregroundStyle(index == vm.selectedIndex ? Color.accentColor : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                  if case .newSession = item {
-                    HStack(spacing: 4) {
-                      Image(systemName: "plus.circle")
-                        .foregroundStyle(.secondary)
-                        .font(.system(size: 12))
-                      Text(item.displayName)
-                        .font(.system(size: 13))
-                        .lineLimit(1)
-                    }
-                  } else {
-                    let matchResult = vm.matchResults[item.id]
-                    HighlightedText(
-                      text: item.displayName,
-                      indices: Set(matchResult?.displayNameIndices ?? [])
-                    )
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                  }
+                  let matchResult = vm.matchResults[item.id]
+                  HighlightedText(
+                    text: item.displayName,
+                    indices: Set(matchResult?.displayNameIndices ?? [])
+                  )
+                  .font(.system(size: 13))
+                  .lineLimit(1)
                   if let subtitle = item.subtitle {
-                    let matchResult = vm.matchResults[item.id]
                     HighlightedText(
                       text: subtitle,
                       indices: Set(matchResult?.subtitleIndices ?? [])
