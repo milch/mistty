@@ -170,6 +170,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   // MARK: - Full window
 
   func test_contentView_fullWindow() {
+    UserDefaults.standard.set(true, forKey: "sidebarVisible")
+
     let store = SessionStore()
 
     // First session: two tabs so the tab bar is visible.
@@ -199,6 +201,81 @@ final class ChromePolishSnapshotTests: XCTestCase {
       of: host(view, size: CGSize(width: 1200, height: 800)),
       as: .image(size: CGSize(width: 1200, height: 800)),
       named: "content-view-full-window"
+    )
+  }
+
+  func test_contentView_sidebarOpen_singleTab() {
+    UserDefaults.standard.set(true, forKey: "sidebarVisible")
+
+    let store = SessionStore()
+    let s1 = store.createSession(
+      name: "mistty",
+      directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
+    s1.activeTab?.activePane?.processTitle = "nvim"
+    s1.activeTab?.title = "nvim — mistty"
+
+    let s2 = store.createSession(
+      name: "prod",
+      directory: FileManager.default.homeDirectoryForCurrentUser)
+    s2.sshCommand = "ssh manu@prod.example.com"
+
+    store.activeSession = s1  // s1 has 1 tab → tab bar hidden
+
+    let view = ContentView(store: store)
+      .frame(width: 1200, height: 800)
+
+    assertSnapshot(
+      of: host(view, size: CGSize(width: 1200, height: 800)),
+      as: .image(size: CGSize(width: 1200, height: 800)),
+      named: "content-view-sidebar-open-single-tab"
+    )
+  }
+
+  func test_contentView_sidebarClosed_singleTab() {
+    UserDefaults.standard.set(false, forKey: "sidebarVisible")
+
+    let store = SessionStore()
+    let s1 = store.createSession(
+      name: "mistty",
+      directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
+    s1.activeTab?.activePane?.processTitle = "nvim"
+    s1.activeTab?.title = "nvim — mistty"
+
+    store.activeSession = s1
+
+    let view = ContentView(store: store)
+      .frame(width: 1200, height: 800)
+
+    assertSnapshot(
+      of: host(view, size: CGSize(width: 1200, height: 800)),
+      as: .image(size: CGSize(width: 1200, height: 800)),
+      named: "content-view-sidebar-closed-single-tab"
+    )
+  }
+
+  func test_contentView_sidebarClosed_multipleTabs() {
+    UserDefaults.standard.set(false, forKey: "sidebarVisible")
+
+    let store = SessionStore()
+    let s1 = store.createSession(
+      name: "mistty",
+      directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
+    s1.activeTab?.activePane?.processTitle = "nvim"
+    s1.activeTab?.title = "nvim — mistty"
+    s1.addTab()
+    s1.tabs.last?.title = "zsh"
+    s1.tabs.last?.activePane?.processTitle = "zsh"
+    s1.activeTab = s1.tabs.first
+
+    store.activeSession = s1
+
+    let view = ContentView(store: store)
+      .frame(width: 1200, height: 800)
+
+    assertSnapshot(
+      of: host(view, size: CGSize(width: 1200, height: 800)),
+      as: .image(size: CGSize(width: 1200, height: 800)),
+      named: "content-view-sidebar-closed-multi-tab"
     )
   }
 }
