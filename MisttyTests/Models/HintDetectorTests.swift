@@ -100,9 +100,9 @@ final class HintDetectorTests: XCTestCase {
   func test_line_source_nonAscii_startsAtFirstNonWhitespace() {
     let matches = HintDetector.detect(lines: ["  😀 hello"], source: .lines)
     XCTAssertEqual(matches.count, 1)
-    // Two spaces trimmed → startCol = 2 (UTF-16). 😀 spans 2 UTF-16 units.
-    // end is "o" of hello. Full text = "😀 hello".
-    XCTAssertEqual(matches[0].range.startCol, 2)
-    XCTAssertEqual(matches[0].text, "😀 hello")
+    // Pill always starts at col 0; text includes leading whitespace through last non-whitespace.
+    // 😀 spans 2 UTF-16 units; full text = "  😀 hello".
+    XCTAssertEqual(matches[0].range.startCol, 0)
+    XCTAssertEqual(matches[0].text, "  😀 hello")
   }
 }

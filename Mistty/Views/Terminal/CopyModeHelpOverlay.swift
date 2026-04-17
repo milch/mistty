@@ -40,7 +40,7 @@ struct CopyModeHelpOverlay: View {
   ]
 
   private let actionHints: [(key: String, label: String)] = [
-    ("y", "yank selection"),
+    ("y", "yank sel / hints"),
     ("g?", "toggle this help"),
     ("Esc", "exit copy mode"),
   ]

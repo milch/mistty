@@ -342,12 +342,19 @@ struct ContentView: View {
   }
 
   private func handleYankHints() {
+    if store.activeSession?.activeTab?.copyModeState?.isHinting == true { return }
     guard let tab = store.activeSession?.activeTab else { return }
     if !tab.isCopyModeActive {
       enterCopyMode()
     }
     guard var state = store.activeSession?.activeTab?.copyModeState else { return }
-    state.applyHintEntry(action: .copy, source: .patterns)
+    let config = MisttyConfig.load()
+    state.applyHintEntry(
+      action: .copy,
+      source: .patterns,
+      uppercaseAction: config.copyModeHints.uppercaseAction,
+      alphabet: config.copyModeHints.alphabet
+    )
     populateHintMatches(&state, source: .patterns)
     store.activeSession?.activeTab?.copyModeState = state
   }
@@ -747,7 +754,13 @@ struct ContentView: View {
             populateHintMatches(&state, source: source)
           }
         case .enterHintMode(let action, let source):
-          state.applyHintEntry(action: action, source: source)
+          let cfg = MisttyConfig.load()
+          state.applyHintEntry(
+            action: action,
+            source: source,
+            uppercaseAction: cfg.copyModeHints.uppercaseAction,
+            alphabet: cfg.copyModeHints.alphabet
+          )
         case .requestHintScan:
           let source = state.hint?.source ?? .patterns
           populateHintMatches(&state, source: source)
@@ -1058,7 +1071,7 @@ struct ContentView: View {
 
   private func populateHintMatches(_ state: inout CopyModeState, source: HintSource) {
     let matches = scanViewportForHints(source: source)
-    let alphabet = MisttyConfig.load().copyModeHints.alphabet
+    let alphabet = state.hint?.alphabet ?? "asdfghjkl"
     state.setHintMatches(matches, alphabet: alphabet)
   }
 

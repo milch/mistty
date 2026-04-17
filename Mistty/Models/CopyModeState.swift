@@ -561,9 +561,22 @@ struct CopyModeState {
 
   // MARK: - Hint mode
 
-  mutating func applyHintEntry(action: HintAction, source: HintSource) {
+  mutating func applyHintEntry(
+    action: HintAction,
+    source: HintSource,
+    uppercaseAction: HintAction = .open,
+    alphabet: String = "asdfghjkl"
+  ) {
     subMode = .hint
-    hint = HintState(action: action, source: source, matches: [], labels: [])
+    anchor = nil
+    hint = HintState(
+      action: action,
+      source: source,
+      matches: [],
+      labels: [],
+      uppercaseAction: uppercaseAction,
+      alphabet: alphabet
+    )
   }
 
   mutating func setHintMatches(_ matches: [HintMatch], alphabet: String) {
@@ -605,8 +618,8 @@ struct CopyModeState {
 
     // Action swap is driven by the *last* typed character's case.
     // For 2-char labels the second char carries the signal.
-    let baseAction = h.action
-    let action: HintAction = typedUppercase ? (baseAction == .copy ? .open : .copy) : baseAction
+    // lowercase → h.action (default from entry key); uppercase → h.uppercaseAction (from config)
+    let action: HintAction = typedUppercase ? h.uppercaseAction : h.action
 
     subMode = .normal
     hint = nil

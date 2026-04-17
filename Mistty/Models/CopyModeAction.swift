@@ -92,11 +92,13 @@ struct HintMatch: Equatable {
 }
 
 struct HintState: Equatable {
-  let action: HintAction       // default action from entry key
+  let action: HintAction           // default action from entry key
   let source: HintSource
-  var matches: [HintMatch]     // bottom→top, left→right
-  var labels: [String]         // index-aligned with matches
-  var typedPrefix: String = "" // "" or single char
+  var matches: [HintMatch]         // bottom→top, left→right
+  var labels: [String]             // index-aligned with matches
+  var typedPrefix: String = ""     // "" or single char
+  var uppercaseAction: HintAction = .open
+  var alphabet: String = "asdfghjkl"
 }
 
 enum CopyModeAction: Equatable {

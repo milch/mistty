@@ -103,11 +103,11 @@ final class CopyModeHintIntegrationTests: XCTestCase {
           lastLabel.count == 2 else {
       return XCTFail("expected 2-char label")
     }
-    let actions = simulate(&state, reader: reader, keys: String(lastLabel))
+    // Capture expected text before simulating — state.hint is cleared by the keystroke.
     let expected = state.hint?.matches.last?.text ?? ""
-    // state has been mutated by the final keystroke — compare against captured before
+    let actions = simulate(&state, reader: reader, keys: String(lastLabel))
     XCTAssertTrue(actions.contains(where: {
-      if case .copyText = $0 { return true } else { return false }
+      if case .copyText(let t) = $0 { return t == expected } else { return false }
     }), "should have copied last match (\(expected))")
   }
 
@@ -120,8 +120,8 @@ final class CopyModeHintIntegrationTests: XCTestCase {
     )
     state.applyHintEntry(action: .copy, source: .lines)
     state.setHintMatches(matches, alphabet: "asdf")
-    // Only 2 non-empty lines; label "a" should point at bottom line ("second")
+    // Only 2 non-empty lines; label "a" should point at bottom line (includes leading whitespace)
     let actions = simulate(&state, reader: reader, keys: "a")
-    XCTAssertTrue(actions.contains(.copyText("second")))
+    XCTAssertTrue(actions.contains(.copyText("  second")))
   }
 }

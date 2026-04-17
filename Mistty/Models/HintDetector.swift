@@ -30,6 +30,7 @@ enum HintDetector {
   private static func lineMatch(line: String, row: Int) -> HintMatch? {
     let ns = line as NSString
     let len = ns.length
+    // Detect if line is all-whitespace (skip it).
     var first = 0
     while first < len {
       let s = ns.substring(with: NSRange(location: first, length: 1))
@@ -43,9 +44,10 @@ enum HintDetector {
       if !s.first!.isWhitespace { break }
       last -= 1
     }
-    let text = ns.substring(with: NSRange(location: first, length: last - first + 1))
+    // Include leading whitespace in text and pill starts at column 0.
+    let text = ns.substring(with: NSRange(location: 0, length: last + 1))
     return HintMatch(
-      range: HintRange(startRow: row, startCol: first, endRow: row, endCol: last),
+      range: HintRange(startRow: row, startCol: 0, endRow: row, endCol: last),
       text: text,
       kind: .line
     )
