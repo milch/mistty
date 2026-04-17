@@ -15,10 +15,6 @@ struct ContentView: View {
   @State private var ctrlNavMonitor: Any?
   @State private var closeMonitor: Any?
 
-  private var trafficLightLeadingInset: CGFloat {
-    sidebarVisible ? 0 : 72
-  }
-
   private var tabBarVisible: Bool {
     (store.activeSession?.tabs.count ?? 0) > 1
   }
@@ -202,7 +198,6 @@ struct ContentView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       }
-      .padding(.leading, trafficLightLeadingInset)
       .padding(.top, contentTopInset)
     }
     .onAppear {
