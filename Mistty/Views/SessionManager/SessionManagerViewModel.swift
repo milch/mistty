@@ -347,10 +347,13 @@ final class SessionManagerViewModel {
           try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         }
 
-        let name =
-          query.contains("/") || query.hasPrefix("~")
-          ? directory.lastPathComponent : query
-        store.createSession(name: name, directory: directory)
+        let isPathLike = query.contains("/") || query.hasPrefix("~")
+        let name = isPathLike ? directory.lastPathComponent : query
+        // When the user typed a plain-text name (not a path, not SSH),
+        // record it as customName so the sidebar shows it verbatim even if
+        // the active pane's CWD changes later.
+        let customName: String? = isPathLike ? nil : query
+        store.createSession(name: name, directory: directory, customName: customName)
       }
 
       // Record frecency for the new session
