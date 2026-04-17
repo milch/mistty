@@ -5,7 +5,7 @@ import Foundation
 /// Glyph codepoints source: Nerd Fonts v3 cheat sheet.
 /// https://www.nerdfonts.com/cheat-sheet
 enum ProcessIcon {
-  static let fontName = "SymbolsNerdFontMono"
+  static let fontName = "SymbolsNFM"
 
   static let fallbackGlyph: Character = "\u{f489}"  // nf-dev-terminal
   static let sshGlyph: Character = "\u{f0c2e}"  // nf-md-ssh

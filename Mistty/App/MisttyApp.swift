@@ -15,17 +15,18 @@ struct MisttyApp: App {
   }
 
   private static func registerBundledFonts() {
-    guard
-      let url = Bundle.module.url(
-        forResource: "SymbolsNerdFontMono-Regular",
-        withExtension: "ttf")
+    guard let url = Bundle.module.url(
+      forResource: "SymbolsNerdFontMono-Regular",
+      withExtension: "ttf")
     else {
+      NSLog("[Mistty] SymbolsNerdFontMono-Regular.ttf missing from bundle")
       assertionFailure("SymbolsNerdFontMono-Regular.ttf missing from bundle")
       return
     }
     var error: Unmanaged<CFError>?
     if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
       let err = error?.takeRetainedValue()
+      NSLog("[Mistty] Failed to register bundled Nerd Font: \(String(describing: err))")
       assertionFailure("Failed to register bundled Nerd Font: \(String(describing: err))")
     }
   }
