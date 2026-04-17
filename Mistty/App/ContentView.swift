@@ -138,8 +138,15 @@ struct ContentView: View {
           let tab = session.activeTab
         {
           VStack(spacing: 0) {
-            TabBarView(session: session)
-            Divider()
+            if session.tabs.count > 1 {
+              TabBarView(session: session)
+                .transition(.asymmetric(
+                  insertion: .move(edge: .top).combined(with: .opacity),
+                  removal: .move(edge: .top).combined(with: .opacity)
+                ))
+              Divider()
+                .transition(.opacity)
+            }
             let joinPickTabNames = session.tabs
               .filter { $0.id != tab.id }
               .map { $0.displayTitle }
@@ -182,6 +189,7 @@ struct ContentView: View {
               }
             }
           }
+          .animation(.easeInOut(duration: 0.15), value: session.tabs.count)
         } else {
           VStack(spacing: 12) {
             Text("No active session")
@@ -194,6 +202,7 @@ struct ContentView: View {
         }
       }
       .padding(.leading, trafficLightLeadingInset)
+      .padding(.top, contentTopInset)
     }
     .onAppear {
       DispatchQueue.main.async {
