@@ -1,0 +1,80 @@
+# Mistty configuration — sample file with all defaults.
+#
+# Copy to ~/.config/mistty/config.toml and edit to taste.
+# Values shown are the built-in defaults; remove a key to revert.
+
+# Terminal font size in points.
+font_size = 13
+
+# Font family. Any monospace font installed on the system works.
+# Examples: "JetBrainsMono Nerd Font", "SF Mono", "Menlo".
+font_family = "monospace"
+
+# Cursor shape.
+# Options: "block" | "bar" (beam) | "underline"
+cursor_style = "block"
+
+# Scrollback buffer size, in lines.
+scrollback_lines = 10000
+
+# Show the session sidebar on launch.
+# Toggle at runtime with cmd+\.
+sidebar_visible = true
+
+# ─── Popup windows ───────────────────────────────────────────────────────────
+# Transient, floating terminal windows bound to a keyboard shortcut.
+# Add one [[popup]] block per popup. No defaults ship.
+#
+# [[popup]]
+# name = "scratch"                  # display name
+# command = "zsh"                   # command to run
+# shortcut = "cmd+shift+space"      # modifiers: cmd/command, shift, opt/option/alt, ctrl/control
+# width = 0.8                       # fraction of screen width  (0.1–1.0)
+# height = 0.8                      # fraction of screen height (0.1–1.0)
+# close_on_exit = true              # close popup when command exits
+
+# ─── SSH ─────────────────────────────────────────────────────────────────────
+# Command used when opening SSH sessions from the session manager.
+[ssh]
+# Default command. Host is appended as the final argument.
+default_command = "ssh"
+
+# Per-host overrides. Match by exact hostname or regex; first match wins.
+#
+# [[ssh.host]]
+# hostname = "prod.example.com"
+# command = "ssh -J bastion.example.com"
+#
+# [[ssh.host]]
+# regex = "^.*\\.staging\\.example\\.com$"
+# command = "ssh -o StrictHostKeyChecking=no"
+
+# ─── Copy mode hints ─────────────────────────────────────────────────────────
+[copy_mode.hints]
+# Letters used to label hints. Order matters — earlier letters are assigned first.
+# Pick keys that are easy to reach on your layout.
+alphabet = "asdfghjkl"
+
+# Action triggered by uppercase hint letters. Lowercase triggers the other.
+# Options: "open" | "copy"
+#   "open" → uppercase opens URL/file, lowercase copies to clipboard
+#   "copy" → uppercase copies, lowercase opens
+uppercase_action = "open"
+
+# ─── Window chrome ───────────────────────────────────────────────────────────
+[ui]
+# When to show the tab bar.
+# Options:
+#   "always"                                — tab bar always visible
+#   "never"                                 — tab bar never visible
+#   "when_sidebar_hidden"                   — only when the sidebar is collapsed
+#   "when_sidebar_hidden_and_multiple_tabs" — sidebar collapsed AND more than one tab
+#   "when_multiple_tabs"                    — whenever there is more than one tab (default)
+tab_bar_mode = "when_multiple_tabs"
+
+# Title bar appearance.
+# Options:
+#   "always"             — standard macOS title bar above content
+#   "hidden_with_lights" — title bar hidden, traffic lights float over content (default)
+#   "hidden_no_lights"   — title bar hidden, no traffic lights (use cmd+w / cmd+q to close)
+title_bar_style = "hidden_with_lights"
