@@ -16,14 +16,14 @@ Add to your neovim config:
 
 ```lua
 require('smart-splits').setup({
-  at_edge = function(direction)
+  at_edge = function(opts)
     local dir_map = {
       left = 'left',
       right = 'right',
       up = 'up',
       down = 'down',
     }
-    os.execute('mistty-cli pane focus --direction ' .. dir_map[direction])
+    os.execute('mistty-cli pane focus --direction ' .. dir_map[opts.direction])
   end
 })
 
