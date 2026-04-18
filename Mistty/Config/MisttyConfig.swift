@@ -33,6 +33,51 @@ struct CopyModeHintsConfig: Sendable, Equatable {
   var uppercaseAction: HintAction = .open
 }
 
+enum TabBarMode: String, Sendable, Equatable, CaseIterable {
+  case always = "always"
+  case never = "never"
+  case whenSidebarHidden = "when_sidebar_hidden"
+  case whenSidebarHiddenAndMultipleTabs = "when_sidebar_hidden_and_multiple_tabs"
+  case whenMultipleTabs = "when_multiple_tabs"
+
+  func shouldShow(sidebarVisible: Bool, tabCount: Int) -> Bool {
+    switch self {
+    case .always: return true
+    case .never: return false
+    case .whenSidebarHidden: return !sidebarVisible
+    case .whenSidebarHiddenAndMultipleTabs: return !sidebarVisible && tabCount > 1
+    case .whenMultipleTabs: return tabCount > 1
+    }
+  }
+}
+
+enum TitleBarStyle: String, Sendable, Equatable, CaseIterable {
+  case always = "always"
+  case hiddenWithLights = "hidden_with_lights"
+  case hiddenNoLights = "hidden_no_lights"
+
+  var hasTrafficLights: Bool {
+    switch self {
+    case .always: return false  // lights are inside the title bar, not over content
+    case .hiddenWithLights: return true
+    case .hiddenNoLights: return false
+    }
+  }
+
+  var contentExtendsUnderTitleBar: Bool {
+    self != .always
+  }
+
+  var shouldHideWindowButtons: Bool {
+    self == .hiddenNoLights
+  }
+}
+
+struct UIConfig: Sendable, Equatable {
+  var tabBarMode: TabBarMode = .whenMultipleTabs
+  var titleBarStyle: TitleBarStyle = .hiddenWithLights
+}
+
 struct MisttyConfig: Sendable, Equatable {
   var fontSize: Int = 13
   var fontFamily: String = "monospace"
@@ -42,6 +87,7 @@ struct MisttyConfig: Sendable, Equatable {
   var popups: [PopupDefinition] = []
   var ssh: SSHConfig = SSHConfig()
   var copyModeHints: CopyModeHintsConfig = CopyModeHintsConfig()
+  var ui: UIConfig = UIConfig()
 
   static let `default` = MisttyConfig()
 
@@ -92,6 +138,16 @@ struct MisttyConfig: Sendable, Equatable {
         case "copy": config.copyModeHints.uppercaseAction = .copy
         default: break
         }
+      }
+    }
+    if let uiTable = table["ui"]?.table {
+      if let mode = uiTable["tab_bar_mode"]?.string,
+         let parsed = TabBarMode(rawValue: mode) {
+        config.ui.tabBarMode = parsed
+      }
+      if let style = uiTable["title_bar_style"]?.string,
+         let parsed = TitleBarStyle(rawValue: style) {
+        config.ui.titleBarStyle = parsed
       }
     }
     return config
@@ -164,6 +220,16 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("alphabet = \"\(tomlEscape(copyModeHints.alphabet))\"")
       let ua = copyModeHints.uppercaseAction == .open ? "open" : "copy"
       lines.append("uppercase_action = \"\(ua)\"")
+    }
+    if ui != UIConfig() {
+      lines.append("")
+      lines.append("[ui]")
+      if ui.tabBarMode != UIConfig().tabBarMode {
+        lines.append("tab_bar_mode = \"\(ui.tabBarMode.rawValue)\"")
+      }
+      if ui.titleBarStyle != UIConfig().titleBarStyle {
+        lines.append("title_bar_style = \"\(ui.titleBarStyle.rawValue)\"")
+      }
     }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
   }
