@@ -2,19 +2,26 @@
 #
 # Copy to ~/.config/mistty/config.toml and edit to taste.
 # Values shown are the built-in defaults; remove a key to revert.
+#
+# To inspect what Mistty actually passes through to ghostty, run
+# `mistty-cli config show` or watch stdout when launching Mistty from a
+# terminal.
 
-# Terminal font size in points.
+# Terminal font size in points. Forwarded to ghostty as `font-size`.
 font_size = 13
 
 # Font family. Any monospace font installed on the system works.
 # Examples: "JetBrainsMono Nerd Font", "SF Mono", "Menlo".
-font_family = "monospace"
+# Forwarded to ghostty as `font-family`. Leave empty to let ghostty pick.
+font_family = ""
 
-# Cursor shape.
+# Cursor shape. Forwarded to ghostty as `cursor-style`.
 # Options: "block" | "bar" (beam) | "underline"
 cursor_style = "block"
 
-# Scrollback buffer size, in lines.
+# Scrollback buffer size, in lines. Forwarded to ghostty as
+# `scrollback-limit = lines * 1024` bytes — matches ghostty's default of
+# ~10 000 lines / 10 MiB.
 scrollback_lines = 10000
 
 # Show the session sidebar on launch.
@@ -100,3 +107,108 @@ title_bar_style = "hidden_with_lights"
 
 # Border thickness in points. Default 1.
 # pane_border_width = 1
+
+# ─── Ghostty passthrough ─────────────────────────────────────────────────────
+# Any ghostty config key placed under [ghostty] is forwarded verbatim to
+# libghostty. Keys use ghostty's kebab-case names exactly as they appear in
+# `ghostty +show-config` / the ghostty docs.
+#
+# This is the same as dropping options into ~/.config/mistty/ghostty.conf —
+# use whichever you prefer. Mistty-managed keys (see below) are always
+# ignored here, and Mistty's own [ui] keys (content_padding_*,
+# pane_border_*) take precedence.
+#
+# Keys that Mistty MANAGES and will IGNORE in this table:
+#   window-* (width/height/position/decoration/save-state/title/theme/…),
+#   split-divider-color, split-preserve-zoom, split-inherit-working-directory,
+#   tab-inherit-working-directory, keybind, key-remap, command,
+#   initial-command, working-directory, quick-terminal-*, macos-titlebar-style,
+#   macos-window-buttons, macos-window-shadow, macos-icon*,
+#   macos-non-native-fullscreen, macos-applescript, macos-shortcuts,
+#   macos-dock-drop-behavior, macos-hidden, background-opacity,
+#   background-blur, config-file, auto-update*,
+#   quit-after-last-window-closed*, undo-timeout, command-palette-entry,
+#   focus-follows-mouse, maximize, fullscreen, title.
+# Configure those through Mistty's own options (e.g. ui.title_bar_style,
+# ui.content_padding_*, ui.pane_border_*) instead.
+[ghostty]
+# ── Theme / colors ──
+# Named theme ships with ghostty — run `ghostty +list-themes` to browse.
+# `theme` is emitted first so your own overrides win.
+# theme = "Dracula"
+# background = "#1e1e2e"
+# foreground = "#cdd6f4"
+# cursor-color = "#f5e0dc"
+# selection-background = "#585b70"
+# palette = ["0=#45475a", "1=#f38ba8"]   # repeatable — use TOML array
+# Note: alphabetical ordering means custom `palette` entries would be
+# emitted BEFORE `palette-generate`, so don't combine the two.
+
+# ── Font rendering ──
+# Override Mistty's top-level font_* keys by editing THOSE (they map to
+# font-family / font-size). Use these for advanced font control.
+# font-family-bold = "JetBrainsMono Nerd Font Bold"
+# font-family-italic = "Monaspace Radon Var"
+# font-feature = ["-calt", "-liga"]      # disable ligatures
+# font-variation = ["wght=450"]
+# font-thicken = true                    # macOS: thicker strokes
+
+# ── Display / rendering ──
+# Display-P3 wide-gamut rendering on supported screens.
+# window-colorspace = "display-p3"
+# alpha-blending = "linear-corrected"
+# minimum-contrast = 1.1
+# window-vsync = true
+
+# ── Transparency / blur (macOS) ──
+# Mistty's NSWindow is fully opaque today — `background-opacity`,
+# `background-opacity-cells` and `background-blur` are DENIED and will be
+# ignored with a diagnostic. Once Mistty wires the window layer, these will
+# become supported.
+
+# ── Cursor ──
+# cursor-style-blink = true
+# cursor-opacity = 0.9
+# cursor-click-to-move = true
+
+# ── Mouse ──
+# mouse-hide-while-typing = true
+# mouse-scroll-multiplier = 1.0
+
+# ── Selection / clipboard ──
+# copy-on-select = "clipboard"
+# selection-clear-on-typing = true
+# clipboard-paste-protection = true
+# clipboard-read = "ask"
+# clipboard-write = "allow"
+
+# ── Shell integration ──
+# shell-integration = "detect"
+# shell-integration-features = "cursor,sudo,title"
+# env = ["FOO=bar", "BAZ=qux"]
+
+# ── Bell / notifications ──
+# bell-features = "audio,attention"
+# bell-audio-volume = 0.5
+# desktop-notifications = true
+# notify-on-command-finish = "unfocused"
+
+# ── Links ──
+# link-url = true
+# link-previews = "osc8"
+
+# ── macOS input ──
+# macos-option-as-alt = true             # or "left" / "right"
+# macos-auto-secure-input = true
+
+# ── Misc ──
+# scrollbar = "never"
+# term = "xterm-ghostty"
+# confirm-close-surface = true
+# osc-color-report-format = "16-bit"
+# resize-overlay = "after-first"
+
+# ── Custom shader ──
+# Path or list of paths to GLSL shader files. Use ~ or absolute paths.
+# custom-shader = "~/.config/ghostty/shaders/retro.glsl"
+# custom-shader-animation = true

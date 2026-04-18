@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyKit
+import MisttyShared
 
 // MARK: - C Callbacks (top-level, no captures)
 
@@ -141,6 +142,12 @@ final class GhosttyAppManager {
   nonisolated(unsafe) private(set) var app: ghostty_app_t?
   nonisolated(unsafe) private var config: ghostty_config_t?
 
+  /// Retains the KVO subscription that pushes macOS appearance changes to
+  /// ghostty. Without this, ghostty never learns the system is dark/light —
+  /// our `window-theme = system` default has nothing to resolve against, so
+  /// themes like `"light:X,dark:Y"` always fall back to the light variant.
+  private var appearanceObserver: NSKeyValueObservation?
+
   private init() {
     // 1. Initialize ghostty
     let initResult = ghostty_init(0, nil)
@@ -164,13 +171,42 @@ final class GhosttyAppManager {
       }
     }
 
-    // Apply Mistty [ui] padding settings by writing a temp ghostty config
-    // file and loading it after the user file, so Mistty-managed keys win.
-    let paddingLines = MisttyConfig.load().ui.ghosttyPaddingConfigLines
-    if !paddingLines.isEmpty {
+    // Apply Mistty-managed ghostty settings (top-level font/cursor, the
+    // [ghostty] passthrough table, and [ui] padding) by writing a temp
+    // ghostty config file and loading it after the user's file, so these
+    // keys override whatever was in ~/.config/mistty/ghostty.conf.
+    let misttyConfig: MisttyConfig
+    do {
+      misttyConfig = try MisttyConfig.loadThrowing()
+    } catch {
+      misttyConfig = .default
+      // Surface parse errors to the user so they know why Mistty launched
+      // with defaults instead of their config. Scheduled on main after the
+      // app finishes launching so the alert isn't eaten.
+      let message = describeTOMLParseError(error)
+      DispatchQueue.main.async {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Mistty could not parse config.toml"
+        alert.informativeText =
+          "Falling back to defaults.\n\n\(message)\n\nFile: \(MisttyConfig.configURL.path)"
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+      }
+    }
+
+    let ghosttyLines = misttyConfig.ghosttyConfigLines
+    print("[mistty] resolved ghostty config:")
+    if ghosttyLines.isEmpty {
+      print("  (no Mistty-managed keys — using ghostty defaults + ~/.config/mistty/ghostty.conf)")
+    } else {
+      for line in ghosttyLines { print("  \(line)") }
+    }
+
+    if !ghosttyLines.isEmpty {
       let tempURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier).conf")
-      let contents = paddingLines.joined(separator: "\n") + "\n"
+      let contents = ghosttyLines.joined(separator: "\n") + "\n"
       if (try? contents.write(to: tempURL, atomically: true, encoding: .utf8)) != nil {
         tempURL.path.withCString { path in
           ghostty_config_load_file(cfg, path)
@@ -207,6 +243,21 @@ final class GhosttyAppManager {
     self.app = ghostty_app_new(&runtimeCfg, cfg)
     if self.app == nil {
       print("[GhosttyAppManager] ghostty_app_new failed")
+    }
+
+    // 5. Push the current (and future) macOS appearance to ghostty. `.initial`
+    // fires synchronously so the first surface already sees the right scheme.
+    self.appearanceObserver = NSApplication.shared.observe(
+      \.effectiveAppearance,
+      options: [.new, .initial]
+    ) { [weak self] _, change in
+      guard let self, let app = self.app else { return }
+      guard let appearance = change.newValue else { return }
+      let scheme: ghostty_color_scheme_e =
+        appearance.name.rawValue.lowercased().contains("dark")
+          ? GHOSTTY_COLOR_SCHEME_DARK
+          : GHOSTTY_COLOR_SCHEME_LIGHT
+      ghostty_app_set_color_scheme(app, scheme)
     }
   }
 

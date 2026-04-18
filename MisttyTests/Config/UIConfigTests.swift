@@ -191,6 +191,171 @@ final class UIConfigTests: XCTestCase {
     XCTAssertEqual(config.ui.paneBorderWidth, UIConfig().paneBorderWidth)
   }
 
+  // MARK: Ghostty passthrough
+
+  func test_ghosttyPassthrough_scalars() throws {
+    let toml = """
+      [ghostty]
+      theme = "Dracula"
+      mouse-hide-while-typing = true
+      minimum-contrast = 2
+      cursor-opacity = 0.9
+      """
+    let config = try MisttyConfig.parse(toml)
+    // `theme` is emitted first so later overrides win; remaining keys follow
+    // the underlying table's alphabetical order.
+    XCTAssertEqual(
+      config.ghostty.configLines,
+      [
+        "theme = Dracula",
+        "cursor-opacity = 0.9",
+        "minimum-contrast = 2",
+        "mouse-hide-while-typing = true",
+      ]
+    )
+  }
+
+  func test_ghosttyPassthrough_arrays_expandToMultipleLines() throws {
+    let toml = """
+      [ghostty]
+      font-family = ["JetBrainsMono Nerd Font", "SF Mono"]
+      palette = ["0=#45475a", "1=#f38ba8"]
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(
+      config.ghostty.configLines,
+      [
+        "font-family = JetBrainsMono Nerd Font",
+        "font-family = SF Mono",
+        "palette = 0=#45475a",
+        "palette = 1=#f38ba8",
+      ]
+    )
+  }
+
+  func test_ghosttyPassthrough_deniedKeys_areDropped() throws {
+    let toml = """
+      [ghostty]
+      theme = "Dracula"
+      keybind = "cmd+shift+a=new_window"
+      key-remap = "a=b"
+      window-decoration = "none"
+      macos-titlebar-style = "hidden"
+      window-padding-x = 4
+      background-opacity = 0.9
+      background-blur = 20
+      command = "zsh"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ghostty.configLines, ["theme = Dracula"])
+  }
+
+  func test_ghosttyConfigLines_mergesTopLevelFontAndPadding() throws {
+    let toml = """
+      font_size = 15
+      font_family = "JetBrainsMono Nerd Font"
+      cursor_style = "bar"
+      scrollback_lines = 20000
+
+      [ui]
+      content_padding_x = [4, 8]
+
+      [ghostty]
+      theme = "Dracula"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(
+      config.ghosttyConfigLines,
+      [
+        "window-theme = system",
+        "font-size = 15",
+        "font-family = JetBrainsMono Nerd Font",
+        "cursor-style = bar",
+        "scrollback-limit = \(20000 * 1024)",
+        "theme = Dracula",
+        "window-padding-x = 4,8",
+      ]
+    )
+  }
+
+  func test_ghosttyConfigLines_alwaysEmitsWindowThemeSystem() throws {
+    // Ghostty picks between `light:` / `dark:` variants of multi-theme
+    // strings based on `window-theme`. Mistty forces it to follow macOS
+    // appearance even when the user sets no other keys.
+    let config = try MisttyConfig.parse("")
+    XCTAssertEqual(config.ghosttyConfigLines, ["window-theme = system"])
+  }
+
+  func test_ghosttyConfigLines_userCanOverrideWindowTheme() throws {
+    let toml = """
+      [ghostty]
+      window-theme = "light"
+      """
+    let config = try MisttyConfig.parse(toml)
+    // Default emitted first, user-supplied value emitted after → ghostty's
+    // last-wins semantics honour the user's override.
+    XCTAssertEqual(
+      config.ghosttyConfigLines,
+      ["window-theme = system", "window-theme = light"]
+    )
+  }
+
+  func test_ghosttyConfigLines_emitsExplicitlySetValuesEvenIfMatchingDisplayDefault() throws {
+    // Before the Optional refactor, `font_family = "monospace"` in the user's
+    // config would be silently dropped because it equalled the built-in
+    // default. Now the optional storage distinguishes "not set" from "set to
+    // the display-default value", and explicit values are always forwarded.
+    let toml = """
+      font_family = ""
+      cursor_style = "block"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(
+      config.ghosttyConfigLines,
+      ["window-theme = system", "font-family = ", "cursor-style = block"]
+    )
+  }
+
+  func test_ghosttyPassthrough_preservesTomlTypeAcrossSaveRoundTrip() throws {
+    // String-that-looks-like-a-bool / string-that-looks-like-a-number must
+    // survive save() without being coerced to the wrong TOML type. Reviewer
+    // flagged this as the top bug in the previous implementation.
+    let toml = """
+      [ghostty]
+      term = "true"
+      enquiry-response = "123"
+      cursor-opacity = 0.9
+      mouse-hide-while-typing = true
+      """
+    let parsed = try MisttyConfig.parse(toml)
+    let tempURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mistty-config-roundtrip-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+    try parsed.save(to: tempURL)
+
+    let reParsed = try MisttyConfig.parse(
+      String(contentsOf: tempURL, encoding: .utf8))
+    XCTAssertEqual(parsed.ghostty, reParsed.ghostty)
+    // Explicitly verify the types weren't coerced.
+    let termEntry = reParsed.ghostty.entries.first { $0.key == "term" }
+    XCTAssertEqual(termEntry?.kind, .string)
+    XCTAssertEqual(termEntry?.value, "true")
+    let enquiryEntry = reParsed.ghostty.entries.first { $0.key == "enquiry-response" }
+    XCTAssertEqual(enquiryEntry?.kind, .string)
+    XCTAssertEqual(enquiryEntry?.value, "123")
+    let opacityEntry = reParsed.ghostty.entries.first { $0.key == "cursor-opacity" }
+    XCTAssertEqual(opacityEntry?.kind, .double)
+  }
+
+  func test_loadThrowing_reportsParseErrors() throws {
+    let tempURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mistty-config-bad-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+    try "this is not valid = toml = at = all\n".write(
+      to: tempURL, atomically: true, encoding: .utf8)
+    XCTAssertThrowsError(try MisttyConfig.loadThrowing(from: tempURL))
+  }
+
   func test_parseUIConfig_invalidValues_fallBackToDefault() throws {
     let toml = """
       [ui]

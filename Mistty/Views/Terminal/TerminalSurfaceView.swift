@@ -18,9 +18,21 @@ final class TerminalSurfaceView: NSView {
   /// Stores the initial input string to keep it alive for the C pointer.
   private var initialInputString: String?
 
+  /// Mistty's configured leading content padding, captured at init so
+  /// `gridMetrics()` doesn't do disk IO on every frame. Config changes
+  /// currently require a restart, so caching is safe.
+  private let configuredPaddingX: CGFloat
+  private let configuredPaddingY: CGFloat
+  private let configuredPaddingBalance: Bool
+
   init(
     frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, initialInput: String? = nil
   ) {
+    let ui = MisttyConfig.load().ui
+    self.configuredPaddingX = CGFloat(ui.contentPaddingX?.first ?? Int(Self.ghosttyDefaultPadding))
+    self.configuredPaddingY = CGFloat(ui.contentPaddingY?.first ?? Int(Self.ghosttyDefaultPadding))
+    self.configuredPaddingBalance = ui.contentPaddingBalance ?? false
+
     super.init(frame: frame)
     wantsLayer = true
 
@@ -142,6 +154,27 @@ final class TerminalSurfaceView: NSView {
     var offsetY: CGFloat
   }
 
+  /// Ghostty's default padding when `window-padding-x/y` isn't set.
+  private static let ghosttyDefaultPadding: CGFloat = 2.0
+
+  /// Leading padding inside the surface, in points — i.e. the offset of the
+  /// grid's top-left from `(0, 0)`. Matches what ghostty does based on
+  /// Mistty's configured `window-padding-x/y` values, plus half the leftover
+  /// pixels when `window-padding-balance` is on.
+  private func leadingPadding(surfaceSize: ghostty_surface_size_s, scale: CGFloat)
+    -> (x: CGFloat, y: CGFloat)
+  {
+    if configuredPaddingBalance {
+      let gridWidth = CGFloat(surfaceSize.cell_width_px) * CGFloat(surfaceSize.columns) / scale
+      let gridHeight = CGFloat(surfaceSize.cell_height_px) * CGFloat(surfaceSize.rows) / scale
+      return (
+        max(0, bounds.width - gridWidth) / 2,
+        max(0, bounds.height - gridHeight) / 2
+      )
+    }
+    return (configuredPaddingX, configuredPaddingY)
+  }
+
   /// Returns cell dimensions in points and the grid's top-left offset within the view.
   func gridMetrics() -> GridMetrics? {
     guard let surface else { return nil }
@@ -150,10 +183,8 @@ final class TerminalSurfaceView: NSView {
     let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
     let cellW = CGFloat(size.cell_width_px) / scale
     let cellH = CGFloat(size.cell_height_px) / scale
-    // Ghostty positions the grid at (window-padding-x, window-padding-y) from top-left.
-    // Default window-padding is 2pt on all sides. Blank space goes to bottom/right.
-    let padding: CGFloat = 2.0
-    return GridMetrics(cellWidth: cellW, cellHeight: cellH, offsetX: padding, offsetY: padding)
+    let (padX, padY) = leadingPadding(surfaceSize: size, scale: scale)
+    return GridMetrics(cellWidth: cellW, cellHeight: cellH, offsetX: padX, offsetY: padY)
   }
 
   /// Returns the terminal cursor position as (row, col) in grid coordinates.

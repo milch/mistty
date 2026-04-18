@@ -4,9 +4,14 @@ import XCTest
 
 final class MisttyConfigTests: XCTestCase {
   func test_defaultConfig() {
+    // Top-level ghostty passthrough keys store `nil` by default so that
+    // nothing is emitted to ghostty unless the user explicitly asks.
+    // Settings UI surfaces the display defaults via `resolvedXxx`.
     let config = MisttyConfig.default
-    XCTAssertEqual(config.fontSize, 13)
-    XCTAssertEqual(config.fontFamily, "monospace")
+    XCTAssertNil(config.fontSize)
+    XCTAssertNil(config.fontFamily)
+    XCTAssertEqual(config.resolvedFontSize, MisttyConfig.defaultFontSize)
+    XCTAssertEqual(config.resolvedFontFamily, MisttyConfig.defaultFontFamily)
   }
 
   func test_parsesValidTOML() throws {
@@ -21,8 +26,10 @@ final class MisttyConfigTests: XCTestCase {
 
   func test_missingKeysUseDefaults() throws {
     let config = try MisttyConfig.parse("")
-    XCTAssertEqual(config.fontSize, 13)
-    XCTAssertEqual(config.fontFamily, "monospace")
+    XCTAssertNil(config.fontSize)
+    XCTAssertNil(config.fontFamily)
+    XCTAssertEqual(config.resolvedFontSize, MisttyConfig.defaultFontSize)
+    XCTAssertEqual(config.resolvedFontFamily, MisttyConfig.defaultFontFamily)
   }
 
   func test_invalidTOMLThrows() {

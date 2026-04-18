@@ -10,7 +10,13 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     ],
     targets: [
-        .target(name: "MisttyShared", path: "MisttyShared"),
+        .target(
+            name: "MisttyShared",
+            dependencies: [
+                .product(name: "TOMLKit", package: "TOMLKit"),
+            ],
+            path: "MisttyShared"
+        ),
         .executableTarget(
             name: "Mistty",
             dependencies: [

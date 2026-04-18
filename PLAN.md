@@ -27,10 +27,6 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 - There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
 - Configurable allowlist of processes that should be relaunched when restoring a layout, e.g. nvim, claude, ssh
 
-### Ghostty config
-
-- Ghostty config needs to be configurable too. At least some of the options, not all - those that control the UI, for example, don't apply for mistty, but things like rendering (e.g. display colorspace) do apply
-
 ### Keyboard shortcut configuration
 
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
@@ -196,3 +192,12 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Ghostty content padding exposed as `ui.content_padding_x`, `ui.content_padding_y` (int or [start, end]), `ui.content_padding_balance`. Values pass through to ghostty via a temp config file loaded after the user's `~/.config/mistty/ghostty.conf`
 - Pane split border configurable via `ui.pane_border_color` (hex `#rrggbb` / `#rrggbbaa`, falls back to `NSColor.separatorColor`) and `ui.pane_border_width` (points, default 1)
 - Annotated sample config at `docs/config-example.toml` covers every option
+
+### Ghostty config passthrough
+
+- `[ghostty]` table in `config.toml` forwards arbitrary ghostty keys (kebab-case) verbatim to libghostty via a temp file loaded after `~/.config/mistty/ghostty.conf`
+- Denylist in `GhosttyPassthroughConfig.deniedKeys` drops keys that would conflict with Mistty's own chrome / window / tab / split / keybind / lifecycle management (window-decoration, macos-titlebar-style, keybind, command, quick-terminal-*, split-divider-color, auto-update, …)
+- TOML scalars → one line; TOML arrays → one line per element (so repeatable keys like font-family / palette work)
+- `theme` is emitted before other passthrough keys so user overrides win over the theme's defaults; remaining keys follow alphabetical order
+- Top-level `font_size`, `font_family`, `cursor_style` in `config.toml` now flow through to ghostty when they differ from Mistty defaults (previously dead settings)
+- `[ui].content_padding_*` and `[ui].pane_border_*` still take precedence over anything under `[ghostty]`

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import MisttyShared
 import SwiftUI
 import TOMLKit
 
@@ -142,15 +143,53 @@ struct UIConfig: Sendable, Equatable {
 }
 
 struct MisttyConfig: Sendable, Equatable {
-  var fontSize: Int = 13
-  var fontFamily: String = "monospace"
-  var cursorStyle: String = "block"
-  var scrollbackLines: Int = 10000
+  /// UI-visible fallback values for the top-level ghostty passthrough keys
+  /// when the user hasn't set them. Used by `SettingsView` to populate
+  /// steppers / pickers; NOT emitted to ghostty on their own.
+  static let defaultFontSize: Int = 13
+  static let defaultFontFamily: String = ""
+  static let defaultCursorStyle: String = "block"
+  static let defaultScrollbackLines: Int = 10_000
+
+  /// When non-nil these are forwarded to ghostty. A nil value means "use
+  /// whatever ghostty's own default is" — which is crucially different from
+  /// "equal to Mistty's display default", so that a user who explicitly
+  /// writes `font_family = "monospace"` in `config.toml` still gets that
+  /// exact value passed through instead of being silently swallowed.
+  var fontSize: Int? = nil
+  var fontFamily: String? = nil
+  var cursorStyle: String? = nil
+  var scrollbackLines: Int? = nil
+
   var sidebarVisible: Bool = true
   var popups: [PopupDefinition] = []
   var ssh: SSHConfig = SSHConfig()
   var copyModeHints: CopyModeHintsConfig = CopyModeHintsConfig()
   var ui: UIConfig = UIConfig()
+  var ghostty: GhosttyPassthroughConfig = GhosttyPassthroughConfig()
+
+  /// Values to show in Settings UI / Stepper bindings. Read-only surface over
+  /// the optional storage.
+  var resolvedFontSize: Int { fontSize ?? Self.defaultFontSize }
+  var resolvedFontFamily: String { fontFamily ?? Self.defaultFontFamily }
+  var resolvedCursorStyle: String { cursorStyle ?? Self.defaultCursorStyle }
+  var resolvedScrollbackLines: Int { scrollbackLines ?? Self.defaultScrollbackLines }
+
+  /// Rendered ghostty config lines assembled via the shared resolver.
+  /// Top-level font/cursor first, then `[ghostty]` passthrough, then
+  /// `[ui].content_padding_*` — later lines override earlier ones.
+  var ghosttyConfigLines: [String] {
+    var resolved = GhosttyResolvedConfig()
+    resolved.fontSize = fontSize
+    resolved.fontFamily = fontFamily
+    resolved.cursorStyle = cursorStyle
+    resolved.scrollbackLines = scrollbackLines
+    resolved.passthrough = ghostty
+    resolved.contentPaddingX = ui.contentPaddingX
+    resolved.contentPaddingY = ui.contentPaddingY
+    resolved.contentPaddingBalance = ui.contentPaddingBalance
+    return resolved.configLines
+  }
 
   static let `default` = MisttyConfig()
 
@@ -225,6 +264,9 @@ struct MisttyConfig: Sendable, Equatable {
         config.ui.paneBorderWidth = w
       }
     }
+    if let ghosttyTable = table["ghostty"]?.table {
+      config.ghostty = GhosttyPassthroughConfig.parse(ghosttyTable)
+    }
     return config
   }
 
@@ -244,14 +286,27 @@ struct MisttyConfig: Sendable, Equatable {
     return nil
   }
 
-  static func load() -> MisttyConfig {
-    let configURL = FileManager.default
-      .homeDirectoryForCurrentUser
+  static var configURL: URL {
+    FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent(".config/mistty/config.toml")
-    guard let contents = try? String(contentsOf: configURL, encoding: .utf8) else {
+  }
+
+  /// Load and parse `config.toml`. Returns Mistty defaults when the file is
+  /// missing or empty; throws when the file exists but is malformed so that
+  /// the caller can surface the error to the user instead of silently
+  /// swallowing it.
+  static func loadThrowing(from url: URL = configURL) throws -> MisttyConfig {
+    guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
       return .default
     }
-    return (try? parse(contents)) ?? .default
+    return try parse(contents)
+  }
+
+  /// Convenience for callers that don't care about the parse error. Falls
+  /// back to defaults; prefer `loadThrowing` when you want to show the user
+  /// what went wrong.
+  static func load() -> MisttyConfig {
+    (try? loadThrowing()) ?? .default
   }
 
   /// Escape a string for safe TOML serialization.
@@ -261,21 +316,33 @@ struct MisttyConfig: Sendable, Equatable {
       .replacingOccurrences(of: "\"", with: "\\\"")
   }
 
-  func save() throws {
-    let configURL = FileManager.default
-      .homeDirectoryForCurrentUser
-      .appendingPathComponent(".config/mistty/config.toml")
+  /// Emit a passthrough value using its recorded TOML kind so the file
+  /// round-trips without coercion: `term = "true"` stays a string,
+  /// `background-opacity = 0.95` stays a float, etc.
+  private func formatPassthroughValue(_ entry: GhosttyPassthroughEntry) -> String {
+    switch entry.kind {
+    case .bool, .int, .double: return entry.value
+    case .string: return "\"\(tomlEscape(entry.value))\""
+    }
+  }
 
+  func save(to url: URL = configURL) throws {
     try FileManager.default.createDirectory(
-      at: configURL.deletingLastPathComponent(),
+      at: url.deletingLastPathComponent(),
       withIntermediateDirectories: true
     )
 
     var lines: [String] = []
-    lines.append("font_size = \(fontSize)")
-    lines.append("font_family = \"\(fontFamily)\"")
-    lines.append("cursor_style = \"\(cursorStyle)\"")
-    lines.append("scrollback_lines = \(scrollbackLines)")
+    if let size = fontSize { lines.append("font_size = \(size)") }
+    if let family = fontFamily {
+      lines.append("font_family = \"\(tomlEscape(family))\"")
+    }
+    if let cursor = cursorStyle {
+      lines.append("cursor_style = \"\(tomlEscape(cursor))\"")
+    }
+    if let scrollback = scrollbackLines {
+      lines.append("scrollback_lines = \(scrollback)")
+    }
     lines.append("sidebar_visible = \(sidebarVisible)")
     for popup in popups {
       lines.append("")
@@ -337,6 +404,27 @@ struct MisttyConfig: Sendable, Equatable {
         lines.append("pane_border_width = \(ui.paneBorderWidth)")
       }
     }
-    try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
+    if !ghostty.entries.isEmpty {
+      lines.append("")
+      lines.append("[ghostty]")
+      // Group entries by key in first-seen order so round-tripped arrays
+      // collapse back into a single TOML list assignment.
+      var order: [String] = []
+      var grouped: [String: [GhosttyPassthroughEntry]] = [:]
+      for e in ghostty.entries {
+        if grouped[e.key] == nil { order.append(e.key) }
+        grouped[e.key, default: []].append(e)
+      }
+      for key in order {
+        let values = grouped[key] ?? []
+        if values.count == 1 {
+          lines.append("\(key) = \(formatPassthroughValue(values[0]))")
+        } else {
+          let joined = values.map(formatPassthroughValue).joined(separator: ", ")
+          lines.append("\(key) = [\(joined)]")
+        }
+      }
+    }
+    try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
   }
 }

@@ -3,22 +3,51 @@ import SwiftUI
 struct SettingsView: View {
   @State private var config = MisttyConfig.load()
 
+  /// Bind a `Stepper`/`TextField`/`Picker` to an optional scalar on the
+  /// config, falling back to the shown default. Writes `nil` when the edited
+  /// value happens to equal the default so we don't churn the on-disk file
+  /// with redundant entries.
+  private func optionalBinding<Value: Equatable>(
+    _ keyPath: WritableKeyPath<MisttyConfig, Value?>,
+    default defaultValue: Value
+  ) -> Binding<Value> {
+    Binding(
+      get: { config[keyPath: keyPath] ?? defaultValue },
+      set: { new in
+        config[keyPath: keyPath] = (new == defaultValue) ? nil : new
+      }
+    )
+  }
+
   var body: some View {
     Form {
       Section("Font") {
-        TextField("Font Family", text: $config.fontFamily)
-        Stepper("Font Size: \(config.fontSize)", value: $config.fontSize, in: 8...36)
+        TextField(
+          "Font Family",
+          text: optionalBinding(\.fontFamily, default: MisttyConfig.defaultFontFamily)
+        )
+        Stepper(
+          "Font Size: \(config.resolvedFontSize)",
+          value: optionalBinding(\.fontSize, default: MisttyConfig.defaultFontSize),
+          in: 8...36
+        )
       }
 
       Section("Terminal") {
-        Picker("Cursor Style", selection: $config.cursorStyle) {
+        Picker(
+          "Cursor Style",
+          selection: optionalBinding(\.cursorStyle, default: MisttyConfig.defaultCursorStyle)
+        ) {
           Text("Block").tag("block")
           Text("Beam").tag("bar")
           Text("Underline").tag("underline")
         }
         Stepper(
-          "Scrollback Lines: \(config.scrollbackLines)",
-          value: $config.scrollbackLines, in: 0...100000, step: 1000)
+          "Scrollback Lines: \(config.resolvedScrollbackLines)",
+          value: optionalBinding(
+            \.scrollbackLines, default: MisttyConfig.defaultScrollbackLines),
+          in: 0...100000, step: 1000
+        )
       }
 
       Section("Appearance") {
