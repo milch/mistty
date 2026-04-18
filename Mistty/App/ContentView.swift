@@ -171,6 +171,8 @@ struct ContentView: View {
                   windowModeState: tab.windowModeState,
                   joinPickTabNames: joinPickTabNames,
                   paneCount: tab.panes.count,
+                  borderColor: config.ui.paneBorderColor,
+                  borderWidth: CGFloat(config.ui.paneBorderWidth),
                   onClosePane: { pane in closePane(pane) },
                   onSelectPane: { pane in tab.activePane = pane }
                 )

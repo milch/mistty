@@ -9,6 +9,8 @@ struct PaneLayoutView: View {
   var windowModeState: MisttyTab.WindowModeState = .inactive
   var joinPickTabNames: [String] = []
   var paneCount: Int = 1
+  var borderColor: Color = Color(NSColor.separatorColor)
+  var borderWidth: CGFloat = 1
   var onClosePane: ((MisttyPane) -> Void)?
   var onSelectPane: ((MisttyPane) -> Void)?
 
@@ -31,39 +33,35 @@ struct PaneLayoutView: View {
     case .split(let direction, let a, let b, let ratio):
       GeometryReader { geo in
         if direction == .horizontal {
-          HStack(spacing: 1) {
-            PaneLayoutView(
-              node: a, activePane: activePane, isWindowModeActive: isWindowModeActive,
-              copyModeState: copyModeState, copyModePaneID: copyModePaneID,
-              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane
-            )
-            .frame(width: geo.size.width * ratio)
-            Divider()
-            PaneLayoutView(
-              node: b, activePane: activePane, isWindowModeActive: isWindowModeActive,
-              copyModeState: copyModeState, copyModePaneID: copyModePaneID,
-              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane)
+          HStack(spacing: 0) {
+            child(a)
+              .frame(width: geo.size.width * ratio)
+            borderColor
+              .frame(width: borderWidth)
+            child(b)
           }
         } else {
-          VStack(spacing: 1) {
-            PaneLayoutView(
-              node: a, activePane: activePane, isWindowModeActive: isWindowModeActive,
-              copyModeState: copyModeState, copyModePaneID: copyModePaneID,
-              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane
-            )
-            .frame(height: geo.size.height * ratio)
-            Divider()
-            PaneLayoutView(
-              node: b, activePane: activePane, isWindowModeActive: isWindowModeActive,
-              copyModeState: copyModeState, copyModePaneID: copyModePaneID,
-              windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
-              paneCount: paneCount, onClosePane: onClosePane, onSelectPane: onSelectPane)
+          VStack(spacing: 0) {
+            child(a)
+              .frame(height: geo.size.height * ratio)
+            borderColor
+              .frame(height: borderWidth)
+            child(b)
           }
         }
       }
     }
+  }
+
+  @ViewBuilder
+  private func child(_ node: PaneLayoutNode) -> some View {
+    PaneLayoutView(
+      node: node, activePane: activePane, isWindowModeActive: isWindowModeActive,
+      copyModeState: copyModeState, copyModePaneID: copyModePaneID,
+      windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
+      paneCount: paneCount,
+      borderColor: borderColor, borderWidth: borderWidth,
+      onClosePane: onClosePane, onSelectPane: onSelectPane
+    )
   }
 }

@@ -92,3 +92,11 @@ title_bar_style = "hidden_with_lights"
 # When true, ghostty distributes leftover pixels as extra padding so the grid
 # stays centered within the surface. Maps to ghostty window-padding-balance.
 # content_padding_balance = true
+
+# Border between split panes. Accepts "#rrggbb" or "#rrggbbaa" (with or
+# without the leading #). When omitted, the system separator color is used
+# — this blends into the chrome and usually looks right.
+# pane_border_color = "#3a3a3a"
+
+# Border thickness in points. Default 1.
+# pane_border_width = 1

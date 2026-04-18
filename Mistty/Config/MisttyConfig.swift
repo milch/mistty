@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import TOMLKit
 
 struct SSHHostOverride: Sendable, Equatable {
@@ -108,6 +110,20 @@ struct UIConfig: Sendable, Equatable {
   /// ghostty `window-padding-balance`.
   var contentPaddingBalance: Bool? = nil
 
+  /// Hex string (`#rrggbb` or `#rrggbbaa`) for the border between split panes.
+  /// When nil, the system `NSColor.separatorColor` is used.
+  var paneBorderColorHex: String? = nil
+  /// Width of the border between split panes, in points.
+  var paneBorderWidth: Int = 1
+
+  /// Resolved border color between panes, with system-default fallback.
+  var paneBorderColor: Color {
+    if let hex = paneBorderColorHex, let color = HexColor.parse(hex) {
+      return color
+    }
+    return Color(NSColor.separatorColor)
+  }
+
   /// Ghostty-format config lines for the padding keys that the user has set.
   /// Suitable for writing to a temp file that `ghostty_config_load_file` reads.
   var ghosttyPaddingConfigLines: [String] {
@@ -200,6 +216,13 @@ struct MisttyConfig: Sendable, Equatable {
       config.ui.contentPaddingY = parsePadding(uiTable["content_padding_y"])
       if let balance = uiTable["content_padding_balance"]?.bool {
         config.ui.contentPaddingBalance = balance
+      }
+      if let hex = uiTable["pane_border_color"]?.string,
+         HexColor.isValid(hex) {
+        config.ui.paneBorderColorHex = hex
+      }
+      if let w = uiTable["pane_border_width"]?.int, w >= 0 {
+        config.ui.paneBorderWidth = w
       }
     }
     return config
@@ -306,6 +329,12 @@ struct MisttyConfig: Sendable, Equatable {
       }
       if let balance = ui.contentPaddingBalance {
         lines.append("content_padding_balance = \(balance)")
+      }
+      if let hex = ui.paneBorderColorHex {
+        lines.append("pane_border_color = \"\(hex)\"")
+      }
+      if ui.paneBorderWidth != UIConfig().paneBorderWidth {
+        lines.append("pane_border_width = \(ui.paneBorderWidth)")
       }
     }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)

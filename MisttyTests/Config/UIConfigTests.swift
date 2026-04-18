@@ -162,6 +162,35 @@ final class UIConfigTests: XCTestCase {
     XCTAssertTrue(UIConfig().ghosttyPaddingConfigLines.isEmpty)
   }
 
+  func test_parseUIConfig_paneBorder() throws {
+    let toml = """
+      [ui]
+      pane_border_color = "#3a3a3a"
+      pane_border_width = 2
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ui.paneBorderColorHex, "#3a3a3a")
+    XCTAssertEqual(config.ui.paneBorderWidth, 2)
+  }
+
+  func test_parseUIConfig_paneBorder_invalidHexIgnored() throws {
+    let toml = """
+      [ui]
+      pane_border_color = "not-a-color"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertNil(config.ui.paneBorderColorHex)
+  }
+
+  func test_parseUIConfig_paneBorder_negativeWidthIgnored() throws {
+    let toml = """
+      [ui]
+      pane_border_width = -3
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ui.paneBorderWidth, UIConfig().paneBorderWidth)
+  }
+
   func test_parseUIConfig_invalidValues_fallBackToDefault() throws {
     let toml = """
       [ui]
