@@ -1,35 +1,88 @@
+import ArgumentParser
 import Foundation
+import MisttyShared
 
-enum OutputFormat {
+enum OutputFormat: ExpressibleByArgument {
+    init?(argument: String) {
+        switch argument {
+        case "json": self = .json
+        case "human": self = .human
+        case "quiet": self = .quiet
+        default: return nil
+        }
+    }
     case human
     case json
+    case quiet
 
-    static func detect(forceJSON: Bool, forceHuman: Bool) -> OutputFormat {
-        if forceJSON { return .json }
-        if forceHuman { return .human }
-        return isatty(STDOUT_FILENO) != 0 ? .human : .json
+    static func detect() -> OutputFormat {
+        return isatty(STDOUT_FILENO) == 0 ? .quiet : .human
     }
+}
+
+struct GenericData: Codable {
+    let text: String
 }
 
 struct OutputFormatter {
     let format: OutputFormat
+    let encoder = JSONEncoder()
 
     init(format: OutputFormat) {
         self.format = format
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     }
 
-    func printJSON(_ data: Data) {
-        // Pretty-print the JSON
-        if let jsonObject = try? JSONSerialization.jsonObject(with: data),
-           let pretty = try? JSONSerialization.data(
-               withJSONObject: jsonObject,
-               options: [.prettyPrinted, .sortedKeys]
-           ),
-           let string = String(data: pretty, encoding: .utf8)
+    func print(_ data: Data) {
+        switch format {
+        case .human:
+            // In human mode, just print the text directly
+            if let text = String(data: data, encoding: .utf8) {
+                Swift.print(text)
+            }
+            break
+        case .json:
+            printJSON(GenericData(text: String(data: data, encoding: .utf8) ?? ""))
+            break
+        case .quiet: break
+        }
+    }
+
+    func print<T: PrintableByFormatter & Codable>(_ item: T) {
+        switch format {
+        case .human:
+            let header = T.formatHeader()
+            let row = item.formatRow()
+            printSingle(zip(header, row).map { ($0.0, $0.1) })
+            break
+        case .json:
+            printJSON(item)
+            break
+        case .quiet: break
+        }
+    }
+
+    func print<T: PrintableByFormatter & Codable>(_ item: [T]) {
+        switch format {
+        case .human:
+            let header = T.formatHeader()
+            let rows = item.map { $0.formatRow() }
+            printTable(headers: header, rows: rows)
+            break
+        case .json:
+            printJSON(item)
+            break
+        case .quiet: break
+        }
+    }
+
+    func printJSON(_ item: Codable) {
+        if let pretty = try? encoder.encode(item),
+            let string = String(data: pretty, encoding: .utf8)
         {
-            print(string)
-        } else if let raw = String(data: data, encoding: .utf8) {
-            print(raw)
+            Swift.print(string)
+        } else {
+            Swift.print(item)
         }
     }
 
@@ -48,11 +101,11 @@ struct OutputFormatter {
         let headerLine = headers.enumerated().map { i, h in
             h.padding(toLength: widths[i], withPad: " ", startingAt: 0)
         }.joined(separator: "  ")
-        print(headerLine)
+        Swift.print(headerLine)
 
         // Print separator
         let separator = widths.map { String(repeating: "-", count: $0) }.joined(separator: "  ")
-        print(separator)
+        Swift.print(separator)
 
         // Print rows
         for row in rows {
@@ -60,7 +113,7 @@ struct OutputFormatter {
                 let width = i < widths.count ? widths[i] : cell.count
                 return cell.padding(toLength: width, withPad: " ", startingAt: 0)
             }.joined(separator: "  ")
-            print(line)
+            Swift.print(line)
         }
     }
 
@@ -69,20 +122,23 @@ struct OutputFormatter {
         let maxKey = pairs.map { $0.0.count }.max() ?? 0
         for (key, value) in pairs {
             let paddedKey = key.padding(toLength: maxKey, withPad: " ", startingAt: 0)
-            print("\(paddedKey)  \(value)")
+            Swift.print("\(paddedKey)  \(value)")
         }
     }
 
     func printSuccess(_ message: String) {
         switch format {
         case .human:
-            print(message)
+            Swift.print(message)
         case .json:
-            print("{}")
+            Swift.print("{}")
+        case .quiet: break
         }
     }
 
-    static func printError(_ message: String) {
-        FileHandle.standardError.write(Data("Error: \(message)\n".utf8))
+    func printError(_ message: String) {
+        if format != .quiet {
+            FileHandle.standardError.write(Data("Error: \(message)\n".utf8))
+        }
     }
 }
