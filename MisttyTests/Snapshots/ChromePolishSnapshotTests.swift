@@ -278,4 +278,155 @@ final class ChromePolishSnapshotTests: XCTestCase {
       named: "content-view-sidebar-closed-multi-tab"
     )
   }
+
+  // MARK: - Matrix (TabBarMode x TitleBarStyle)
+
+  func test_matrix_always_always() {
+    assertMatrix(tabBarMode: .always, titleBarStyle: .always, testName: #function)
+  }
+  func test_matrix_always_hiddenWithLights() {
+    assertMatrix(tabBarMode: .always, titleBarStyle: .hiddenWithLights, testName: #function)
+  }
+  func test_matrix_always_hiddenNoLights() {
+    assertMatrix(tabBarMode: .always, titleBarStyle: .hiddenNoLights, testName: #function)
+  }
+
+  func test_matrix_never_always() {
+    assertMatrix(tabBarMode: .never, titleBarStyle: .always, testName: #function)
+  }
+  func test_matrix_never_hiddenWithLights() {
+    assertMatrix(tabBarMode: .never, titleBarStyle: .hiddenWithLights, testName: #function)
+  }
+  func test_matrix_never_hiddenNoLights() {
+    assertMatrix(tabBarMode: .never, titleBarStyle: .hiddenNoLights, testName: #function)
+  }
+
+  func test_matrix_whenSidebarHidden_always() {
+    assertMatrix(tabBarMode: .whenSidebarHidden, titleBarStyle: .always, testName: #function)
+  }
+  func test_matrix_whenSidebarHidden_hiddenWithLights() {
+    assertMatrix(
+      tabBarMode: .whenSidebarHidden, titleBarStyle: .hiddenWithLights, testName: #function)
+  }
+  func test_matrix_whenSidebarHidden_hiddenNoLights() {
+    assertMatrix(
+      tabBarMode: .whenSidebarHidden, titleBarStyle: .hiddenNoLights, testName: #function)
+  }
+
+  func test_matrix_whenSidebarHiddenAndMultipleTabs_always() {
+    assertMatrix(
+      tabBarMode: .whenSidebarHiddenAndMultipleTabs, titleBarStyle: .always, testName: #function)
+  }
+  func test_matrix_whenSidebarHiddenAndMultipleTabs_hiddenWithLights() {
+    assertMatrix(
+      tabBarMode: .whenSidebarHiddenAndMultipleTabs, titleBarStyle: .hiddenWithLights,
+      testName: #function)
+  }
+  func test_matrix_whenSidebarHiddenAndMultipleTabs_hiddenNoLights() {
+    assertMatrix(
+      tabBarMode: .whenSidebarHiddenAndMultipleTabs, titleBarStyle: .hiddenNoLights,
+      testName: #function)
+  }
+
+  func test_matrix_whenMultipleTabs_always() {
+    assertMatrix(tabBarMode: .whenMultipleTabs, titleBarStyle: .always, testName: #function)
+  }
+  func test_matrix_whenMultipleTabs_hiddenWithLights() {
+    assertMatrix(
+      tabBarMode: .whenMultipleTabs, titleBarStyle: .hiddenWithLights, testName: #function)
+  }
+  func test_matrix_whenMultipleTabs_hiddenNoLights() {
+    assertMatrix(
+      tabBarMode: .whenMultipleTabs, titleBarStyle: .hiddenNoLights, testName: #function)
+  }
+
+  // MARK: - Matrix helpers
+
+  private func assertMatrix(
+    tabBarMode: TabBarMode,
+    titleBarStyle: TitleBarStyle,
+    testName: String,
+    file: StaticString = #file,
+    line: UInt = #line
+  ) {
+    UserDefaults.standard.set(true, forKey: "sidebarVisible")
+
+    let store = SessionStore()
+    let s1 = store.createSession(
+      name: "mistty",
+      directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
+    s1.activeTab?.activePane?.processTitle = "nvim"
+    s1.activeTab?.title = "nvim — mistty"
+    s1.addTab()
+    s1.tabs[1].title = "zsh"
+    s1.tabs[1].activePane?.processTitle = "zsh"
+    s1.addTab()
+    s1.tabs[2].title = "claude"
+    s1.tabs[2].activePane?.processTitle = "claude"
+    s1.activeTab = s1.tabs[1]
+
+    let s2 = store.createSession(
+      name: "prod",
+      directory: FileManager.default.homeDirectoryForCurrentUser)
+    s2.sshCommand = "ssh manu@prod.example.com"
+
+    store.activeSession = s1
+
+    var ui = UIConfig()
+    ui.tabBarMode = tabBarMode
+    ui.titleBarStyle = titleBarStyle
+    var cfg = MisttyConfig.default
+    cfg.ui = ui
+
+    let view =
+      ContentView(store: store, config: cfg)
+      .applyTopSafeArea(style: titleBarStyle)
+      .overlay(alignment: .topLeading) {
+        chromeOverlay(style: titleBarStyle)
+      }
+      .frame(width: 1200, height: 800)
+
+    let snapshotName = "matrix-\(tabBarMode.rawValue)-\(titleBarStyle.rawValue)"
+    assertSnapshot(
+      of: host(view, size: CGSize(width: 1200, height: 800)),
+      as: .image(size: CGSize(width: 1200, height: 800)),
+      named: snapshotName,
+      file: file,
+      testName: testName,
+      line: line
+    )
+  }
+
+  @ViewBuilder
+  private func chromeOverlay(style: TitleBarStyle) -> some View {
+    switch style {
+    case .always:
+      ZStack(alignment: .leading) {
+        Rectangle()
+          .fill(Color(NSColor.windowBackgroundColor))
+          .frame(height: 28)
+          .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+          }
+        HStack(spacing: 8) {
+          Circle().fill(Color(red: 1.0, green: 0.37, blue: 0.34)).frame(width: 12, height: 12)
+          Circle().fill(Color(red: 1.0, green: 0.74, blue: 0.18)).frame(width: 12, height: 12)
+          Circle().fill(Color(red: 0.16, green: 0.78, blue: 0.25)).frame(width: 12, height: 12)
+        }
+        .padding(.leading, 10)
+      }
+      .frame(maxWidth: .infinity)
+    case .hiddenWithLights:
+      HStack(spacing: 8) {
+        Circle().fill(Color(red: 1.0, green: 0.37, blue: 0.34)).frame(width: 12, height: 12)
+        Circle().fill(Color(red: 1.0, green: 0.74, blue: 0.18)).frame(width: 12, height: 12)
+        Circle().fill(Color(red: 0.16, green: 0.78, blue: 0.25)).frame(width: 12, height: 12)
+      }
+      .padding(.leading, 10)
+      .padding(.top, 10)
+      .allowsHitTesting(false)
+    case .hiddenNoLights:
+      Color.clear
+    }
+  }
 }
