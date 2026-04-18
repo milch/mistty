@@ -50,7 +50,7 @@ uninstall-cli:
 bundle: build
     #!/usr/bin/env bash
     set -euo pipefail
-    APP="build/Mistty.app"
+    APP="build/Mistty-dev.app"
     rm -rf "$APP"
     mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     cp .build/debug/Mistty "$APP/Contents/MacOS/Mistty"
@@ -81,9 +81,9 @@ install: bundle
     #!/usr/bin/env bash
     set -euo pipefail
     osascript -e 'tell application "Mistty" to quit' 2>/dev/null || true
-    rm -rf /Applications/Mistty.app
-    cp -R build/Mistty.app /Applications/Mistty.app
-    echo "Installed: /Applications/Mistty.app"
+    rm -rf /Applications/Mistty-dev.app
+    cp -R build/Mistty-dev.app /Applications/Mistty-dev.app
+    echo "Installed: /Applications/Mistty-dev.app"
 
 # Install to /Applications (release)
 install-release: bundle-release
@@ -96,7 +96,7 @@ install-release: bundle-release
 
 # Run the app (debug)
 run: install
-    open /Applications/Mistty.app
+    open /Applications/Mistty-dev.app
 
 # Run the app (release)
 run-release: install-release
