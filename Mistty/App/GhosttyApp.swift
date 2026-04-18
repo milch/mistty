@@ -4,6 +4,11 @@ import MisttyShared
 
 // MARK: - C Callbacks (top-level, no captures)
 
+/// Stashed so the C action callback can push our config back through
+/// `ghostty_app_update_config` without reaching into the main-actor-isolated
+/// `GhosttyAppManager.shared`. Written once during manager init.
+nonisolated(unsafe) private var sharedGhosttyConfig: ghostty_config_t?
+
 /// Called from a background thread when ghostty needs attention.
 /// Must dispatch to main thread.
 private let wakeupCallback: ghostty_runtime_wakeup_cb = { userdata in
@@ -74,6 +79,21 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
         // If copy mode is hinting, re-scan labels after mouse/wheel scroll.
         NotificationCenter.default.post(name: .misttyScrollChanged, object: nil)
       }
+    }
+    return true
+
+  case GHOSTTY_ACTION_RELOAD_CONFIG:
+    // `ghostty_app_set_color_scheme` bumps `core_app.config_conditional_state`
+    // and fires `reload_config(.soft)` so the apprt can push the new state
+    // into `app.config._conditional_state`. Without that sync, the next
+    // `ghostty_surface_new` sees a state mismatch and ghostty's `Surface.init`
+    // rebuilds the config via `changeConditionalState` — which replays the
+    // config load steps and DROPS the per-surface `cfg.initial_input` /
+    // `cfg.command` we set for popups, so the shell spawns empty.
+    // Mirror ghostty's own macOS apprt: on soft reload, push our existing
+    // config back through `ghostty_app_update_config`.
+    if action.action.reload_config.soft, let cfg = sharedGhosttyConfig {
+      ghostty_app_update_config(app, cfg)
     }
     return true
 
@@ -221,6 +241,7 @@ final class GhosttyAppManager {
 
     ghostty_config_finalize(cfg)
     self.config = cfg
+    sharedGhosttyConfig = cfg
 
     // Log any config diagnostics
     let diagCount = ghostty_config_diagnostics_count(cfg)
