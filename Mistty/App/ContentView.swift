@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
   var store: SessionStore
+  var config: MisttyConfig
   @AppStorage("sidebarVisible") var sidebarVisible = true
   @SceneStorage("sidebarWidth") var sidebarWidth: Double = 220
   @State var showingSessionManager = false
@@ -118,7 +119,8 @@ struct ContentView: View {
             width: Binding(
               get: { CGFloat(sidebarWidth) },
               set: { sidebarWidth = Double($0) }
-            ))
+            ),
+            titleBarStyle: config.ui.titleBarStyle)
           Divider()
         }
         .transition(.move(edge: .leading))
@@ -129,9 +131,15 @@ struct ContentView: View {
           let tab = session.activeTab
         {
           VStack(spacing: 0) {
-            if session.tabs.count > 1 {
+            if config.ui.tabBarMode.shouldShow(
+              sidebarVisible: sidebarVisible, tabCount: session.tabs.count)
+            {
               VStack(spacing: 0) {
-                TabBarView(session: session, leadingInset: sidebarVisible ? 0 : 72)
+                TabBarView(
+                  session: session,
+                  leadingInset:
+                    (config.ui.titleBarStyle.hasTrafficLights && !sidebarVisible) ? 72 : 0
+                )
                 Divider()
               }
               .transition(.move(edge: .top).combined(with: .opacity))
@@ -178,7 +186,11 @@ struct ContentView: View {
               }
             }
           }
-          .animation(.easeInOut(duration: 0.15), value: session.tabs.count)
+          .animation(
+            .easeInOut(duration: 0.15),
+            value: config.ui.tabBarMode.shouldShow(
+              sidebarVisible: sidebarVisible, tabCount: session.tabs.count)
+          )
         } else {
           VStack(spacing: 12) {
             Text("No active session")

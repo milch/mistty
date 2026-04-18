@@ -8,6 +8,7 @@ struct MisttyApp: App {
   @State private var store = SessionStore()
   @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
+  private let config: MisttyConfig = MisttyConfig.load()
 
   init() {
     _ = GhosttyAppManager.shared
@@ -31,8 +32,8 @@ struct MisttyApp: App {
 
   var body: some Scene {
     WindowGroup {
-      ContentView(store: store)
-        .ignoresSafeArea(.container, edges: .top)
+      ContentView(store: store, config: config)
+        .applyTopSafeArea(style: config.ui.titleBarStyle)
         .onAppear {
           if ipcListener == nil {
             let service = MisttyIPCService(store: store)
@@ -40,6 +41,7 @@ struct MisttyApp: App {
             listener.start()
             ipcListener = listener
           }
+          applyTitleBarStyleToWindows()
         }
     }
     .windowStyle(.hiddenTitleBar)
@@ -165,6 +167,43 @@ struct MisttyApp: App {
     }
   }
 
+  /// Apply the configured `TitleBarStyle` to every NSWindow. We always
+  /// declare `.windowStyle(.hiddenTitleBar)` at the Scene level (SwiftUI
+  /// `SceneBuilder` can't branch over window styles) and then adjust the
+  /// AppKit windows here to realize each style.
+  private func applyTitleBarStyleToWindows() {
+    let style = config.ui.titleBarStyle
+    DispatchQueue.main.async {
+      for window in NSApplication.shared.windows {
+        switch style {
+        case .always:
+          // Show a standard title bar: visible title, no transparent
+          // titlebar, content does NOT extend under the title bar.
+          window.titleVisibility = .visible
+          window.titlebarAppearsTransparent = false
+          window.styleMask.remove(.fullSizeContentView)
+          window.standardWindowButton(.closeButton)?.isHidden = false
+          window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+          window.standardWindowButton(.zoomButton)?.isHidden = false
+        case .hiddenWithLights:
+          window.titleVisibility = .hidden
+          window.titlebarAppearsTransparent = true
+          window.styleMask.insert(.fullSizeContentView)
+          window.standardWindowButton(.closeButton)?.isHidden = false
+          window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+          window.standardWindowButton(.zoomButton)?.isHidden = false
+        case .hiddenNoLights:
+          window.titleVisibility = .hidden
+          window.titlebarAppearsTransparent = true
+          window.styleMask.insert(.fullSizeContentView)
+          window.standardWindowButton(.closeButton)?.isHidden = true
+          window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+          window.standardWindowButton(.zoomButton)?.isHidden = true
+        }
+      }
+    }
+  }
+
   /// Normalize shortcut string: lowercase, accept both "+" and "-" as separators.
   private func shortcutParts(_ shortcut: String?) -> [Substring]? {
     guard let shortcut else { return nil }
@@ -193,6 +232,17 @@ struct MisttyApp: App {
       }
     }
     return modifiers.isEmpty ? nil : modifiers
+  }
+}
+
+extension View {
+  @ViewBuilder
+  func applyTopSafeArea(style: TitleBarStyle) -> some View {
+    if style.contentExtendsUnderTitleBar {
+      self.ignoresSafeArea(.container, edges: .top)
+    } else {
+      self
+    }
   }
 }
 

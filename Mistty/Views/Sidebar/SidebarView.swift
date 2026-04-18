@@ -3,6 +3,7 @@ import SwiftUI
 struct SidebarView: View {
   @Bindable var store: SessionStore
   @Binding var width: CGFloat
+  var titleBarStyle: TitleBarStyle = .hiddenWithLights
 
   var body: some View {
     List {
@@ -11,7 +12,7 @@ struct SidebarView: View {
       }
     }
     .listStyle(.sidebar)
-    .padding(.top, 28)
+    .padding(.top, titleBarStyle.hasTrafficLights ? 28 : 0)
     .frame(width: width)
     .overlay(alignment: .trailing) {
       SidebarDragHandle(width: $width)

@@ -194,7 +194,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     // Point back to the first session so the snapshot shows the tab bar.
     store.activeSession = s1
 
-    let view = ContentView(store: store)
+    let view = ContentView(store: store, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -221,7 +221,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1  // s1 has 1 tab → tab bar hidden
 
-    let view = ContentView(store: store)
+    let view = ContentView(store: store, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -243,7 +243,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1
 
-    let view = ContentView(store: store)
+    let view = ContentView(store: store, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -269,7 +269,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1
 
-    let view = ContentView(store: store)
+    let view = ContentView(store: store, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
