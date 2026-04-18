@@ -31,6 +31,11 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
 
+### Preference Pane
+
+- We have a non-standard preference pane right now. Make a pref pane like Safari, Mail, etc., that looks like a standard macOS preference pane
+- Shortcuts have to be put in manually, record the shortcuts instead
+
 ### Non-standard pane
 
 - mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown view over the terminal (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
@@ -43,6 +48,12 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 ### Misc
 
 - Need to mark in the sidebar what tab is active inside of a session. Also need to visually highlight the active session
+- Session manager search bug: When I type `mist` then the first hit is not `mistty` (full session name match) but a directory name match for another session
+- Cmd-W when pref pane is open closes the pane behind the pref pane
+- Session manager sort order: Active sessions should be at the very top (LRU)
+- The pane focusing seems to get "out of sync" sometimes - e.g. I'll have a split left and right, and after moving around sometimes it will show "no split to left". If I mouse click into the same pane it will "re-sync" and continues working again for a while. The other thing I notice is that the blue outline moves but the ACTUAL focus (i.e. where I type) stays on the other pane.
+- Zoomed indicator in sidebar / tab bar
+- Sometimes the tab name is just "exit $PATH", which seems like a bug
 
 ## Implemented
 
