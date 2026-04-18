@@ -336,6 +336,11 @@ struct MisttyConfig: Sendable, Equatable {
     }
   }
 
+  // TODO: `save()` serializes known fields but drops comments and any keys
+  // Mistty hasn't modelled (unknown top-level entries, custom sections).
+  // Fine today because only `SettingsView` calls this, but worth replacing
+  // with a CST-preserving TOML edit (or scoping the writes to only the keys
+  // that changed) before we ship more config surface.
   func save(to url: URL = configURL) throws {
     try FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(),

@@ -271,7 +271,7 @@ final class UIConfigTests: XCTestCase {
         "font-size = 15",
         "font-family = JetBrainsMono Nerd Font",
         "cursor-style = bar",
-        "scrollback-limit = \(20000 * 1024)",
+        "scrollback-limit = \(20000 * 1000)",
         "theme = Dracula",
         "window-padding-x = 4,8",
       ]

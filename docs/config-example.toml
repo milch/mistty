@@ -22,8 +22,8 @@ font_size = 13
 cursor_style = "block"
 
 # Scrollback buffer size, in lines. Forwarded to ghostty as
-# `scrollback-limit = lines * 1024` bytes — matches ghostty's default of
-# ~10 000 lines / 10 MiB.
+# `scrollback-limit = lines * 1000` bytes, matching ghostty's own default
+# of 10 000 000 bytes (~10 000 lines).
 scrollback_lines = 10000
 
 # Show the session sidebar on launch.

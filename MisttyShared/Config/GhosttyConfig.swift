@@ -117,9 +117,14 @@ public struct GhosttyPassthroughConfig: Sendable, Equatable {
     // TOMLKit's `keys` is alphabetical (toml++ uses a sorted map). Ghostty's
     // `theme` key implicitly sets palette/background/foreground, so emit it
     // FIRST and let any user-provided overrides (still alphabetical) win.
-    let allKeys = table.keys
-    let themeFirst = allKeys.filter { $0 == "theme" } + allKeys.filter { $0 != "theme" }
-    for key in themeFirst {
+    // Single-pass partition — `stablePartition` keeps the non-`theme` keys
+    // in their original alphabetical order while lifting `theme` to index 0.
+    var orderedKeys = table.keys
+    if let themeIdx = orderedKeys.firstIndex(of: "theme"), themeIdx != orderedKeys.startIndex {
+      orderedKeys.remove(at: themeIdx)
+      orderedKeys.insert("theme", at: orderedKeys.startIndex)
+    }
+    for key in orderedKeys {
       guard let value = table[key] else { continue }
       if deniedKeys.contains(key) {
         FileHandle.standardError.write(
@@ -166,7 +171,9 @@ public struct GhosttyResolvedConfig: Sendable, Equatable {
   public var fontFamily: String?
   public var cursorStyle: String?
   /// In lines. Converted to `scrollback-limit` bytes at render time using
-  /// ~1 KiB/line (matches ghostty's own 10 MB / 10 000-line default).
+  /// ~1 000 bytes/line — ghostty's own default is 10 000 000 bytes (decimal
+  /// MB, see `vendor/ghostty/src/config/Config.zig:1385`), which lines up
+  /// with the historical 10 000-line scrollback budget at 1 000 bytes/line.
   public var scrollbackLines: Int?
   public var passthrough: GhosttyPassthroughConfig = GhosttyPassthroughConfig()
   public var contentPaddingX: [Int]?
@@ -189,7 +196,7 @@ public struct GhosttyResolvedConfig: Sendable, Equatable {
     if let s = fontSize { lines.append("font-size = \(s)") }
     if let f = fontFamily, !f.isEmpty { lines.append("font-family = \(f)") }
     if let c = cursorStyle, !c.isEmpty { lines.append("cursor-style = \(c)") }
-    if let l = scrollbackLines { lines.append("scrollback-limit = \(l * 1024)") }
+    if let l = scrollbackLines { lines.append("scrollback-limit = \(l * 1000)") }
     lines.append(contentsOf: passthrough.configLines)
     if let xs = contentPaddingX {
       lines.append("window-padding-x = \(xs.map(String.init).joined(separator: ","))")
