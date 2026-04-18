@@ -51,6 +51,28 @@ enum TabBarMode: String, Sendable, Equatable, CaseIterable {
   }
 }
 
+/// Per-window user override for tab-bar visibility, independent of `TabBarMode`.
+/// Toggled via the "Toggle Tab Bar" menu command.
+enum TabBarVisibilityOverride: String, Sendable, Equatable, CaseIterable {
+  case auto = "auto"
+  case hidden = "hidden"
+  case visible = "visible"
+
+  /// Whether the tab bar should render, given what the user's config mode would show.
+  func effectiveShow(configuredShow: Bool) -> Bool {
+    switch self {
+    case .auto: return configuredShow
+    case .hidden: return false
+    case .visible: return true
+    }
+  }
+
+  /// Next override after a user toggle: force the opposite of whatever is currently showing.
+  func toggled(configuredShow: Bool) -> TabBarVisibilityOverride {
+    effectiveShow(configuredShow: configuredShow) ? .hidden : .visible
+  }
+}
+
 enum TitleBarStyle: String, Sendable, Equatable, CaseIterable {
   case always = "always"
   case hiddenWithLights = "hidden_with_lights"

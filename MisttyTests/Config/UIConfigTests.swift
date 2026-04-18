@@ -66,6 +66,40 @@ final class UIConfigTests: XCTestCase {
     XCTAssertTrue(TitleBarStyle.hiddenNoLights.shouldHideWindowButtons)
   }
 
+  // MARK: TabBarVisibilityOverride
+
+  func test_override_auto_followsConfiguredShow() {
+    XCTAssertTrue(TabBarVisibilityOverride.auto.effectiveShow(configuredShow: true))
+    XCTAssertFalse(TabBarVisibilityOverride.auto.effectiveShow(configuredShow: false))
+  }
+
+  func test_override_hidden_alwaysHides() {
+    XCTAssertFalse(TabBarVisibilityOverride.hidden.effectiveShow(configuredShow: true))
+    XCTAssertFalse(TabBarVisibilityOverride.hidden.effectiveShow(configuredShow: false))
+  }
+
+  func test_override_visible_alwaysShows() {
+    XCTAssertTrue(TabBarVisibilityOverride.visible.effectiveShow(configuredShow: true))
+    XCTAssertTrue(TabBarVisibilityOverride.visible.effectiveShow(configuredShow: false))
+  }
+
+  func test_toggle_fromAuto_flipsConfiguredDefault() {
+    // Configured show → user wants it hidden
+    XCTAssertEqual(TabBarVisibilityOverride.auto.toggled(configuredShow: true), .hidden)
+    // Configured hidden → user wants it visible
+    XCTAssertEqual(TabBarVisibilityOverride.auto.toggled(configuredShow: false), .visible)
+  }
+
+  func test_toggle_fromHidden_goesVisible() {
+    XCTAssertEqual(TabBarVisibilityOverride.hidden.toggled(configuredShow: true), .visible)
+    XCTAssertEqual(TabBarVisibilityOverride.hidden.toggled(configuredShow: false), .visible)
+  }
+
+  func test_toggle_fromVisible_goesHidden() {
+    XCTAssertEqual(TabBarVisibilityOverride.visible.toggled(configuredShow: true), .hidden)
+    XCTAssertEqual(TabBarVisibilityOverride.visible.toggled(configuredShow: false), .hidden)
+  }
+
   // MARK: TOML parsing
 
   func test_parseUIConfig_defaults() throws {

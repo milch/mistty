@@ -7,6 +7,7 @@ struct ContentView: View {
   var store: SessionStore
   var config: MisttyConfig
   @AppStorage("sidebarVisible") var sidebarVisible = true
+  @AppStorage("tabBarOverride") var tabBarOverrideRaw = TabBarVisibilityOverride.auto.rawValue
   @SceneStorage("sidebarWidth") var sidebarWidth: Double = 220
   @State var showingSessionManager = false
   @State private var sessionManagerVM: SessionManagerViewModel?
@@ -130,10 +131,9 @@ struct ContentView: View {
         if let session = store.activeSession,
           let tab = session.activeTab
         {
+          let tabBarShouldShow = shouldShowTabBar(tabCount: session.tabs.count)
           VStack(spacing: 0) {
-            if config.ui.tabBarMode.shouldShow(
-              sidebarVisible: sidebarVisible, tabCount: session.tabs.count)
-            {
+            if tabBarShouldShow {
               VStack(spacing: 0) {
                 TabBarView(
                   session: session,
@@ -186,11 +186,7 @@ struct ContentView: View {
               }
             }
           }
-          .animation(
-            .easeInOut(duration: 0.15),
-            value: config.ui.tabBarMode.shouldShow(
-              sidebarVisible: sidebarVisible, tabCount: session.tabs.count)
-          )
+          .animation(.easeInOut(duration: 0.15), value: tabBarShouldShow)
         } else {
           VStack(spacing: 12) {
             Text("No active session")
@@ -274,6 +270,13 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
+  }
+
+  private func shouldShowTabBar(tabCount: Int) -> Bool {
+    let configured = config.ui.tabBarMode.shouldShow(
+      sidebarVisible: sidebarVisible, tabCount: tabCount)
+    let override = TabBarVisibilityOverride(rawValue: tabBarOverrideRaw) ?? .auto
+    return override.effectiveShow(configuredShow: configured)
   }
 
   private func splitPane(direction: SplitDirection) {
