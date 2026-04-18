@@ -22,28 +22,6 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 - s to save layout for this session / r to restore layout
 
-### Copy mode improvements
-
-Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/2026-03-18-copy-mode-phase1-design.md`.
-
-#### Phase 1: Motion & selection (spec complete)
-
-- Refactor CopyModeState to action-based state machine with `handleKey` returning `[CopyModeAction]`
-- Visual line mode (V), visual block mode (Ctrl-v)
-- Tmux-style escape: esc from visual -> copy mode, esc from copy mode -> exit
-- Number prefix for movement commands (10j, 3w, 5G, etc.)
-- Proper word motions: w/W/e/E/b/B/ge/gE with vim-exact word/WORD definitions
-- f/F/t/T find-character on current line, ; and , for repeat/reverse
-- Toggle-able help overlay (g?) showing keybindings
-
-#### Phase 2: Scrollback & search
-
-- Navigate through scrollback buffer (not just viewport)
-- Search hit highlighting (all matches visible, not just current)
-- ? support (reverse search) — `?` key reassigned from help overlay to reverse search
-- Cross-line word motion wrapping into scrollback
-- Handle Ctrl-D/U and other paging shortcuts
-
 ### Save layouts
 
 - There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
@@ -128,6 +106,28 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Search: / forward, ? reverse, n/N next/prev, match count indicator, all-match highlighting, full scrollback coverage
 - Scrollback navigation: Ctrl-D/U half page, Ctrl-F/B full page, word motions wrap into scrollback
 - Help overlay (g?)
+
+### Copy mode improvements
+
+Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/2026-03-18-copy-mode-phase1-design.md`.
+
+#### Phase 1: Motion & selection (spec complete)
+
+- Refactor CopyModeState to action-based state machine with `handleKey` returning `[CopyModeAction]`
+- Visual line mode (V), visual block mode (Ctrl-v)
+- Tmux-style escape: esc from visual -> copy mode, esc from copy mode -> exit
+- Number prefix for movement commands (10j, 3w, 5G, etc.)
+- Proper word motions: w/W/e/E/b/B/ge/gE with vim-exact word/WORD definitions
+- f/F/t/T find-character on current line, ; and , for repeat/reverse
+- Toggle-able help overlay (g?) showing keybindings
+
+#### Phase 2: Scrollback & search
+
+- Navigate through scrollback buffer (not just viewport)
+- Search hit highlighting (all matches visible, not just current)
+- ? support (reverse search) — `?` key reassigned from help overlay to reverse search
+- Cross-line word motion wrapping into scrollback
+- Handle Ctrl-D/U and other paging shortcuts
 
 ### Copy mode — yank hints (Phase 3)
 
