@@ -278,12 +278,22 @@ final class UIConfigTests: XCTestCase {
     )
   }
 
-  func test_ghosttyConfigLines_alwaysEmitsWindowThemeSystem() throws {
+  func test_ghosttyConfigLines_prependsWindowThemeSystemWhenAnyKeySet() throws {
     // Ghostty picks between `light:` / `dark:` variants of multi-theme
     // strings based on `window-theme`. Mistty forces it to follow macOS
-    // appearance even when the user sets no other keys.
+    // appearance whenever there's anything to emit.
+    let config = try MisttyConfig.parse("font_size = 14")
+    XCTAssertEqual(
+      config.ghosttyConfigLines,
+      ["window-theme = system", "font-size = 14"]
+    )
+  }
+
+  func test_ghosttyConfigLines_emptyWhenNothingSet() throws {
+    // Don't write a temp config with `window-theme = system` and nothing
+    // else — it adds IO for zero user-visible effect.
     let config = try MisttyConfig.parse("")
-    XCTAssertEqual(config.ghosttyConfigLines, ["window-theme = system"])
+    XCTAssertTrue(config.ghosttyConfigLines.isEmpty)
   }
 
   func test_ghosttyConfigLines_userCanOverrideWindowTheme() throws {
@@ -292,19 +302,16 @@ final class UIConfigTests: XCTestCase {
       window-theme = "light"
       """
     let config = try MisttyConfig.parse(toml)
-    // Default emitted first, user-supplied value emitted after → ghostty's
-    // last-wins semantics honour the user's override.
-    XCTAssertEqual(
-      config.ghosttyConfigLines,
-      ["window-theme = system", "window-theme = light"]
-    )
+    // User override supersedes the default; Mistty doesn't emit the default
+    // anymore when `window-theme` is user-controlled.
+    XCTAssertEqual(config.ghosttyConfigLines, ["window-theme = light"])
   }
 
-  func test_ghosttyConfigLines_emitsExplicitlySetValuesEvenIfMatchingDisplayDefault() throws {
-    // Before the Optional refactor, `font_family = "monospace"` in the user's
-    // config would be silently dropped because it equalled the built-in
-    // default. Now the optional storage distinguishes "not set" from "set to
-    // the display-default value", and explicit values are always forwarded.
+  func test_ghosttyConfigLines_emptyFontFamilyDoesNotEmitReset() throws {
+    // An empty `font_family` string would translate to `font-family = `
+    // which ghostty interprets as "clear the font-family list" — almost
+    // certainly not what a user leaving the field blank intends. Skip the
+    // forward entirely and let ghostty's own default apply.
     let toml = """
       font_family = ""
       cursor_style = "block"
@@ -312,7 +319,7 @@ final class UIConfigTests: XCTestCase {
     let config = try MisttyConfig.parse(toml)
     XCTAssertEqual(
       config.ghosttyConfigLines,
-      ["window-theme = system", "font-family = ", "cursor-style = block"]
+      ["window-theme = system", "cursor-style = block"]
     )
   }
 

@@ -28,7 +28,9 @@ final class TerminalSurfaceView: NSView {
   init(
     frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, initialInput: String? = nil
   ) {
-    let ui = MisttyConfig.load().ui
+    // Use the shared launch-time parse so init doesn't re-read config.toml
+    // per pane and stays consistent with the lines sent to libghostty.
+    let ui = MisttyConfig.loadedAtLaunch.config.ui
     self.configuredPaddingX = CGFloat(ui.contentPaddingX?.first ?? Int(Self.ghosttyDefaultPadding))
     self.configuredPaddingY = CGFloat(ui.contentPaddingY?.first ?? Int(Self.ghosttyDefaultPadding))
     self.configuredPaddingBalance = ui.contentPaddingBalance ?? false

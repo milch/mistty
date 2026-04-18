@@ -12,8 +12,10 @@ font_size = 13
 
 # Font family. Any monospace font installed on the system works.
 # Examples: "JetBrainsMono Nerd Font", "SF Mono", "Menlo".
-# Forwarded to ghostty as `font-family`. Leave empty to let ghostty pick.
-font_family = ""
+# Forwarded to ghostty as `font-family` when set. Leave unset (or comment
+# out) to let ghostty / your ghostty.conf pick — setting this to an empty
+# string would clear ghostty's font list entirely, so we skip the forward.
+# font_family = "JetBrainsMono Nerd Font"
 
 # Cursor shape. Forwarded to ghostty as `cursor-style`.
 # Options: "block" | "bar" (beam) | "underline"

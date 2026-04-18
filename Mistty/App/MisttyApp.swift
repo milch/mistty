@@ -9,7 +9,10 @@ struct MisttyApp: App {
   @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
   @AppStorage("tabBarOverride") var tabBarOverrideRaw = TabBarVisibilityOverride.auto.rawValue
-  private let config: MisttyConfig = MisttyConfig.load()
+  // Shared parse — see `MisttyConfig.loadedAtLaunch`. Reading the same cache
+  // GhosttyAppManager uses keeps SwiftUI state and libghostty in lockstep and
+  // avoids parsing the TOML twice at bootstrap.
+  private let config: MisttyConfig = MisttyConfig.loadedAtLaunch.config
 
   init() {
     _ = GhosttyAppManager.shared
@@ -157,7 +160,7 @@ struct MisttyApp: App {
 
         Divider()
 
-        ForEach(Array(MisttyConfig.load().popups.enumerated()), id: \.offset) { _, popup in
+        ForEach(Array(config.popups.enumerated()), id: \.offset) { _, popup in
           if let key = parseShortcutKey(popup.shortcut),
             let modifiers = parseShortcutModifiers(popup.shortcut)
           {

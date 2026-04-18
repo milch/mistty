@@ -178,16 +178,17 @@ public struct GhosttyResolvedConfig: Sendable, Equatable {
   /// Ghostty config file lines. Top-level font/cursor first so `[ghostty]`
   /// passthrough entries for the same key (rare but legal) override them;
   /// `[ui].content_padding_*` last so Mistty-managed padding always wins.
+  ///
+  /// Empty strings for `font_family` / `cursor_style` are treated as "don't
+  /// forward" rather than "reset" — emitting `font-family = ` would clear
+  /// ghostty's entire font-family list (and anything in the user's
+  /// `ghostty.conf`), which is almost certainly not what a user editing
+  /// `config.toml` intends.
   public var configLines: [String] {
     var lines: [String] = []
-    // Default `window-theme = system` so ghostty picks the right variant of
-    // `theme = "light:X,dark:Y"` strings based on macOS appearance. User can
-    // override by setting `window-theme` in their own `[ghostty]` table —
-    // emitted after, so their value wins.
-    lines.append("window-theme = system")
     if let s = fontSize { lines.append("font-size = \(s)") }
-    if let f = fontFamily { lines.append("font-family = \(f)") }
-    if let c = cursorStyle { lines.append("cursor-style = \(c)") }
+    if let f = fontFamily, !f.isEmpty { lines.append("font-family = \(f)") }
+    if let c = cursorStyle, !c.isEmpty { lines.append("cursor-style = \(c)") }
     if let l = scrollbackLines { lines.append("scrollback-limit = \(l * 1024)") }
     lines.append(contentsOf: passthrough.configLines)
     if let xs = contentPaddingX {
@@ -199,7 +200,19 @@ public struct GhosttyResolvedConfig: Sendable, Equatable {
     if let b = contentPaddingBalance {
       lines.append("window-padding-balance = \(b)")
     }
-    return lines
+
+    // Empty resolution = empty output. Skips writing a temp file with nothing
+    // but `window-theme = system` when the user hasn't configured anything.
+    if lines.isEmpty { return [] }
+
+    // Default `window-theme = system` so ghostty picks the right variant of
+    // `theme = "light:X,dark:Y"` strings based on macOS appearance. Only
+    // prepend when the user hasn't set `window-theme` themselves — otherwise
+    // we'd emit two lines for the same key.
+    if passthrough.entries.contains(where: { $0.key == "window-theme" }) {
+      return lines
+    }
+    return ["window-theme = system"] + lines
   }
 
   /// Parse the relevant subset of a Mistty `config.toml` string. Throws the

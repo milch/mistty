@@ -175,16 +175,21 @@ final class GhosttyAppManager {
     // [ghostty] passthrough table, and [ui] padding) by writing a temp
     // ghostty config file and loading it after the user's file, so these
     // keys override whatever was in ~/.config/mistty/ghostty.conf.
-    let misttyConfig: MisttyConfig
-    do {
-      misttyConfig = try MisttyConfig.loadThrowing()
-    } catch {
-      misttyConfig = .default
-      // Surface parse errors to the user so they know why Mistty launched
-      // with defaults instead of their config. Scheduled on main after the
-      // app finishes launching so the alert isn't eaten.
-      let message = describeTOMLParseError(error)
-      DispatchQueue.main.async {
+    // Read the single shared parse result. If parsing failed, surface it via
+    // an NSAlert so the user knows why Mistty launched with defaults.
+    let (misttyConfig, parseError) = MisttyConfig.loadedAtLaunch
+    if let parseError {
+      let message = describeTOMLParseError(parseError)
+      // Wait for `didFinishLaunchingNotification` so the app is active when
+      // the alert runs; otherwise it shows up behind other windows / without
+      // focus during bootstrap.
+      var observer: NSObjectProtocol?
+      observer = NotificationCenter.default.addObserver(
+        forName: NSApplication.didFinishLaunchingNotification,
+        object: nil, queue: .main
+      ) { _ in
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Mistty could not parse config.toml"
@@ -196,14 +201,14 @@ final class GhosttyAppManager {
     }
 
     let ghosttyLines = misttyConfig.ghosttyConfigLines
-    print("[mistty] resolved ghostty config:")
     if ghosttyLines.isEmpty {
-      print("  (no Mistty-managed keys — using ghostty defaults + ~/.config/mistty/ghostty.conf)")
+      print(
+        "[mistty] no Mistty-managed ghostty keys — using ghostty defaults + ~/.config/mistty/ghostty.conf"
+      )
     } else {
+      print("[mistty] resolved ghostty config:")
       for line in ghosttyLines { print("  \(line)") }
-    }
 
-    if !ghosttyLines.isEmpty {
       let tempURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier).conf")
       let contents = ghosttyLines.joined(separator: "\n") + "\n"

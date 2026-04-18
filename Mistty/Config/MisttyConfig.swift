@@ -306,8 +306,18 @@ struct MisttyConfig: Sendable, Equatable {
   /// back to defaults; prefer `loadThrowing` when you want to show the user
   /// what went wrong.
   static func load() -> MisttyConfig {
-    (try? loadThrowing()) ?? .default
+    loadedAtLaunch.config
   }
+
+  /// Single source of truth for the parse of `config.toml` at app launch.
+  /// Static `let` runs exactly once, so we avoid multiple disk reads and
+  /// multiple swallows of the same parse error. Consumers that need a fresh
+  /// read after the user edits the file on disk — currently only
+  /// `SettingsView` — should call `loadThrowing(from:)` directly.
+  static let loadedAtLaunch: (config: MisttyConfig, parseError: Error?) = {
+    do { return (try loadThrowing(), nil) }
+    catch { return (.default, error) }
+  }()
 
   /// Escape a string for safe TOML serialization.
   private func tomlEscape(_ value: String) -> String {
