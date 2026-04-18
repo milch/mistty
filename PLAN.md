@@ -57,15 +57,8 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
 
-### UI improvements
+### Markdown viewer
 
-- Better minimal tab bar design
-- Tab bar should only show when there is more than 1 tab
-- Session manager icons (SFSymbols?) indicating the type of each row (currently uses Unicode icons)
-- macOS title bar should be hidden
-- Hiding/showing the sidebar should be animated (slide in/out)
-- Sidebar should show process icons for common processes (can use whatever nvim-mini/mini.icons does for filetype and common terminal icons)
-- Instead of showing process title + directory for the tab name in the sidebar, let's only show the CWD (of the currently active pane) for the session and the process title or renamed name for the tab
 - mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown view over the terminal (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
   - supports rendering mermaid diagrams & images
   - Obsidian markdown support
@@ -191,3 +184,15 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - SwiftUI + AppKit hybrid (terminal surface is NSView, UI is SwiftUI)
 - Tab bar with horizontal scrolling, close buttons, new tab button
 - Process title display via ghostty notifications
+
+### Chrome polish (v0.3)
+
+- Minimal subtle-pill tab bar (28pt). Configurable visibility via `ui.tab_bar_mode`: `always`, `never`, `when_sidebar_hidden`, `when_sidebar_hidden_and_multiple_tabs`, `when_multiple_tabs` (default)
+- Tab bar runtime toggle (cmd+shift+b) layers on top of the configured mode via `TabBarVisibilityOverride` (auto/hidden/visible) in AppStorage
+- Title bar style configurable via `ui.title_bar_style`: `always`, `hidden_with_lights` (default, traffic lights float over content), `hidden_no_lights` (no chrome at all — close via cmd+w)
+- Sidebar slide-in/out animation (180ms), process icons per session/tab row, CWD-for-session + process-title-for-tab label format
+- Session manager rows use SFSymbols per row type (terminal, folder, ssh, plus.circle)
+- Symbols Nerd Font Mono v3.2.1 bundled as SPM resource and registered at launch for ProcessIcon glyphs
+- Ghostty content padding exposed as `ui.content_padding_x`, `ui.content_padding_y` (int or [start, end]), `ui.content_padding_balance`. Values pass through to ghostty via a temp config file loaded after the user's `~/.config/mistty/ghostty.conf`
+- Pane split border configurable via `ui.pane_border_color` (hex `#rrggbb` / `#rrggbbaa`, falls back to `NSColor.separatorColor`) and `ui.pane_border_width` (points, default 1)
+- Annotated sample config at `docs/config-example.toml` covers every option
