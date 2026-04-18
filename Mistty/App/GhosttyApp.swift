@@ -163,6 +163,21 @@ final class GhosttyAppManager {
         ghostty_config_load_file(cfg, path)
       }
     }
+
+    // Apply Mistty [ui] padding settings by writing a temp ghostty config
+    // file and loading it after the user file, so Mistty-managed keys win.
+    let paddingLines = MisttyConfig.load().ui.ghosttyPaddingConfigLines
+    if !paddingLines.isEmpty {
+      let tempURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier).conf")
+      let contents = paddingLines.joined(separator: "\n") + "\n"
+      if (try? contents.write(to: tempURL, atomically: true, encoding: .utf8)) != nil {
+        tempURL.path.withCString { path in
+          ghostty_config_load_file(cfg, path)
+        }
+      }
+    }
+
     ghostty_config_finalize(cfg)
     self.config = cfg
 

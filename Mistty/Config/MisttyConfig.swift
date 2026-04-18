@@ -98,6 +98,31 @@ enum TitleBarStyle: String, Sendable, Equatable, CaseIterable {
 struct UIConfig: Sendable, Equatable {
   var tabBarMode: TabBarMode = .whenMultipleTabs
   var titleBarStyle: TitleBarStyle = .hiddenWithLights
+  /// Horizontal padding inside the ghostty terminal surface. `[left]` applies
+  /// symmetrically; `[left, right]` splits. Maps to ghostty `window-padding-x`.
+  var contentPaddingX: [Int]? = nil
+  /// Vertical padding inside the ghostty terminal surface. `[top]` applies
+  /// symmetrically; `[top, bottom]` splits. Maps to ghostty `window-padding-y`.
+  var contentPaddingY: [Int]? = nil
+  /// Whether ghostty distributes unused pixels as padding. Maps to
+  /// ghostty `window-padding-balance`.
+  var contentPaddingBalance: Bool? = nil
+
+  /// Ghostty-format config lines for the padding keys that the user has set.
+  /// Suitable for writing to a temp file that `ghostty_config_load_file` reads.
+  var ghosttyPaddingConfigLines: [String] {
+    var lines: [String] = []
+    if let xs = contentPaddingX {
+      lines.append("window-padding-x = \(xs.map(String.init).joined(separator: ","))")
+    }
+    if let ys = contentPaddingY {
+      lines.append("window-padding-y = \(ys.map(String.init).joined(separator: ","))")
+    }
+    if let balance = contentPaddingBalance {
+      lines.append("window-padding-balance = \(balance)")
+    }
+    return lines
+  }
 }
 
 struct MisttyConfig: Sendable, Equatable {
@@ -171,8 +196,29 @@ struct MisttyConfig: Sendable, Equatable {
          let parsed = TitleBarStyle(rawValue: style) {
         config.ui.titleBarStyle = parsed
       }
+      config.ui.contentPaddingX = parsePadding(uiTable["content_padding_x"])
+      config.ui.contentPaddingY = parsePadding(uiTable["content_padding_y"])
+      if let balance = uiTable["content_padding_balance"]?.bool {
+        config.ui.contentPaddingBalance = balance
+      }
     }
     return config
+  }
+
+  /// Serialize `[4]` as `4` and `[4, 2]` as `[4, 2]` for round-trip symmetry.
+  private func formatPadding(_ values: [Int]) -> String {
+    if values.count == 1 { return "\(values[0])" }
+    return "[" + values.map(String.init).joined(separator: ", ") + "]"
+  }
+
+  /// Accepts `4` (int) or `[4, 2]` (array) and returns a non-empty `[Int]`.
+  private static func parsePadding(_ value: TOMLValueConvertible?) -> [Int]? {
+    if let single = value?.int { return [single] }
+    if let arr = value?.array {
+      let ints = arr.compactMap { $0.int }
+      return ints.isEmpty ? nil : ints
+    }
+    return nil
   }
 
   static func load() -> MisttyConfig {
@@ -251,6 +297,15 @@ struct MisttyConfig: Sendable, Equatable {
       }
       if ui.titleBarStyle != UIConfig().titleBarStyle {
         lines.append("title_bar_style = \"\(ui.titleBarStyle.rawValue)\"")
+      }
+      if let xs = ui.contentPaddingX {
+        lines.append("content_padding_x = \(formatPadding(xs))")
+      }
+      if let ys = ui.contentPaddingY {
+        lines.append("content_padding_y = \(formatPadding(ys))")
+      }
+      if let balance = ui.contentPaddingBalance {
+        lines.append("content_padding_balance = \(balance)")
       }
     }
     try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)

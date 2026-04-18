@@ -119,6 +119,49 @@ final class UIConfigTests: XCTestCase {
     XCTAssertEqual(config.ui.titleBarStyle, .hiddenNoLights)
   }
 
+  func test_parseUIConfig_contentPadding_singleInt() throws {
+    let toml = """
+      [ui]
+      content_padding_x = 4
+      content_padding_y = 9
+      content_padding_balance = true
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ui.contentPaddingX, [4])
+    XCTAssertEqual(config.ui.contentPaddingY, [9])
+    XCTAssertEqual(config.ui.contentPaddingBalance, true)
+  }
+
+  func test_parseUIConfig_contentPadding_arrayPair() throws {
+    let toml = """
+      [ui]
+      content_padding_x = [4, 8]
+      content_padding_y = [9, 0]
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.ui.contentPaddingX, [4, 8])
+    XCTAssertEqual(config.ui.contentPaddingY, [9, 0])
+  }
+
+  func test_ghosttyPaddingConfigLines_emitsGhosttyKeys() {
+    var ui = UIConfig()
+    ui.contentPaddingX = [4]
+    ui.contentPaddingY = [9, 0]
+    ui.contentPaddingBalance = true
+    XCTAssertEqual(
+      ui.ghosttyPaddingConfigLines,
+      [
+        "window-padding-x = 4",
+        "window-padding-y = 9,0",
+        "window-padding-balance = true",
+      ]
+    )
+  }
+
+  func test_ghosttyPaddingConfigLines_emptyWhenNothingSet() {
+    XCTAssertTrue(UIConfig().ghosttyPaddingConfigLines.isEmpty)
+  }
+
   func test_parseUIConfig_invalidValues_fallBackToDefault() throws {
     let toml = """
       [ui]

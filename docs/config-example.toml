@@ -78,3 +78,17 @@ tab_bar_mode = "when_multiple_tabs"
 #   "hidden_with_lights" — title bar hidden, traffic lights float over content (default)
 #   "hidden_no_lights"   — title bar hidden, no traffic lights (use cmd+w / cmd+q to close)
 title_bar_style = "hidden_with_lights"
+
+# Padding, in points, inside the terminal surface. The area fills with the
+# terminal background, so this adds breathing room without cutting into the
+# text. Accepts an integer (symmetric) or a 2-element array (start, end).
+#   content_padding_x = 4        # 4pt left + 4pt right
+#   content_padding_x = [4, 8]   # 4pt left, 8pt right
+#   content_padding_y = [9, 0]   # 9pt top, 0pt bottom
+# Maps directly to ghostty's window-padding-x / window-padding-y.
+# content_padding_x = 4
+# content_padding_y = [9, 0]
+
+# When true, ghostty distributes leftover pixels as extra padding so the grid
+# stays centered within the surface. Maps to ghostty window-padding-balance.
+# content_padding_balance = true
