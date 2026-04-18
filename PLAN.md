@@ -31,13 +31,18 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
 
-### Markdown viewer
+### Non-standard pane
 
 - mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown view over the terminal (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
   - supports rendering mermaid diagrams & images
   - Obsidian markdown support
   - hitting "e" opens the file in $EDITOR for editing, closing the file goes back to the markdown view and shows the updated render
   - Excalidraw rendering support?
+- Same with an embedded webview, e.g. open localhost:3000 in a pane that is a web view for rendering, open docs or html files, ...
+
+### Misc
+
+- Need to mark in the sidebar what tab is active inside of a session. Also need to visually highlight the active session
 
 ## Implemented
 
@@ -196,7 +201,7 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 ### Ghostty config passthrough
 
 - `[ghostty]` table in `config.toml` forwards arbitrary ghostty keys (kebab-case) verbatim to libghostty via a temp file loaded after `~/.config/mistty/ghostty.conf`
-- Denylist in `GhosttyPassthroughConfig.deniedKeys` drops keys that would conflict with Mistty's own chrome / window / tab / split / keybind / lifecycle management (window-decoration, macos-titlebar-style, keybind, command, quick-terminal-*, split-divider-color, auto-update, …)
+- Denylist in `GhosttyPassthroughConfig.deniedKeys` drops keys that would conflict with Mistty's own chrome / window / tab / split / keybind / lifecycle management (window-decoration, macos-titlebar-style, keybind, command, quick-terminal-\*, split-divider-color, auto-update, …)
 - TOML scalars → one line; TOML arrays → one line per element (so repeatable keys like font-family / palette work)
 - `theme` is emitted before other passthrough keys so user overrides win over the theme's defaults; remaining keys follow alphabetical order
 - Top-level `font_size`, `font_family`, `cursor_style` in `config.toml` now flow through to ghostty when they differ from Mistty defaults (previously dead settings)
