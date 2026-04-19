@@ -1,6 +1,7 @@
 import Foundation
 
 public struct WindowResponse: Codable, Sendable, PrintableByFormatter {
+    public let id: Int
     public let sessionCount: Int
 
     public init(id: Int, sessionCount: Int) {
@@ -9,7 +10,6 @@ public struct WindowResponse: Codable, Sendable, PrintableByFormatter {
     }
 
     public static func formatHeader() -> [String] {
-
         [
             "ID",
             "Sessions",
@@ -18,11 +18,8 @@ public struct WindowResponse: Codable, Sendable, PrintableByFormatter {
 
     public func formatRow() -> [String] {
         [
-
-            ("\(self.id)"),
-            ("\(self.sessionCount)"),
+            "\(self.id)",
+            "\(self.sessionCount)",
         ]
     }
-
-    public let id: Int
 }

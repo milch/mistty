@@ -26,8 +26,8 @@ struct SessionCommand: ParsableCommand {
         @Option(name: .long, help: "Executable to run")
         var exec: String?
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -54,8 +54,8 @@ struct SessionCommand: ParsableCommand {
     struct List: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "List all sessions")
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -81,8 +81,8 @@ struct SessionCommand: ParsableCommand {
         @Argument(help: "Session ID")
         var id: Int
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -108,8 +108,8 @@ struct SessionCommand: ParsableCommand {
         @Argument(help: "Session ID")
         var id: Int
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)

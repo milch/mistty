@@ -39,7 +39,7 @@ struct PopupCommand: ParsableCommand {
         var keepOnExit: Bool = false
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -84,7 +84,7 @@ struct PopupCommand: ParsableCommand {
         var id: Int
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -112,7 +112,7 @@ struct PopupCommand: ParsableCommand {
         var session: Int?
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -129,8 +129,13 @@ struct PopupCommand: ParsableCommand {
                 Foundation.exit(1)
             }
 
-            let popup = try JSONDecoder().decode(PopupResponse.self, from: data)
-            formatter.print(popup)
+            // togglePopup may return an empty object when the popup was hidden,
+            // or a PopupResponse when it became visible.
+            if let popup = try? JSONDecoder().decode(PopupResponse.self, from: data) {
+                formatter.print(popup)
+            } else {
+                formatter.printSuccess("Popup '\(name)' toggled")
+            }
         }
     }
 
@@ -141,7 +146,7 @@ struct PopupCommand: ParsableCommand {
         var session: Int?
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)

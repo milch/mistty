@@ -27,8 +27,8 @@ struct TabCommand: ParsableCommand {
         @Option(name: .long, help: "Executable to run")
         var exec: String?
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -58,8 +58,8 @@ struct TabCommand: ParsableCommand {
         @Option(name: .long, help: "Session ID")
         var session: Int
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -85,8 +85,8 @@ struct TabCommand: ParsableCommand {
         @Argument(help: "Tab ID")
         var id: Int
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -112,8 +112,8 @@ struct TabCommand: ParsableCommand {
         @Argument(help: "Tab ID")
         var id: Int
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -140,8 +140,8 @@ struct TabCommand: ParsableCommand {
         @Argument(help: "New name")
         var name: String
 
-        @Option(name: .long, help: "Choose output format")
-        var format = OutputFormat.detect()
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)

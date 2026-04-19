@@ -14,7 +14,6 @@ public struct TabResponse: Codable, Sendable, PrintableByFormatter {
     }
 
     public static func formatHeader() -> [String] {
-
         [
             "ID",
             "Title",
@@ -31,5 +30,4 @@ public struct TabResponse: Codable, Sendable, PrintableByFormatter {
             self.paneIds.map { "\($0)" }.joined(separator: ", "),
         ]
     }
-
 }

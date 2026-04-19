@@ -12,8 +12,6 @@ public struct GetTextResponse: Codable, Sendable, PrintableByFormatter {
     }
 
     public func formatRow() -> [String] {
-        [
-            self.text
-        ]
+        [self.text]
     }
 }

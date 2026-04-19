@@ -34,5 +34,4 @@ public struct SessionResponse: Codable, Sendable, PrintableByFormatter {
             self.tabIds.map { "\($0)" }.joined(separator: ", "),
         ]
     }
-
 }

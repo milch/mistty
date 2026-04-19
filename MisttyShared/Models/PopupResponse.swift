@@ -30,9 +30,8 @@ public struct PopupResponse: Codable, Sendable, PrintableByFormatter {
             "\(self.id)",
             self.name,
             self.command,
-            "\(self.isVisible ? "visible" : "hidden")",
+            self.isVisible ? "visible" : "hidden",
             "\(self.paneId)",
         ]
     }
-
 }

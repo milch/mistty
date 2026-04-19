@@ -30,7 +30,7 @@ struct PaneCommand: ParsableCommand {
         var direction: String?
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -60,7 +60,7 @@ struct PaneCommand: ParsableCommand {
         var tab: Int
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -87,7 +87,7 @@ struct PaneCommand: ParsableCommand {
         var id: Int
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -114,7 +114,7 @@ struct PaneCommand: ParsableCommand {
         var id: Int
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -145,7 +145,7 @@ struct PaneCommand: ParsableCommand {
         var session: Int = 0
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func validate() throws {
             if id == nil && direction == nil {
@@ -193,7 +193,7 @@ struct PaneCommand: ParsableCommand {
         var amount: Int = 1
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -216,7 +216,7 @@ struct PaneCommand: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Get the active pane")
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -249,7 +249,7 @@ struct PaneCommand: ParsableCommand {
         var pane: Int = 0
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -280,7 +280,7 @@ struct PaneCommand: ParsableCommand {
         var pane: Int = 0
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
@@ -308,7 +308,7 @@ struct PaneCommand: ParsableCommand {
         var pane: Int = 0
 
         @Option(name: .long, help: "Choose the output format")
-        var format = OutputFormat.detect()
+        var format: OutputFormat = .auto
 
         func run() throws {
             let formatter = OutputFormatter(format: format)

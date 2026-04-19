@@ -2,22 +2,11 @@ import ArgumentParser
 import Foundation
 import MisttyShared
 
-enum OutputFormat: ExpressibleByArgument {
-    init?(argument: String) {
-        switch argument {
-        case "json": self = .json
-        case "human": self = .human
-        case "quiet": self = .quiet
-        default: return nil
-        }
-    }
+enum OutputFormat: String, CaseIterable, ExpressibleByArgument {
+    case auto
     case human
     case json
     case quiet
-
-    static func detect() -> OutputFormat {
-        return isatty(STDOUT_FILENO) == 0 ? .json : .human
-    }
 }
 
 struct OutputFormatter {
@@ -25,8 +14,14 @@ struct OutputFormatter {
     let encoder = JSONEncoder()
 
     init(format: OutputFormat) {
-        self.format = format
+        self.format = Self.resolve(format)
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    }
+
+    /// Resolve `.auto` against the current stdout TTY state. Non-TTY → JSON, TTY → human.
+    private static func resolve(_ format: OutputFormat) -> OutputFormat {
+        guard format == .auto else { return format }
+        return isatty(STDOUT_FILENO) == 0 ? .json : .human
     }
 
     func print<T: PrintableByFormatter & Codable>(_ item: T, printHeader: Bool = true) {
@@ -35,39 +30,47 @@ struct OutputFormatter {
             let row = item.formatRow()
             if printHeader {
                 let header = T.formatHeader()
-                printSingle(zip(header, row).map { ($0.0, $0.1) })
+                assert(header.count == row.count, "\(T.self) header/row column count mismatch")
+                printSingle(Array(zip(header, row)))
             } else {
                 Swift.print(row.joined(separator: "  "))
             }
-            break
         case .json:
             printJSON(item)
+        case .quiet, .auto:
             break
-        case .quiet: break
         }
     }
 
-    func print<T: PrintableByFormatter & Codable>(_ item: [T]) {
+    func print<T: PrintableByFormatter & Codable>(_ items: [T]) {
         switch format {
         case .human:
             let header = T.formatHeader()
-            let rows = item.map { $0.formatRow() }
+            let rows = items.map { $0.formatRow() }
+            for row in rows {
+                assert(header.count == row.count, "\(T.self) header/row column count mismatch")
+            }
             printTable(headers: header, rows: rows)
-            break
         case .json:
-            printJSON(item)
+            printJSON(items)
+        case .quiet, .auto:
             break
-        case .quiet: break
         }
     }
 
     func printJSON(_ item: Codable) {
-        if let pretty = try? encoder.encode(item),
-            let string = String(data: pretty, encoding: .utf8)
-        {
+        do {
+            let data = try encoder.encode(item)
+            guard let string = String(data: data, encoding: .utf8) else {
+                FileHandle.standardError.write(
+                    Data("Error: encoded JSON was not valid UTF-8\n".utf8))
+                Foundation.exit(1)
+            }
             Swift.print(string)
-        } else {
-            Swift.print(item)
+        } catch {
+            FileHandle.standardError.write(
+                Data("Error: failed to encode response as JSON: \(error)\n".utf8))
+            Foundation.exit(1)
         }
     }
 
@@ -117,7 +120,8 @@ struct OutputFormatter {
             Swift.print(message)
         case .json:
             Swift.print("{}")
-        case .quiet: break
+        case .quiet, .auto:
+            break
         }
     }
 
