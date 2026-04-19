@@ -45,15 +45,20 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
   - Excalidraw rendering support?
 - Same with an embedded webview, e.g. open localhost:3000 in a pane that is a web view for rendering, open docs or html files, ...
 
-### Misc
+### Misc & Bugs
 
-- Need to mark in the sidebar what tab is active inside of a session. Also need to visually highlight the active session
+- Need to mark in the sidebar what tab is active inside of a session. Also need to visually highlight the active session better, it is very hard to tell
 - Session manager search bug: When I type `mist` then the first hit is not `mistty` (full session name match) but a directory name match for another session
 - Cmd-W when pref pane is open closes the pane behind the pref pane
 - Session manager sort order: Active sessions should be at the very top (LRU)
 - The pane focusing seems to get "out of sync" sometimes - e.g. I'll have a split left and right, and after moving around sometimes it will show "no split to left". If I mouse click into the same pane it will "re-sync" and continues working again for a while. The other thing I notice is that the blue outline moves but the ACTUAL focus (i.e. where I type) stays on the other pane.
+  - The trigger seems to be the CLI. Using the CLI shifts the focus ring but doesn't actually change focus between the panes
 - Zoomed indicator in sidebar / tab bar
 - Sometimes the tab name is just "exit $PATH", which seems like a bug
+- I noticed randomly I coulnd't activate window mode using the shortcut (as in nothing would happen). After activating it through the menu bar it went back to working.
+- Switching between dark/light mode doesn't work - the terminal stays in whatever it was launched. Applications inside of the terminal switch fine
+- Popup launching from the CLI prints "write failed"
+- It seems there are some missing macOS permissions. When launching through the CLI via `open Mistty.app` it shows the full zoxide session list. But when opening interactively it only shows SSH sessions in the session manager
 
 ## Implemented
 
