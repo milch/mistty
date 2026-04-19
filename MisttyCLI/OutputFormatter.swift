@@ -16,7 +16,7 @@ enum OutputFormat: ExpressibleByArgument {
     case quiet
 
     static func detect() -> OutputFormat {
-        return isatty(STDOUT_FILENO) == 0 ? .quiet : .human
+        return isatty(STDOUT_FILENO) == 0 ? .json : .human
     }
 }
 
