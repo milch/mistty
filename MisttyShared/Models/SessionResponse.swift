@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SessionResponse: Codable, Sendable {
+public struct SessionResponse: Codable, Sendable, PrintableByFormatter {
     public let id: Int
     public let name: String
     public let directory: String
@@ -14,4 +14,25 @@ public struct SessionResponse: Codable, Sendable {
         self.tabCount = tabCount
         self.tabIds = tabIds
     }
+
+    public static func formatHeader() -> [String] {
+        [
+            "ID",
+            "Name",
+            "Directory",
+            "Tabs",
+            "Tab IDs",
+        ]
+    }
+
+    public func formatRow() -> [String] {
+        [
+            "\(self.id)",
+            self.name,
+            self.directory,
+            "\(self.tabCount)",
+            self.tabIds.map { "\($0)" }.joined(separator: ", "),
+        ]
+    }
+
 }

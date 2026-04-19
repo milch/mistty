@@ -29,14 +29,10 @@ struct PaneCommand: ParsableCommand {
         @Option(name: .long, help: "Split direction (horizontal or vertical)")
         var direction: String?
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -48,21 +44,12 @@ struct PaneCommand: ParsableCommand {
             do {
                 data = try client.call("createPane", params)
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let pane = try? JSONDecoder().decode(PaneResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(pane.id)"),
-                        ("Directory", pane.directory ?? "-"),
-                    ])
-                }
-            }
+            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
+            formatter.print(pane)
         }
     }
 
@@ -72,14 +59,10 @@ struct PaneCommand: ParsableCommand {
         @Option(name: .long, help: "Tab ID")
         var tab: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -88,24 +71,12 @@ struct PaneCommand: ParsableCommand {
             do {
                 data = try client.call("listPanes", ["tabId": tab])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let panes = try? JSONDecoder().decode([PaneResponse].self, from: data) {
-                    let rows = panes.map { p in
-                        ["\(p.id)", p.directory ?? "-"]
-                    }
-                    formatter.printTable(
-                        headers: ["ID", "DIRECTORY"],
-                        rows: rows
-                    )
-                }
-            }
+            let panes = try JSONDecoder().decode([PaneResponse].self, from: data)
+            formatter.print(panes)
         }
     }
 
@@ -115,14 +86,10 @@ struct PaneCommand: ParsableCommand {
         @Argument(help: "Pane ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -131,21 +98,12 @@ struct PaneCommand: ParsableCommand {
             do {
                 data = try client.call("getPane", ["id": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let pane = try? JSONDecoder().decode(PaneResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(pane.id)"),
-                        ("Directory", pane.directory ?? "-"),
-                    ])
-                }
-            }
+            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
+            formatter.print(pane)
         }
     }
 
@@ -155,14 +113,10 @@ struct PaneCommand: ParsableCommand {
         @Argument(help: "Pane ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -170,7 +124,7 @@ struct PaneCommand: ParsableCommand {
             do {
                 _ = try client.call("closePane", ["id": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
@@ -190,11 +144,8 @@ struct PaneCommand: ParsableCommand {
         @Option(name: .long, help: "Session ID for direction-based focus (0 = active)")
         var session: Int = 0
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func validate() throws {
             if id == nil && direction == nil {
@@ -203,7 +154,6 @@ struct PaneCommand: ParsableCommand {
         }
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -211,32 +161,22 @@ struct PaneCommand: ParsableCommand {
             let data: Data
             do {
                 if let direction {
-                    data = try client.call("focusPaneByDirection", ["direction": direction, "sessionId": session])
+                    data = try client.call(
+                        "focusPaneByDirection", ["direction": direction, "sessionId": session])
                 } else if let id {
                     data = try client.call("focusPane", ["id": id])
                 } else {
                     // Should not reach here due to validate()
-                    OutputFormatter.printError("Provide either a pane ID or --direction")
+                    formatter.printError("Provide either a pane ID or --direction")
                     Foundation.exit(1)
                 }
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let pane = try? JSONDecoder().decode(PaneResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(pane.id)"),
-                        ("Directory", pane.directory ?? "-"),
-                    ])
-                } else {
-                    formatter.printSuccess("Pane focused")
-                }
-            }
+            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
+            formatter.print(pane)
         }
     }
 
@@ -252,22 +192,19 @@ struct PaneCommand: ParsableCommand {
         @Option(name: .long, help: "Amount to resize")
         var amount: Int = 1
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
 
             do {
-                _ = try client.call("resizePane", ["id": id, "direction": direction, "amount": amount])
+                _ = try client.call(
+                    "resizePane", ["id": id, "direction": direction, "amount": amount])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
@@ -278,14 +215,10 @@ struct PaneCommand: ParsableCommand {
     struct Active: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Get the active pane")
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -294,21 +227,12 @@ struct PaneCommand: ParsableCommand {
             do {
                 data = try client.call("activePane")
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let pane = try? JSONDecoder().decode(PaneResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(pane.id)"),
-                        ("Directory", pane.directory ?? "-"),
-                    ])
-                }
-            }
+            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
+            formatter.print(pane)
         }
     }
 
@@ -324,14 +248,10 @@ struct PaneCommand: ParsableCommand {
         @Option(name: .long, help: "Pane ID (0 = active pane)")
         var pane: Int = 0
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -339,7 +259,7 @@ struct PaneCommand: ParsableCommand {
             do {
                 _ = try client.call("sendKeys", ["paneId": pane, "keys": keys])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
@@ -359,14 +279,10 @@ struct PaneCommand: ParsableCommand {
         @Option(name: .long, help: "Pane ID (0 = active pane)")
         var pane: Int = 0
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -374,7 +290,7 @@ struct PaneCommand: ParsableCommand {
             do {
                 _ = try client.call("runCommand", ["paneId": pane, "command": command])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
@@ -391,14 +307,10 @@ struct PaneCommand: ParsableCommand {
         @Option(name: .long, help: "Pane ID (0 = active pane)")
         var pane: Int = 0
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -407,19 +319,12 @@ struct PaneCommand: ParsableCommand {
             do {
                 data = try client.call("getText", ["paneId": pane])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                // In human mode, just print the text directly
-                if let text = String(data: data, encoding: .utf8) {
-                    print(text)
-                }
-            }
+            // Print the raw data/text
+            formatter.print(data)
         }
     }
 }

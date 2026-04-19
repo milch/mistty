@@ -18,14 +18,10 @@ struct WindowCommand: ParsableCommand {
     struct Create: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Create a new window")
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -34,35 +30,22 @@ struct WindowCommand: ParsableCommand {
             do {
                 data = try client.call("createWindow")
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let window = try? JSONDecoder().decode(WindowResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(window.id)"),
-                        ("Sessions", "\(window.sessionCount)"),
-                    ])
-                }
-            }
+            let window = try JSONDecoder().decode(WindowResponse.self, from: data)
+            formatter.print(window)
         }
     }
 
     struct List: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "List all windows")
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -71,24 +54,12 @@ struct WindowCommand: ParsableCommand {
             do {
                 data = try client.call("listWindows")
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let windows = try? JSONDecoder().decode([WindowResponse].self, from: data) {
-                    let rows = windows.map { w in
-                        ["\(w.id)", "\(w.sessionCount)"]
-                    }
-                    formatter.printTable(
-                        headers: ["ID", "SESSIONS"],
-                        rows: rows
-                    )
-                }
-            }
+            let window = try JSONDecoder().decode([WindowResponse].self, from: data)
+            formatter.print(window)
         }
     }
 
@@ -98,14 +69,10 @@ struct WindowCommand: ParsableCommand {
         @Argument(help: "Window ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -114,21 +81,12 @@ struct WindowCommand: ParsableCommand {
             do {
                 data = try client.call("getWindow", ["id": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let window = try? JSONDecoder().decode(WindowResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(window.id)"),
-                        ("Sessions", "\(window.sessionCount)"),
-                    ])
-                }
-            }
+            let window = try JSONDecoder().decode(WindowResponse.self, from: data)
+            formatter.print(window)
         }
     }
 
@@ -138,14 +96,10 @@ struct WindowCommand: ParsableCommand {
         @Argument(help: "Window ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -153,7 +107,7 @@ struct WindowCommand: ParsableCommand {
             do {
                 _ = try client.call("closeWindow", ["id": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
@@ -167,14 +121,10 @@ struct WindowCommand: ParsableCommand {
         @Argument(help: "Window ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -182,7 +132,7 @@ struct WindowCommand: ParsableCommand {
             do {
                 _ = try client.call("focusWindow", ["id": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 

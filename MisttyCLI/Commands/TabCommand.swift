@@ -27,14 +27,10 @@ struct TabCommand: ParsableCommand {
         @Option(name: .long, help: "Executable to run")
         var exec: String?
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -47,22 +43,12 @@ struct TabCommand: ParsableCommand {
             do {
                 data = try client.call("createTab", params)
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let tab = try? JSONDecoder().decode(TabResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(tab.id)"),
-                        ("Title", tab.title),
-                        ("Panes", "\(tab.paneCount)"),
-                    ])
-                }
-            }
+            let tab = try JSONDecoder().decode(TabResponse.self, from: data)
+            formatter.print(tab)
         }
     }
 
@@ -72,14 +58,10 @@ struct TabCommand: ParsableCommand {
         @Option(name: .long, help: "Session ID")
         var session: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -88,24 +70,12 @@ struct TabCommand: ParsableCommand {
             do {
                 data = try client.call("listTabs", ["sessionId": session])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let tabs = try? JSONDecoder().decode([TabResponse].self, from: data) {
-                    let rows = tabs.map { t in
-                        ["\(t.id)", t.title, "\(t.paneCount)"]
-                    }
-                    formatter.printTable(
-                        headers: ["ID", "TITLE", "PANES"],
-                        rows: rows
-                    )
-                }
-            }
+            let tabs = try JSONDecoder().decode([TabResponse].self, from: data)
+            formatter.print(tabs)
         }
     }
 
@@ -115,14 +85,10 @@ struct TabCommand: ParsableCommand {
         @Argument(help: "Tab ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -131,23 +97,12 @@ struct TabCommand: ParsableCommand {
             do {
                 data = try client.call("getTab", ["id": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let tab = try? JSONDecoder().decode(TabResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(tab.id)"),
-                        ("Title", tab.title),
-                        ("Panes", "\(tab.paneCount)"),
-                        ("Pane IDs", tab.paneIds.map { "\($0)" }.joined(separator: ", ")),
-                    ])
-                }
-            }
+            let tab = try JSONDecoder().decode(TabResponse.self, from: data)
+            formatter.print(tab)
         }
     }
 
@@ -157,14 +112,10 @@ struct TabCommand: ParsableCommand {
         @Argument(help: "Tab ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -172,7 +123,7 @@ struct TabCommand: ParsableCommand {
             do {
                 _ = try client.call("closeTab", ["id": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
@@ -189,14 +140,10 @@ struct TabCommand: ParsableCommand {
         @Argument(help: "New name")
         var name: String
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -205,22 +152,12 @@ struct TabCommand: ParsableCommand {
             do {
                 data = try client.call("renameTab", ["id": id, "name": name])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let tab = try? JSONDecoder().decode(TabResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(tab.id)"),
-                        ("Title", tab.title),
-                        ("Panes", "\(tab.paneCount)"),
-                    ])
-                }
-            }
+            let tab = try JSONDecoder().decode(TabResponse.self, from: data)
+            formatter.print(tab)
         }
     }
 }

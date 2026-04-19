@@ -156,7 +156,9 @@ public struct GhosttyPassthroughConfig: Sendable, Equatable {
     // Nested tables, TOML dates/times. Ghostty has no such config — warn so
     // the user spots a typo like `[ghostty.font]` instead of silent drop.
     FileHandle.standardError.write(
-      Data("[mistty] [ghostty] key '\(key)' has an unsupported TOML value type and was ignored\n".utf8))
+      Data(
+        "[mistty] [ghostty] key '\(key)' has an unsupported TOML value type and was ignored\n".utf8)
+    )
     return []
   }
 }
@@ -285,4 +287,3 @@ public func describeTOMLParseError(_ error: Error) -> String {
   }
   return error.localizedDescription
 }
-

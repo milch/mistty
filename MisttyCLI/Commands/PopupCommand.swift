@@ -38,22 +38,19 @@ struct PopupCommand: ParsableCommand {
         @Flag(name: .long, help: "Keep popup open when process exits")
         var keepOnExit: Bool = false
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
 
-            let sessionId = try resolveSessionId(session, client: client)
+            let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
             let popupName = name ?? exec ?? "popup"
             guard let command = exec ?? name else {
-                OutputFormatter.printError("Provide --name (from config) or --exec (ad-hoc command)")
+                formatter.printError(
+                    "Provide --name (from config) or --exec (ad-hoc command)")
                 Foundation.exit(1)
             }
 
@@ -61,33 +58,22 @@ struct PopupCommand: ParsableCommand {
 
             let data: Data
             do {
-                data = try client.call("openPopup", [
-                    "sessionId": sessionId,
-                    "name": popupName,
-                    "exec": command,
-                    "width": width,
-                    "height": height,
-                    "closeOnExit": shouldCloseOnExit,
-                ])
+                data = try client.call(
+                    "openPopup",
+                    [
+                        "sessionId": sessionId,
+                        "name": popupName,
+                        "exec": command,
+                        "width": width,
+                        "height": height,
+                        "closeOnExit": shouldCloseOnExit,
+                    ])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
-
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let popup = try? JSONDecoder().decode(PopupResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(popup.id)"),
-                        ("Name", popup.name),
-                        ("Command", popup.command),
-                        ("Visible", "\(popup.isVisible)"),
-                        ("Pane ID", "\(popup.paneId)"),
-                    ])
-                }
-            }
+            let popup = try JSONDecoder().decode(PopupResponse.self, from: data)
+            formatter.print(popup)
         }
     }
 
@@ -97,14 +83,10 @@ struct PopupCommand: ParsableCommand {
         @Argument(help: "Popup ID")
         var id: Int
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
@@ -112,7 +94,7 @@ struct PopupCommand: ParsableCommand {
             do {
                 _ = try client.call("closePopup", ["popupId": id])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
@@ -129,42 +111,26 @@ struct PopupCommand: ParsableCommand {
         @Option(name: .long, help: "Session ID (defaults to active session)")
         var session: Int?
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
 
-            let sessionId = try resolveSessionId(session, client: client)
+            let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
 
             let data: Data
             do {
                 data = try client.call("togglePopup", ["sessionId": sessionId, "name": name])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let popup = try? JSONDecoder().decode(PopupResponse.self, from: data) {
-                    formatter.printSingle([
-                        ("ID", "\(popup.id)"),
-                        ("Name", popup.name),
-                        ("Visible", "\(popup.isVisible)"),
-                    ])
-                } else {
-                    formatter.printSuccess("Popup '\(name)' toggled")
-                }
-            }
+            let popup = try JSONDecoder().decode(PopupResponse.self, from: data)
+            formatter.print(popup)
         }
     }
 
@@ -174,54 +140,40 @@ struct PopupCommand: ParsableCommand {
         @Option(name: .long, help: "Session ID (defaults to active session)")
         var session: Int?
 
-        @Flag(name: .long, help: "Output as JSON")
-        var json = false
-
-        @Flag(name: .long, help: "Output as human-readable text")
-        var human = false
+        @Option(name: .long, help: "Choose the output format")
+        var format = OutputFormat.detect()
 
         func run() throws {
-            let format = OutputFormat.detect(forceJSON: json, forceHuman: human)
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
             try client.connect()
 
-            let sessionId = try resolveSessionId(session, client: client)
+            let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
 
             let data: Data
             do {
                 data = try client.call("listPopups", ["sessionId": sessionId])
             } catch {
-                OutputFormatter.printError(error.localizedDescription)
+                formatter.printError(error.localizedDescription)
                 Foundation.exit(1)
             }
 
-            switch format {
-            case .json:
-                formatter.printJSON(data)
-            case .human:
-                if let popups = try? JSONDecoder().decode([PopupResponse].self, from: data) {
-                    let rows = popups.map { p in
-                        ["\(p.id)", p.name, p.command, p.isVisible ? "visible" : "hidden", "\(p.paneId)"]
-                    }
-                    formatter.printTable(
-                        headers: ["ID", "NAME", "COMMAND", "STATUS", "PANE"],
-                        rows: rows
-                    )
-                }
-            }
+            let popups = try JSONDecoder().decode([PopupResponse].self, from: data)
+            formatter.print(popups)
         }
     }
 }
 
 /// Resolve session ID: use provided value or look up the first (active) session.
-private func resolveSessionId(_ provided: Int?, client: IPCClient) throws -> Int {
+private func resolveSessionId(_ provided: Int?, client: IPCClient, formatter: OutputFormatter)
+    throws -> Int
+{
     if let sid = provided { return sid }
     let data = try client.call("listSessions")
     guard let sessions = try? JSONDecoder().decode([SessionResponse].self, from: data),
-          let first = sessions.first
+        let first = sessions.first
     else {
-        OutputFormatter.printError("No active session. Specify --session")
+        formatter.printError("No active session. Specify --session")
         Foundation.exit(1)
     }
     return first.id
