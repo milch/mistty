@@ -417,7 +417,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         content = ""
       }
 
-      reply(self.encode(["text": content]), nil)
+      reply(self.encode(GetTextResponse(text: content)), nil)
     }
   }
 

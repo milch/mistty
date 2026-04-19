@@ -20,10 +20,6 @@ enum OutputFormat: ExpressibleByArgument {
     }
 }
 
-struct GenericData: Codable {
-    let text: String
-}
-
 struct OutputFormatter {
     let format: OutputFormat
     let encoder = JSONEncoder()
@@ -33,27 +29,16 @@ struct OutputFormatter {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     }
 
-    func print(_ data: Data) {
+    func print<T: PrintableByFormatter & Codable>(_ item: T, printHeader: Bool = true) {
         switch format {
         case .human:
-            // In human mode, just print the text directly
-            if let text = String(data: data, encoding: .utf8) {
-                Swift.print(text)
-            }
-            break
-        case .json:
-            printJSON(GenericData(text: String(data: data, encoding: .utf8) ?? ""))
-            break
-        case .quiet: break
-        }
-    }
-
-    func print<T: PrintableByFormatter & Codable>(_ item: T) {
-        switch format {
-        case .human:
-            let header = T.formatHeader()
             let row = item.formatRow()
-            printSingle(zip(header, row).map { ($0.0, $0.1) })
+            if printHeader {
+                let header = T.formatHeader()
+                printSingle(zip(header, row).map { ($0.0, $0.1) })
+            } else {
+                Swift.print(row.joined(separator: "  "))
+            }
             break
         case .json:
             printJSON(item)

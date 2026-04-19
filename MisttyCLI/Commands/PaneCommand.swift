@@ -324,7 +324,8 @@ struct PaneCommand: ParsableCommand {
             }
 
             // Print the raw data/text
-            formatter.print(data)
+            let text = try JSONDecoder().decode(GetTextResponse.self, from: data)
+            formatter.print(text, printHeader: false)
         }
     }
 }
