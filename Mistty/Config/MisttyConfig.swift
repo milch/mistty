@@ -176,6 +176,11 @@ struct MisttyConfig: Sendable, Equatable {
   var ui: UIConfig = UIConfig()
   var ghostty: GhosttyPassthroughConfig = GhosttyPassthroughConfig()
 
+  /// Absolute path to the `zoxide` binary. When set, `ZoxideService` uses
+  /// this directly instead of probing common install locations or spawning
+  /// a login shell to resolve the path. Leading `~` is expanded.
+  var zoxidePath: String? = nil
+
   /// Values to show in Settings UI / Stepper bindings. Read-only surface over
   /// the optional storage.
   var resolvedFontSize: Int { fontSize ?? Self.defaultFontSize }
@@ -209,6 +214,10 @@ struct MisttyConfig: Sendable, Equatable {
     if let cursor = table["cursor_style"]?.string { config.cursorStyle = cursor }
     if let scrollback = table["scrollback_lines"]?.int { config.scrollbackLines = scrollback }
     if let sidebar = table["sidebar_visible"]?.bool { config.sidebarVisible = sidebar }
+    if let path = table["zoxide_path"]?.string {
+      let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+      config.zoxidePath = trimmed.isEmpty ? nil : (trimmed as NSString).expandingTildeInPath
+    }
     if let popupArray = table["popup"]?.array {
       config.popups = popupArray.compactMap { entry -> PopupDefinition? in
         guard let t = entry.table else { return nil }

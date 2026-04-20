@@ -36,6 +36,26 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertThrowsError(try MisttyConfig.parse("font_size = !!!invalid"))
   }
 
+  func test_zoxidePath_unsetByDefault() throws {
+    let config = try MisttyConfig.parse("")
+    XCTAssertNil(config.zoxidePath)
+  }
+
+  func test_zoxidePath_absolute() throws {
+    let config = try MisttyConfig.parse(#"zoxide_path = "/opt/homebrew/bin/zoxide""#)
+    XCTAssertEqual(config.zoxidePath, "/opt/homebrew/bin/zoxide")
+  }
+
+  func test_zoxidePath_expandsTilde() throws {
+    let config = try MisttyConfig.parse(#"zoxide_path = "~/.cargo/bin/zoxide""#)
+    XCTAssertEqual(config.zoxidePath, NSHomeDirectory() + "/.cargo/bin/zoxide")
+  }
+
+  func test_zoxidePath_emptyStringTreatedAsUnset() throws {
+    let config = try MisttyConfig.parse(#"zoxide_path = """#)
+    XCTAssertNil(config.zoxidePath)
+  }
+
   func test_parsesPopupDefinitions() throws {
     let toml = """
       [[popup]]

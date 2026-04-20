@@ -30,6 +30,14 @@ scrollback_lines = 10000
 # Toggle at runtime with cmd+\.
 sidebar_visible = true
 
+# Absolute path to the `zoxide` binary. Optional.
+# When unset, Mistty probes common install locations (Homebrew ARM/Intel,
+# nix-darwin, home-manager, nix single-user, ~/.cargo/bin, ~/.local/bin),
+# then falls back to spawning a login shell to resolve the path. Set this
+# to skip the probe — useful if zoxide lives somewhere exotic, or to avoid
+# the `bash -lc` fallback on every cold start. Leading ~ is expanded.
+# zoxide_path = "~/.cargo/bin/zoxide"
+
 # ─── Popup windows ───────────────────────────────────────────────────────────
 # Transient, floating terminal windows bound to a keyboard shortcut.
 # Add one [[popup]] block per popup. No defaults ship.
