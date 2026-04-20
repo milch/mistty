@@ -9,10 +9,15 @@ import XCTest
 @MainActor
 final class ChromePolishSnapshotTests: XCTestCase {
 
+  /// AppStorage keys these snapshot tests touch on UserDefaults.standard.
+  /// Cleared in `tearDown` so writes don't leak into the host user's
+  /// preferences or cross-contaminate between tests.
+  private static let pollutedDefaultsKeys = ["sidebarVisible"]
+
   /// Register the bundled Nerd Font so `ProcessIcon` glyphs render in
   /// snapshots instead of the missing-glyph box. Matches the registration
   /// `MisttyApp` does on launch.
-  private static let registerFontsOnce: Void = {
+  private static let registerFontsOnce: Bool = {
     // Walk every loaded bundle looking for the font. The Mistty target's
     // SPM resource bundle lives as a sibling of the test xctest bundle.
     for bundle in Bundle.allBundles + Bundle.allFrameworks {
@@ -21,7 +26,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
       {
         var error: Unmanaged<CFError>?
         _ = CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
-        return
+        return true
       }
     }
     // Last-ditch: look for the SPM resource bundle adjacent to the test bundle.
@@ -37,11 +42,13 @@ final class ChromePolishSnapshotTests: XCTestCase {
           var error: Unmanaged<CFError>?
           _ = CTFontManagerRegisterFontsForURL(
             candidate as CFURL, .process, &error)
-          return
+          return true
         }
       }
     }
+    return false
   }()
+
 
   /// Parks a hosting view inside a temporary offscreen window so that
   /// `List`/`.listStyle(.sidebar)` and other chrome that requires a window
@@ -49,7 +56,11 @@ final class ChromePolishSnapshotTests: XCTestCase {
   /// The window is retained by the returned helper so it stays alive for the
   /// duration of the snapshot comparison.
   @discardableResult
-  private func host<V: View>(_ view: V, size: CGSize) -> NSHostingView<V> {
+  private func host<V: View>(
+    _ view: V,
+    size: CGSize,
+    appearance: NSAppearance.Name = .darkAqua
+  ) -> NSHostingView<V> {
     let hosting = NSHostingView(rootView: view)
     hosting.frame = CGRect(origin: .zero, size: size)
     let window = NSWindow(
@@ -60,7 +71,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     )
     // Pin the appearance so snapshots are stable regardless of the host's
     // current system Appearance setting.
-    window.appearance = NSAppearance(named: .darkAqua)
+    window.appearance = NSAppearance(named: appearance)
     window.contentView = hosting
     window.layoutIfNeeded()
     hosting.layoutSubtreeIfNeeded()
@@ -76,9 +87,26 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
   override func setUp() {
     super.setUp()
-    _ = Self.registerFontsOnce
+    XCTAssertTrue(
+      Self.registerFontsOnce,
+      "SymbolsNerdFontMono font not registered — snapshots would render missing glyphs")
+
+    // Skip libghostty surface creation so the embedded terminal doesn't
+    // spawn a shell whose macOS "Last login: <date>" banner makes snapshots
+    // non-deterministic.
+    TerminalSurfaceView.skipSurfaceCreation = true
+
     // Set to true to regenerate reference snapshots.
     // isRecording = true
+  }
+
+  override func tearDown() {
+    TerminalSurfaceView.skipSurfaceCreation = false
+    // Don't leak AppStorage writes into the host user's preferences.
+    for key in Self.pollutedDefaultsKeys {
+      UserDefaults.standard.removeObject(forKey: key)
+    }
+    super.tearDown()
   }
 
   // MARK: - Tab bar
@@ -123,6 +151,27 @@ final class ChromePolishSnapshotTests: XCTestCase {
       of: host(view, size: CGSize(width: 220, height: 200)),
       as: .image(size: CGSize(width: 220, height: 200)),
       named: "sidebar-session-row-nvim"
+    )
+  }
+
+  func test_sidebar_sessionRow_withProcessIcon_lightMode() {
+    // Spot-check that the sidebar styling still reads correctly in light
+    // mode. The bulk of the matrix is darkAqua-only; this is the foothold
+    // for parametrizing more views over both appearances later.
+    let store = SessionStore()
+    let session = store.createSession(
+      name: "mistty", directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
+    session.activeTab?.activePane?.processTitle = "nvim"
+    store.activeSession = session
+
+    let view = SidebarView(store: store, width: .constant(220))
+      .frame(width: 220, height: 200)
+      .background(Color(NSColor.windowBackgroundColor))
+
+    assertSnapshot(
+      of: host(view, size: CGSize(width: 220, height: 200), appearance: .aqua),
+      as: .image(size: CGSize(width: 220, height: 200)),
+      named: "sidebar-session-row-nvim-light"
     )
   }
 
@@ -200,13 +249,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
     let view = ContentView(store: store, config: .default)
       .frame(width: 1200, height: 800)
 
-    // Terminal subprocesses print "Last login: <date>" non-deterministically,
-    // so allow a small pixel tolerance over the chrome area.
     assertSnapshot(
       of: host(view, size: CGSize(width: 1200, height: 800)),
-      as: .image(
-        precision: 0.95, perceptualPrecision: 0.95,
-        size: CGSize(width: 1200, height: 800)),
+      as: .image(size: CGSize(width: 1200, height: 800)),
       named: "content-view-full-window"
     )
   }

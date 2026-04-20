@@ -2,6 +2,11 @@ import AppKit
 import GhosttyKit
 
 final class TerminalSurfaceView: NSView {
+  /// When true, skip libghostty surface creation entirely. Snapshot tests
+  /// flip this so the embedded terminal doesn't spawn a shell whose
+  /// "Last login: <date>" output would make the snapshot non-deterministic.
+  nonisolated(unsafe) static var skipSurfaceCreation = false
+
   nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
   var onSelect: (() -> Void)?
   var scrollbarState = ScrollbarState()
@@ -37,6 +42,10 @@ final class TerminalSurfaceView: NSView {
 
     super.init(frame: frame)
     wantsLayer = true
+
+    if Self.skipSurfaceCreation {
+      return
+    }
 
     guard let app = GhosttyAppManager.shared.app else {
       print("[TerminalSurfaceView] No ghostty app available")
