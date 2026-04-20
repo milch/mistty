@@ -109,12 +109,16 @@ struct ContentView: View {
         showingSessionManager = true
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyToggleTabBar)) { _ in
-        let tabCount = store.activeSession?.tabs.count ?? 1
-        let configured = config.ui.tabBarMode.shouldShow(
-          sidebarVisible: sidebarVisible, tabCount: tabCount)
+        let configured = configuredTabBarShow()
         withAnimation(.easeInOut(duration: 0.15)) {
           tabBarOverride = tabBarOverride.toggled(configuredShow: configured)
         }
+      }
+      .onChange(of: sidebarVisible) { _, _ in
+        resolveOverrideIfMatched()
+      }
+      .onChange(of: store.activeSession?.tabs.count) { _, _ in
+        resolveOverrideIfMatched()
       }
   }
 
@@ -139,7 +143,7 @@ struct ContentView: View {
         if let session = store.activeSession,
           let tab = session.activeTab
         {
-          let tabBarShouldShow = shouldShowTabBar(tabCount: session.tabs.count)
+          let tabBarShouldShow = shouldShowTabBar()
           VStack(spacing: 0) {
             if tabBarShouldShow {
               VStack(spacing: 0) {
@@ -282,10 +286,28 @@ struct ContentView: View {
     }
   }
 
-  private func shouldShowTabBar(tabCount: Int) -> Bool {
-    let configured = config.ui.tabBarMode.shouldShow(
+  /// Evaluates the configured `tab_bar_mode` rule against the current
+  /// sidebar visibility and active session's tab count. Does not consider
+  /// any user override — use this as the input to `TabBarVisibilityOverride`.
+  private func configuredTabBarShow() -> Bool {
+    let tabCount = store.activeSession?.tabs.count ?? 1
+    return config.ui.tabBarMode.shouldShow(
       sidebarVisible: sidebarVisible, tabCount: tabCount)
-    return tabBarOverride.effectiveShow(configuredShow: configured)
+  }
+
+  private func shouldShowTabBar() -> Bool {
+    tabBarOverride.effectiveShow(configuredShow: configuredTabBarShow())
+  }
+
+  /// Clear the override when the configured rule would produce the same
+  /// visibility we're already forcing — i.e. the override has become
+  /// redundant. Called from `.onChange` on its inputs.
+  private func resolveOverrideIfMatched() {
+    guard tabBarOverride != .auto else { return }
+    let configured = configuredTabBarShow()
+    if tabBarOverride.effectiveShow(configuredShow: configured) == configured {
+      tabBarOverride = .auto
+    }
   }
 
   private func splitPane(direction: SplitDirection) {
