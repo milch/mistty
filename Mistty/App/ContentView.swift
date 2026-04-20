@@ -554,20 +554,23 @@ struct ContentView: View {
         return nil  // Consume all other keys in join-pick mode
       }
 
-      // Cmd+Arrow to resize
+      // Cmd+Arrow resize: 5 cells, Cmd+Shift+Arrow resize: 1 cell.
+      // Sign matches existing semantics — divider moves right/down on
+      // positive cells (pane A grows).
       if event.modifierFlags.contains(.command) {
+        let cells = event.modifierFlags.contains(.shift) ? 1 : 5
         switch event.keyCode {
-        case 123:  // Cmd+Left — shrink horizontal
-          resizeActivePane(delta: -0.05, along: .horizontal)
+        case 123:  // Left
+          resizeActivePaneCells(-cells, along: .horizontal)
           return nil
-        case 124:  // Cmd+Right — grow horizontal
-          resizeActivePane(delta: 0.05, along: .horizontal)
+        case 124:  // Right
+          resizeActivePaneCells(cells, along: .horizontal)
           return nil
-        case 126:  // Cmd+Up — shrink vertical
-          resizeActivePane(delta: -0.05, along: .vertical)
+        case 126:  // Up
+          resizeActivePaneCells(-cells, along: .vertical)
           return nil
-        case 125:  // Cmd+Down — grow vertical
-          resizeActivePane(delta: 0.05, along: .vertical)
+        case 125:  // Down
+          resizeActivePaneCells(cells, along: .vertical)
           return nil
         default: break
         }
@@ -687,6 +690,34 @@ struct ContentView: View {
       let pane = tab.activePane
     else { return }
     tab.layout.resizeSplit(containing: pane, delta: delta, along: direction)
+  }
+
+  /// Resize the split containing the active pane by a row/column count.
+  /// Falls back to a ratio-based resize (5% / 1%) if cell metrics aren't
+  /// available yet (e.g. before the surface has measured its cell size).
+  private func resizeActivePaneCells(_ cells: Int, along direction: SplitDirection) {
+    guard let tab = store.activeSession?.activeTab,
+      let pane = tab.activePane
+    else { return }
+    let surfaceView = pane.surfaceView
+    let paneBounds = surfaceView.bounds
+    guard let metrics = surfaceView.gridMetrics(),
+      let unit = tab.layout.unitRect(of: pane),
+      unit.width > 0, unit.height > 0,
+      paneBounds.width > 0, paneBounds.height > 0
+    else {
+      // Fallback: approximate ratio per cell (tab has 80 cols / 24 rows)
+      let approxCells = CGFloat(abs(cells))
+      let ratio: CGFloat = direction == .horizontal ? approxCells / 80.0 : approxCells / 24.0
+      let delta: CGFloat = (cells < 0 ? -ratio : ratio)
+      tab.layout.resizeSplit(containing: pane, delta: delta, along: direction)
+      return
+    }
+    let tabSize: CGFloat =
+      direction == .horizontal ? paneBounds.width / unit.width : paneBounds.height / unit.height
+    let cellSize: CGFloat = direction == .horizontal ? metrics.cellWidth : metrics.cellHeight
+    tab.layout.resizeSplit(
+      containing: pane, cells: cells, along: direction, cellSize: cellSize, tabSize: tabSize)
   }
 
   private func removeWindowModeMonitor() {

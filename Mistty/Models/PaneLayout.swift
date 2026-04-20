@@ -141,6 +141,77 @@ struct PaneLayout {
     root = Self.adjustRatio(root, target: pane.id, delta: delta, along: direction)
   }
 
+  /// Resize the split by `cells` rows (for `.vertical`) or columns (for
+  /// `.horizontal`) instead of a ratio. `cellSize` is the grid cell size in
+  /// points along the movement axis; `tabSize` is the enclosing tab's pixel
+  /// size along the movement axis. We walk to the split whose divider would
+  /// actually move, compute its container's pixel extent from its unit rect,
+  /// and convert `cells * cellSize` into a ratio delta. Positive `cells`
+  /// matches `resizeSplit(containing:delta:along:)` sign semantics — divider
+  /// moves right/down.
+  mutating func resizeSplit(
+    containing pane: MisttyPane,
+    cells: Int,
+    along direction: SplitDirection,
+    cellSize: CGFloat,
+    tabSize: CGFloat
+  ) {
+    guard cells != 0, cellSize > 0, tabSize > 0 else { return }
+    guard
+      let container = Self.targetSplitContainer(
+        root, target: pane.id, along: direction,
+        bounds: CGRect(x: 0, y: 0, width: 1, height: 1))
+    else { return }
+    let containerPx: CGFloat =
+      direction == .horizontal ? container.width * tabSize : container.height * tabSize
+    guard containerPx > 0 else { return }
+    let delta = CGFloat(cells) * cellSize / containerPx
+    root = Self.adjustRatio(root, target: pane.id, delta: delta, along: direction)
+  }
+
+  /// Walk the tree and return the unit rect of the split node whose ratio
+  /// `adjustRatio` would mutate — i.e. the first ancestor split that both
+  /// contains `target` AND whose direction matches `along`. Returns `nil` if
+  /// no such split exists (single-pane tab, or target not found).
+  private static func targetSplitContainer(
+    _ node: PaneLayoutNode,
+    target: Int,
+    along direction: SplitDirection,
+    bounds: CGRect
+  ) -> CGRect? {
+    switch node {
+    case .leaf, .empty:
+      return nil
+    case .split(let dir, let a, let b, let ratio):
+      let aContains = collectLeaves(a).contains { $0.id == target }
+      let bContains = collectLeaves(b).contains { $0.id == target }
+      guard aContains || bContains else { return nil }
+      if dir == direction {
+        return bounds
+      }
+      // Recurse with shrunken bounds along the non-matching axis
+      let aBounds: CGRect
+      let bBounds: CGRect
+      switch dir {
+      case .horizontal:
+        let w = bounds.width * ratio
+        aBounds = CGRect(x: bounds.minX, y: bounds.minY, width: w, height: bounds.height)
+        bBounds = CGRect(
+          x: bounds.minX + w, y: bounds.minY, width: bounds.width - w, height: bounds.height)
+      case .vertical:
+        let h = bounds.height * ratio
+        aBounds = CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: h)
+        bBounds = CGRect(
+          x: bounds.minX, y: bounds.minY + h, width: bounds.width, height: bounds.height - h)
+      }
+      if aContains {
+        return targetSplitContainer(a, target: target, along: direction, bounds: aBounds)
+      } else {
+        return targetSplitContainer(b, target: target, along: direction, bounds: bBounds)
+      }
+    }
+  }
+
   private static func adjustRatio(
     _ node: PaneLayoutNode,
     target: Int,
@@ -171,6 +242,13 @@ struct PaneLayout {
   }
 
   // MARK: - Pane Navigation
+
+  /// Unit rect of the given pane within the layout (coordinates in [0, 1]).
+  /// Useful for back-converting a pane's pixel bounds into total tab bounds:
+  /// `tabWidth = paneBounds.width / unitRect.width`.
+  func unitRect(of pane: MisttyPane) -> CGRect? {
+    Self.collectRects(root, in: CGRect(x: 0, y: 0, width: 1, height: 1))[pane.id]
+  }
 
   /// Find the nearest adjacent pane in `direction` using the actual layout
   /// geometry. Computes each leaf's unit rect (within [0, 1]), filters to
