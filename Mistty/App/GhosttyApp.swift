@@ -215,20 +215,25 @@ final class GhosttyAppManager {
       // Wait for `didFinishLaunchingNotification` so the app is active when
       // the alert runs; otherwise it shows up behind other windows / without
       // focus during bootstrap.
-      var observer: NSObjectProtocol?
-      observer = NotificationCenter.default.addObserver(
-        forName: NSApplication.didFinishLaunchingNotification,
-        object: nil, queue: .main
-      ) { _ in
-        if let observer { NotificationCenter.default.removeObserver(observer) }
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "Mistty could not parse config.toml"
-        alert.informativeText =
-          "Falling back to defaults.\n\n\(message)\n\nFile: \(MisttyConfig.configURL.path)"
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+      //
+      // Use the async notification sequence so the continuation body stays on
+      // the main actor and we don't have to fight `@Sendable` closure
+      // isolation rules of `addObserver(forName:object:queue:using:)`.
+      Task { @MainActor in
+        let notifications = NotificationCenter.default.notifications(
+          named: NSApplication.didFinishLaunchingNotification
+        )
+        for await _ in notifications {
+          NSApp.activate(ignoringOtherApps: true)
+          let alert = NSAlert()
+          alert.alertStyle = .warning
+          alert.messageText = "Mistty could not parse config.toml"
+          alert.informativeText =
+            "Falling back to defaults.\n\n\(message)\n\nFile: \(MisttyConfig.configURL.path)"
+          alert.addButton(withTitle: "OK")
+          alert.runModal()
+          break
+        }
       }
     }
 
