@@ -94,12 +94,36 @@ install-release: bundle-release
     cp -R build/Mistty.app /Applications/Mistty.app
     echo "Installed: /Applications/Mistty.app (release)"
 
-# Run the app (debug)
-run: install
+# Run the app (debug). Optionally from a worktree at .worktrees/<name>.
+run worktree="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{worktree}}" ]; then
+      just install
+    else
+      DIR=".worktrees/{{worktree}}"
+      if [ ! -d "$DIR" ]; then
+        echo "Worktree not found: $DIR" >&2
+        exit 1
+      fi
+      (cd "$DIR" && just install)
+    fi
     open /Applications/Mistty-dev.app
 
-# Run the app (release)
-run-release: install-release
+# Run the app (release). Optionally from a worktree at .worktrees/<name>.
+run-release worktree="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{worktree}}" ]; then
+      just install-release
+    else
+      DIR=".worktrees/{{worktree}}"
+      if [ ! -d "$DIR" ]; then
+        echo "Worktree not found: $DIR" >&2
+        exit 1
+      fi
+      (cd "$DIR" && just install-release)
+    fi
     open /Applications/Mistty.app
 
 # Run tests
