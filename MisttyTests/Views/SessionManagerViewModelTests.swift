@@ -490,4 +490,69 @@ final class SessionManagerViewModelTests: XCTestCase {
     vm.confirmSelection()
     XCTAssertEqual(store.activeSession?.name, "work-project")
   }
+
+  // MARK: - Running session ordering and boost
+
+  func test_runningSessions_sortedFirst_byLastActivated() async {
+    let store = SessionStore()
+    let _ = store.createSession(name: "alpha", directory: URL(fileURLWithPath: "/tmp/alpha-x"))
+    let beta = store.createSession(name: "beta", directory: URL(fileURLWithPath: "/tmp/beta-x"))
+    let _ = store.createSession(name: "gamma", directory: URL(fileURLWithPath: "/tmp/gamma-x"))
+
+    // Activate beta last so it should appear on top.
+    store.activeSession = beta
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+
+    let runningNames = vm.filteredItems.compactMap { item -> String? in
+      if case .runningSession(let s) = item { return s.name }
+      return nil
+    }
+    XCTAssertEqual(runningNames.first, "beta")
+
+    // All running sessions must appear before any non-running item.
+    let firstNonRunning = vm.filteredItems.firstIndex { !$0.isRunningSession }
+    let lastRunning = vm.filteredItems.lastIndex { $0.isRunningSession }
+    if let first = firstNonRunning, let last = lastRunning {
+      XCTAssertLessThan(last, first, "Running sessions should be contiguous at the top")
+    }
+  }
+
+  func test_search_displayNamePrefixOutranksScatteredSubtitleMatch() {
+    // Regression: typing "mist" should rank "mistty" above
+    // "ha-is-there-a-seattle-home-game-today" — the latter only matches via
+    // boundary chars in its full path /Users/manu/Developer/ha-is-there-...,
+    // whereas "mist" is a clean prefix of "mistty".
+    let mistName = FuzzyMatcher.match(query: "mist", target: "mistty")!.score
+    let haPath = FuzzyMatcher.match(
+      query: "mist",
+      target: "/Users/manu/Developer/ha-is-there-a-seattle-home-game-today")!.score
+    let subtitlePenalty = 0.6
+    XCTAssertGreaterThan(
+      mistName, haPath * subtitlePenalty,
+      "displayName prefix match must beat penalized subtitle match")
+  }
+
+  func test_runningSessionBoost_appliedToFuzzyScore() async {
+    let store = SessionStore()
+    let session = store.createSession(
+      name: "mistty", directory: URL(fileURLWithPath: "/tmp/mistty-test"))
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    vm.updateQuery("mist")
+
+    let itemId = "session-\(session.id)"
+    guard let result = vm.matchResults[itemId] else {
+      XCTFail("No match result for mistty session")
+      return
+    }
+    // Without boost the normalized score for "mist" matching "mistty" is ~0.32.
+    // With the 1.5x running-session boost it should land near ~0.48.
+    XCTAssertGreaterThan(
+      result.score, 0.4, "Running session match should be boosted above raw fuzzy score")
+  }
 }

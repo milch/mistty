@@ -89,6 +89,10 @@ enum SessionManagerItem {
 @Observable
 @MainActor
 final class SessionManagerViewModel {
+  /// Multiplier applied to subtitle (path/hostname) match scores so a clean
+  /// hit on the displayName outranks a scattered hit across a long subtitle.
+  private static let subtitlePenalty: Double = 0.6
+
   var query = ""
   private var allItems: [SessionManagerItem] = []
   var filteredItems: [SessionManagerItem] = []
@@ -188,19 +192,25 @@ final class SessionManagerViewModel {
         let displayMatch = FuzzyMatcher.match(query: token, target: fields.rawName)
         let subtitleMatch = fields.subtitle.flatMap { FuzzyMatcher.match(query: token, target: $0) }
 
-        if let dm = displayMatch, let sm = subtitleMatch {
-          if dm.score >= sm.score {
+        // Subtitle matches are penalized so a clean displayName hit beats a
+        // scattered match across a long path. Without this, a query like
+        // "mist" can pick up boundary bonuses in
+        // "/Users/manu/Developer/ha-is-there-..." and outscore "mistty".
+        let subtitleScore = subtitleMatch.map { $0.score * Self.subtitlePenalty }
+
+        if let dm = displayMatch, let sm = subtitleMatch, let ss = subtitleScore {
+          if dm.score >= ss {
             minScore = min(minScore, dm.score)
             displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + fields.prefixLen })
           } else {
-            minScore = min(minScore, sm.score)
+            minScore = min(minScore, ss)
             subtitleIndices.append(contentsOf: sm.matchedIndices)
           }
         } else if let dm = displayMatch {
           minScore = min(minScore, dm.score)
           displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + fields.prefixLen })
-        } else if let sm = subtitleMatch {
-          minScore = min(minScore, sm.score)
+        } else if let sm = subtitleMatch, let ss = subtitleScore {
+          minScore = min(minScore, ss)
           subtitleIndices.append(contentsOf: sm.matchedIndices)
         } else {
           allTokensMatch = false
@@ -211,6 +221,12 @@ final class SessionManagerViewModel {
       guard allTokensMatch else { continue }
 
       var finalScore = minScore
+
+      // Running session boost — prefer existing sessions over directories/SSH hosts
+      // when match quality is comparable.
+      if case .runningSession = item {
+        finalScore = min(finalScore * 1.5, 1.0)
+      }
 
       // SSH boost
       if isSSHQuery, case .sshHost = item {
