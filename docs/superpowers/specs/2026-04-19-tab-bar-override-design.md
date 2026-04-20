@@ -188,3 +188,4 @@ them. Leaving them in UserDefaults costs a few bytes per user.
 - **`.onChange` doesn't fire on initial render**: the override starts at
   `.auto`, so there's nothing to resolve. The handlers only run on
   subsequent changes, which is exactly what we want.
+- **Session switches trigger auto-resolve**: the `.onChange(of: store.activeSession?.tabs.count)` handler also fires when the user switches sessions (because the active session's tab count changes). The resolver then evaluates the configured rule against the *new* session's tab count and may clear an override that was set on the previous session. This is an inherent property of the per-window (not per-session) state scope; a cross-session override would need a different design.

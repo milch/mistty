@@ -289,6 +289,7 @@ struct ContentView: View {
   /// Evaluates the configured `tab_bar_mode` rule against the current
   /// sidebar visibility and active session's tab count. Does not consider
   /// any user override — use this as the input to `TabBarVisibilityOverride`.
+  /// Falls back to a tab count of 1 when no session is active.
   private func configuredTabBarShow() -> Bool {
     let tabCount = store.activeSession?.tabs.count ?? 1
     return config.ui.tabBarMode.shouldShow(
