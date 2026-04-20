@@ -50,6 +50,13 @@ struct TabBarItem: View {
           .frame(width: 6, height: 6)
       }
 
+      if tab.zoomedPane != nil {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+          .font(.system(size: 9, weight: .semibold))
+          .foregroundStyle(isActive ? .secondary : .tertiary)
+          .help("Zoomed pane")
+      }
+
       if isEditing {
         TextField(
           "Tab name", text: $editText,

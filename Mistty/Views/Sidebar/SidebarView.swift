@@ -65,6 +65,12 @@ struct SessionRowView: View {
           }
           Text(tab.displayTitle)
             .font(.system(size: 12))
+          if tab.zoomedPane != nil {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundStyle(.tertiary)
+              .help("Zoomed pane")
+          }
           Spacer()
         }
         .padding(.leading, 8)
