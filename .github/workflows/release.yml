@@ -35,10 +35,14 @@ jobs:
       - name: Cache Nix store
         uses: DeterminateSystems/magic-nix-cache-action@main
 
+      - name: Install just
+        uses: extractions/setup-just@v2
+
       - name: Verify tools
         run: |
           nix develop --command zig version
           swift --version
+          just --version
 
       - name: Cache Zig build
         uses: actions/cache@v4
@@ -61,22 +65,8 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-
 
-      - name: Build libghostty
-        run: nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast"
-
-      - name: Build release + bundle .app
-        run: |
-          swift build -c release
-          APP="build/Mistty.app"
-          rm -rf "$APP"
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp .build/release/Mistty "$APP/Contents/MacOS/Mistty"
-          swift build --target MisttyCLI -c release
-          cp .build/release/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
-          cp Mistty/Resources/Fonts/SymbolsNerdFontMono-Regular.ttf "$APP/Contents/Resources/"
-          cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
-          cp Mistty/Resources/Info.plist "$APP/Contents/"
-          codesign -s - -f --deep "$APP"
+      - name: Build + bundle .app
+        run: just bundle-release
 
       - name: Resolve tag
         id: tag
