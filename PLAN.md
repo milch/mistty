@@ -47,17 +47,11 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Misc & Bugs
 
-- Need to mark in the sidebar what tab is active inside of a session. Also need to visually highlight the active session better, it is very hard to tell
-- Session manager search bug: When I type `mist` then the first hit is not `mistty` (full session name match) but a directory name match for another session
-- Cmd-W when pref pane is open closes the pane behind the pref pane
-- Session manager sort order: Active sessions should be at the very top (LRU)
 - The pane focusing seems to get "out of sync" sometimes - e.g. I'll have a split left and right, and after moving around sometimes it will show "no split to left". If I mouse click into the same pane it will "re-sync" and continues working again for a while. The other thing I notice is that the blue outline moves but the ACTUAL focus (i.e. where I type) stays on the other pane.
   - The trigger seems to be the CLI. Using the CLI shifts the focus ring but doesn't actually change focus between the panes
-- Zoomed indicator in sidebar / tab bar
 - Sometimes the tab name is just "exit $PATH", which seems like a bug
 - I noticed randomly I coulnd't activate window mode using the shortcut (as in nothing would happen). After activating it through the menu bar it went back to working.
 - Switching between dark/light mode doesn't work - the terminal stays in whatever it was launched. Applications inside of the terminal switch fine
-- Popup launching from the CLI prints "write failed"
 - It seems there are some missing macOS permissions. When launching through the CLI via `open Mistty.app` it shows the full zoxide session list. But when opening interactively it only shows SSH sessions in the session manager
 
 ## Implemented
@@ -222,3 +216,12 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - `theme` is emitted before other passthrough keys so user overrides win over the theme's defaults; remaining keys follow alphabetical order
 - Top-level `font_size`, `font_family`, `cursor_style` in `config.toml` now flow through to ghostty when they differ from Mistty defaults (previously dead settings)
 - `[ui].content_padding_*` and `[ui].pane_border_*` still take precedence over anything under `[ghostty]`
+
+### Bug fixes
+
+- Sidebar: active tab gets a leading accent bar (clipped to the rounded corner) and tinted background; active session keeps the bold label and accent-tinted process icon
+- Zoomed-pane indicator: SF Symbol next to the tab title in both sidebar and tab bar when `tab.zoomedPane != nil`
+- Search ranking: running sessions get a 1.5× score boost so an open session outranks a comparable directory/SSH match; subtitle (path/hostname) matches penalized 0.6× so a clean displayName hit beats a scattered match across a long path
+- Session manager sort: running sessions pinned to the top in LRU order via a new `MisttySession.lastActivatedAt` updated by `SessionStore.activeSession.didSet`
+- Cmd-W routing: both the SwiftUI menu Button and the global `NSEvent` keyDown monitor now check `store.trackedWindows` before posting the close-pane notification, so Cmd-W closes the focused Settings window instead of leaking through to the terminal behind it
+- CLI popup "write failed": `IPCClient` now opens a fresh socket per call (the listener is one-shot), unblocking commands that issue multiple RPCs (e.g. `popup open` calling `listSessions` then `openPopup`)
