@@ -74,6 +74,7 @@ jobs:
           swift build --target MisttyCLI -c release
           cp .build/release/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
           cp Mistty/Resources/Fonts/SymbolsNerdFontMono-Regular.ttf "$APP/Contents/Resources/"
+          cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
           cp Mistty/Resources/Info.plist "$APP/Contents/"
           codesign -s - -f --deep "$APP"
 
