@@ -68,9 +68,15 @@ final class MisttyTab: Identifiable {
   }
 
   func closePane(_ pane: MisttyPane) {
+    let wasActive = activePane?.id == pane.id
     layout.remove(pane: pane)
     panes = layout.leaves
-    if activePane?.id == pane.id { activePane = panes.last }
+    if wasActive {
+      activePane = panes.last
+      // The closed pane's OSC 2 title was what the tab last latched onto.
+      // Replace with the new active pane's known title (or back to default).
+      title = activePane?.processTitle ?? "Shell"
+    }
   }
 
   /// Make `pane` the active pane AND route keyboard input to it. Prefer this
