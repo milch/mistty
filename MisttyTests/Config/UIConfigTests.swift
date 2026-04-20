@@ -90,14 +90,14 @@ final class UIConfigTests: XCTestCase {
     XCTAssertEqual(TabBarVisibilityOverride.auto.toggled(configuredShow: false), .visible)
   }
 
-  func test_toggle_fromHidden_goesVisible() {
-    XCTAssertEqual(TabBarVisibilityOverride.hidden.toggled(configuredShow: true), .visible)
-    XCTAssertEqual(TabBarVisibilityOverride.hidden.toggled(configuredShow: false), .visible)
+  func test_toggle_fromHidden_goesAuto() {
+    XCTAssertEqual(TabBarVisibilityOverride.hidden.toggled(configuredShow: true), .auto)
+    XCTAssertEqual(TabBarVisibilityOverride.hidden.toggled(configuredShow: false), .auto)
   }
 
-  func test_toggle_fromVisible_goesHidden() {
-    XCTAssertEqual(TabBarVisibilityOverride.visible.toggled(configuredShow: true), .hidden)
-    XCTAssertEqual(TabBarVisibilityOverride.visible.toggled(configuredShow: false), .hidden)
+  func test_toggle_fromVisible_goesAuto() {
+    XCTAssertEqual(TabBarVisibilityOverride.visible.toggled(configuredShow: true), .auto)
+    XCTAssertEqual(TabBarVisibilityOverride.visible.toggled(configuredShow: false), .auto)
   }
 
   // MARK: TOML parsing

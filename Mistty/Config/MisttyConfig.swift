@@ -70,9 +70,17 @@ enum TabBarVisibilityOverride: String, Sendable, Equatable, CaseIterable {
     }
   }
 
-  /// Next override after a user toggle: force the opposite of whatever is currently showing.
+  /// Next override after a user toggle:
+  /// - From `.auto`, flip to the opposite of whatever the config rule shows.
+  /// - From `.hidden`/`.visible`, return to `.auto` so the user can pop the
+  ///   override without having to know its current direction.
   func toggled(configuredShow: Bool) -> TabBarVisibilityOverride {
-    effectiveShow(configuredShow: configuredShow) ? .hidden : .visible
+    switch self {
+    case .auto:
+      return configuredShow ? .hidden : .visible
+    case .hidden, .visible:
+      return .auto
+    }
   }
 }
 
