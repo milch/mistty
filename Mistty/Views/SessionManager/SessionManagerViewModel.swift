@@ -74,6 +74,16 @@ enum SessionManagerItem {
     case .newSession: return "plus.circle"
     }
   }
+
+  var isRunningSession: Bool {
+    if case .runningSession = self { return true }
+    return false
+  }
+
+  var lastActivatedAt: Date? {
+    if case .runningSession(let s) = self { return s.lastActivatedAt }
+    return nil
+  }
 }
 
 @Observable
@@ -110,6 +120,13 @@ final class SessionManagerViewModel {
     items += sshHosts.map { .sshHost($0) }
 
     allItems = items.sorted { a, b in
+      // Running sessions always come first, ordered by most recently activated.
+      if a.isRunningSession != b.isRunningSession { return a.isRunningSession }
+      if a.isRunningSession {
+        let aDate = a.lastActivatedAt ?? .distantPast
+        let bDate = b.lastActivatedAt ?? .distantPast
+        if aDate != bDate { return aDate > bDate }
+      }
       let scoreA = a.frecencyKey.map { frecencyService.score(for: $0) } ?? 0
       let scoreB = b.frecencyKey.map { frecencyService.score(for: $0) } ?? 0
       if scoreA != scoreB { return scoreA > scoreB }

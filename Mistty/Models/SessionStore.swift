@@ -10,7 +10,11 @@ struct TrackedWindow {
 @MainActor
 final class SessionStore {
   private(set) var sessions: [MisttySession] = []
-  var activeSession: MisttySession?
+  var activeSession: MisttySession? {
+    didSet {
+      activeSession?.lastActivatedAt = Date()
+    }
+  }
 
   private var nextSessionId = 1
   private var nextTabId = 1
