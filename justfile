@@ -77,6 +77,7 @@ bundle: build
     cp .build/debug/Mistty "$APP/Contents/MacOS/Mistty"
     swift build --target MisttyCLI
     cp .build/debug/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
+    cp Mistty/Resources/Fonts/SymbolsNerdFontMono-Regular.ttf "$APP/Contents/Resources/"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
     # Prefer the dev-variant icon so the Dock/Finder distinguishes dev from
     # release at a glance. Falls back to the base icon if the dev variant
@@ -99,6 +100,7 @@ bundle-release: build-release
     cp .build/release/Mistty "$APP/Contents/MacOS/Mistty"
     swift build --target MisttyCLI -c release
     cp .build/release/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
+    cp Mistty/Resources/Fonts/SymbolsNerdFontMono-Regular.ttf "$APP/Contents/Resources/"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
     cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
     codesign -s - -f "$APP"

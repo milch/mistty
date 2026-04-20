@@ -20,7 +20,7 @@ struct MisttyApp: App {
 
   private static func registerBundledFonts() {
     guard
-      let url = Bundle.module.url(
+      let url = Bundle.main.url(
         forResource: "SymbolsNerdFontMono-Regular",
         withExtension: "ttf")
     else {

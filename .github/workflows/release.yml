@@ -73,6 +73,7 @@ jobs:
           cp .build/release/Mistty "$APP/Contents/MacOS/Mistty"
           swift build --target MisttyCLI -c release
           cp .build/release/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
+          cp Mistty/Resources/Fonts/SymbolsNerdFontMono-Regular.ttf "$APP/Contents/Resources/"
           cp Mistty/Resources/Info.plist "$APP/Contents/"
           codesign -s - -f --deep "$APP"
 
@@ -95,6 +96,45 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           name: ${{ steps.tag.outputs.name }}
-          draft: true
+          draft: false
           generate_release_notes: true
           files: build/Mistty-${{ steps.tag.outputs.name }}-arm64.zip
+
+      - name: Update Homebrew tap
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+          DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          ZIP="build/Mistty-${TAG}-arm64.zip"
+          SHA256=$(shasum -a 256 "$ZIP" | awk '{print $1}')
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/tap_deploy
+          chmod 600 ~/.ssh/tap_deploy
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/tap_deploy -o IdentitiesOnly=yes"
+
+          TAP=$(mktemp -d)/homebrew-mistty
+          git clone git@github.com:milch/homebrew-mistty.git "$TAP"
+          cd "$TAP"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          CASK=Casks/mistty.rb
+          sed -i.bak -E \
+            -e "s|^([[:space:]]*version[[:space:]]+)\"[^\"]*\"|\\1\"${VERSION}\"|" \
+            -e "s|^([[:space:]]*sha256[[:space:]]+)\"[^\"]*\"|\\1\"${SHA256}\"|" \
+            "$CASK"
+          rm -f "${CASK}.bak"
+
+          if git diff --quiet; then
+            echo "Cask already up to date; nothing to push."
+            exit 0
+          fi
+          git add "$CASK"
+          git commit -m "Update mistty to ${TAG}"
+          git push origin HEAD:main
+
+          rm -f ~/.ssh/tap_deploy
