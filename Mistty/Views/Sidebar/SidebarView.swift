@@ -77,6 +77,16 @@ struct SessionRowView: View {
           .fontWeight(isActive ? .semibold : .regular)
         Spacer()
       }
+      .padding(.leading, 8)
+      .padding(.vertical, 2)
+      .overlay(alignment: .leading) {
+        if isActive {
+          RoundedRectangle(cornerRadius: 1)
+            .fill(Color.accentColor)
+            .frame(width: 2)
+            .padding(.vertical, 2)
+        }
+      }
       .contentShape(Rectangle())
       .onTapGesture { store.activeSession = session }
     }
