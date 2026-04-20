@@ -242,6 +242,21 @@ final class TerminalSurfaceView: NSView {
     }
   }
 
+  /// Propagate system light/dark switches to libghostty. The app-level
+  /// `ghostty_app_set_color_scheme` only bumps the app's conditional state —
+  /// existing surfaces keep their own `config_conditional_state`, so without
+  /// this call dual themes like `theme = light:X,dark:Y` stay stuck on
+  /// whichever variant was active when the surface was created.
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    guard let surface else { return }
+    let scheme: ghostty_color_scheme_e =
+      effectiveAppearance.name.rawValue.lowercased().contains("dark")
+        ? GHOSTTY_COLOR_SCHEME_DARK
+        : GHOSTTY_COLOR_SCHEME_LIGHT
+    ghostty_surface_set_color_scheme(surface, scheme)
+  }
+
   // MARK: - Keyboard Input
 
   /// Text accumulated from `interpretKeyEvents → insertText` during a keyDown.
