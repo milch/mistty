@@ -68,9 +68,9 @@ struct SessionRowView: View {
             .font(.system(size: 12, weight: isActiveTab ? .semibold : .regular))
             .foregroundStyle(isActiveTab ? .primary : .secondary)
           if tab.zoomedPane != nil {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
+            Image(systemName: "arrow.down.right.and.arrow.up.left")
               .font(.system(size: 9, weight: .semibold))
-              .foregroundStyle(.tertiary)
+              .foregroundStyle(isActiveTab ? .secondary : .tertiary)
               .help("Zoomed pane")
           }
           Spacer()
@@ -80,14 +80,14 @@ struct SessionRowView: View {
         .background {
           RoundedRectangle(cornerRadius: 4)
             .fill(isActiveTab ? Color.accentColor.opacity(0.18) : Color.clear)
-            .overlay(alignment: .leading) {
-              if isActiveTab {
-                Rectangle()
-                  .fill(Color.accentColor)
-                  .frame(width: 2)
-              }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .overlay(alignment: .leading) {
+          if isActiveTab {
+            RoundedRectangle(cornerRadius: 1)
+              .fill(Color.accentColor)
+              .frame(width: 2)
+              .padding(.vertical, 2)
+          }
         }
         .animation(.easeInOut(duration: 0.15), value: isActiveTab)
         .contentShape(Rectangle())
