@@ -896,10 +896,17 @@ struct ContentView: View {
   }
 
   private func installCloseMonitor() {
-    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
       let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
       guard flags.contains(.command),
         event.charactersIgnoringModifiers?.lowercased() == "w"
+      else { return event }
+      // Local monitors fire for every window in the app. Only intercept when
+      // the key window is one of our tracked terminal windows; otherwise let
+      // the event flow through so the system can close the focused window
+      // (Settings, etc.).
+      guard let key = NSApp.keyWindow,
+        store.trackedWindows.contains(where: { $0.window === key })
       else { return event }
       let name: Notification.Name =
         flags.contains(.shift) ? .misttyCloseTab : .misttyClosePane
