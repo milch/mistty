@@ -102,23 +102,35 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
   }
 }
 
-/// Clipboard read callback (stub).
+/// Clipboard read callback — libghostty invokes this for `paste_from_clipboard`
+/// (default Cmd+V) and for OSC-52 reads issued from inside the terminal. We
+/// hand the pasteboard contents back via `ghostty_surface_complete_clipboard_request`;
+/// if ghostty decides the paste is unsafe it'll route back through
+/// `confirm_read_clipboard_cb` with the same `state` pointer.
 private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = {
   userdata, clipboard, state in
-  guard let state else { return false }
+  guard let userdata, let state else { return false }
   let pasteboard = NSPasteboard.general
-  if let str = pasteboard.string(forType: .string) {
-    str.withCString { ptr in
-      // TODO: complete clipboard read
-    }
+  guard let str = pasteboard.string(forType: .string), !str.isEmpty else { return false }
+  let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+  guard let surface = view.surface else { return false }
+  str.withCString { ptr in
+    ghostty_surface_complete_clipboard_request(surface, ptr, state, false)
   }
-  return false
+  return true
 }
 
-/// Clipboard confirm read callback (stub).
+/// Clipboard confirm read callback — ghostty calls this when the clipboard
+/// content it just read looks unsafe (e.g. contains control chars). Without a
+/// confirmation UI we auto-confirm so Cmd+V always lands; OSC-52 reads will
+/// also go through, matching ghostty's "trust the user" default until we build
+/// a real prompt.
 private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard_cb = {
   userdata, str, state, request in
-  guard let state else { return }
+  guard let userdata, let state, let str else { return }
+  let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+  guard let surface = view.surface else { return }
+  ghostty_surface_complete_clipboard_request(surface, str, state, true)
 }
 
 /// Clipboard write callback.
