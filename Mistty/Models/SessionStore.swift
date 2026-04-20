@@ -172,4 +172,12 @@ final class SessionStore {
     else { return nil }
     return (session, tab, pane)
   }
+
+  /// True when the system's key window is a tracked terminal window. Used to
+  /// scope app-wide shortcuts (Cmd-W, etc.) so they don't fire while an
+  /// auxiliary window like Settings has focus.
+  func isTerminalWindowKey() -> Bool {
+    guard let key = NSApp.keyWindow else { return false }
+    return trackedWindows.contains { $0.window === key }
+  }
 }

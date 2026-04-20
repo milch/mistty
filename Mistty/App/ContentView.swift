@@ -340,6 +340,12 @@ struct ContentView: View {
   }
 
   private func handleClosePane() {
+    // Dismiss the session manager overlay first; otherwise Cmd-W would
+    // close a pane sitting behind the overlay.
+    if showingSessionManager {
+      showingSessionManager = false
+      return
+    }
     if let session = store.activeSession,
       let popup = session.activePopup,
       popup.isVisible
@@ -394,6 +400,10 @@ struct ContentView: View {
   }
 
   private func handleCloseTab() {
+    if showingSessionManager {
+      showingSessionManager = false
+      return
+    }
     guard let session = store.activeSession,
       let tab = session.activeTab
     else { return }
@@ -905,9 +915,7 @@ struct ContentView: View {
       // the key window is one of our tracked terminal windows; otherwise let
       // the event flow through so the system can close the focused window
       // (Settings, etc.).
-      guard let key = NSApp.keyWindow,
-        store.trackedWindows.contains(where: { $0.window === key })
-      else { return event }
+      guard store.isTerminalWindowKey() else { return event }
       let name: Notification.Name =
         flags.contains(.shift) ? .misttyCloseTab : .misttyClosePane
       NotificationCenter.default.post(name: name, object: nil)

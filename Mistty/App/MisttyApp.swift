@@ -97,7 +97,7 @@ struct MisttyApp: App {
         Button("Close Pane") {
           // If a non-terminal window (e.g. Settings) is key, let the system
           // close that window instead of routing the shortcut to the terminal.
-          if isTerminalWindowKey() {
+          if store.isTerminalWindowKey() {
             NotificationCenter.default.post(name: .misttyClosePane, object: nil)
           } else {
             NSApp.keyWindow?.performClose(nil)
@@ -106,7 +106,7 @@ struct MisttyApp: App {
         .keyboardShortcut("w", modifiers: .command)
 
         Button("Close Tab") {
-          if isTerminalWindowKey() {
+          if store.isTerminalWindowKey() {
             NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
           } else {
             NSApp.keyWindow?.performClose(nil)
@@ -228,14 +228,6 @@ struct MisttyApp: App {
         }
       }
     }
-  }
-
-  /// True when the system's key window is a tracked terminal window. Used to
-  /// scope shortcuts like Cmd-W so they don't fire while an auxiliary window
-  /// (e.g. Settings) has focus.
-  private func isTerminalWindowKey() -> Bool {
-    guard let key = NSApp.keyWindow else { return false }
-    return store.trackedWindows.contains { $0.window === key }
   }
 
   /// Normalize shortcut string: lowercase, accept both "+" and "-" as separators.
