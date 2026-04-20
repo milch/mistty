@@ -37,4 +37,13 @@ final class MisttyPane: Identifiable {
     view.pane = self
     return view
   }()
+
+  /// Route keyboard input to this pane's surface. Safe to call on the
+  /// next runloop tick so the view has a chance to be hosted in a window
+  /// (e.g. after a tab switch).
+  func focusKeyboardInput() {
+    DispatchQueue.main.async { [surfaceView] in
+      surfaceView.window?.makeFirstResponder(surfaceView)
+    }
+  }
 }

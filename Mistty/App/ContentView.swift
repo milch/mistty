@@ -336,11 +336,7 @@ struct ContentView: View {
   }
 
   private func returnFocusToActivePane() {
-    if let pane = store.activeSession?.activeTab?.activePane {
-      DispatchQueue.main.async {
-        pane.surfaceView.window?.makeFirstResponder(pane.surfaceView)
-      }
-    }
+    store.activeSession?.activeTab?.activePane?.focusKeyboardInput()
   }
 
   private func closePaneInTab(_ pane: MisttyPane, tab: MisttyTab, session: MisttySession) {
@@ -363,9 +359,7 @@ struct ContentView: View {
     guard let definition = config.popups.first(where: { $0.name == name }) else { return }
     session.togglePopup(definition: definition)
     if let popup = session.activePopup, popup.isVisible {
-      DispatchQueue.main.async {
-        popup.pane.surfaceView.window?.makeFirstResponder(popup.pane.surfaceView)
-      }
+      popup.pane.focusKeyboardInput()
     }
   }
 
@@ -918,10 +912,7 @@ struct ContentView: View {
 
       // Navigate between MistTY panes — only consume if navigation succeeds
       if let target = tab.layout.adjacentPane(from: pane, direction: direction) {
-        tab.activePane = target
-        DispatchQueue.main.async {
-          target.surfaceView.window?.makeFirstResponder(target.surfaceView)
-        }
+        tab.focusPane(target)
         return nil  // Consume the event
       }
       return event  // No adjacent pane, pass through to terminal

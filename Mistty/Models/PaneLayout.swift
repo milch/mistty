@@ -172,72 +172,77 @@ struct PaneLayout {
 
   // MARK: - Pane Navigation
 
+  /// Find the nearest adjacent pane in `direction` using the actual layout
+  /// geometry. Computes each leaf's unit rect (within [0, 1]), filters to
+  /// panes on the correct side, and picks the one closest to the source —
+  /// ties on movement-axis distance are broken by orthogonal-axis center
+  /// alignment so navigation stays in the same row/column.
   func adjacentPane(from pane: MisttyPane, direction: NavigationDirection) -> MisttyPane? {
-    guard let path = Self.findPath(root, target: pane.id) else { return nil }
-    return Self.findAdjacent(root, path: path, direction: direction)
+    let rects = Self.collectRects(root, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+    guard let source = rects[pane.id] else { return nil }
+
+    let eps: CGFloat = 1e-4
+    var best: (pane: MisttyPane, movement: CGFloat, orthogonal: CGFloat)?
+    for leaf in leaves where leaf.id != pane.id {
+      guard let r = rects[leaf.id] else { continue }
+      let movement: CGFloat
+      let orthogonal: CGFloat
+      switch direction {
+      case .left:
+        guard r.maxX <= source.minX + eps else { continue }
+        movement = source.minX - r.maxX
+        orthogonal = abs(r.midY - source.midY)
+      case .right:
+        guard r.minX >= source.maxX - eps else { continue }
+        movement = r.minX - source.maxX
+        orthogonal = abs(r.midY - source.midY)
+      case .up:
+        guard r.maxY <= source.minY + eps else { continue }
+        movement = source.minY - r.maxY
+        orthogonal = abs(r.midX - source.midX)
+      case .down:
+        guard r.minY >= source.maxY - eps else { continue }
+        movement = r.minY - source.maxY
+        orthogonal = abs(r.midX - source.midX)
+      }
+      if let current = best {
+        if movement < current.movement
+          || (abs(movement - current.movement) < eps && orthogonal < current.orthogonal)
+        {
+          best = (leaf, movement, orthogonal)
+        }
+      } else {
+        best = (leaf, movement, orthogonal)
+      }
+    }
+    return best?.pane
   }
 
-  private enum PathStep { case left, right }
-
-  private static func findPath(_ node: PaneLayoutNode, target: Int) -> [PathStep]? {
+  private static func collectRects(_ node: PaneLayoutNode, in bounds: CGRect) -> [Int: CGRect] {
     switch node {
     case .leaf(let p):
-      return p.id == target ? [] : nil
+      return [p.id: bounds]
     case .empty:
-      return nil
-    case .split(_, let a, let b, _):
-      if let path = findPath(a, target: target) {
-        return [.left] + path
+      return [:]
+    case .split(let dir, let a, let b, let ratio):
+      let aBounds: CGRect
+      let bBounds: CGRect
+      switch dir {
+      case .horizontal:
+        let w = bounds.width * ratio
+        aBounds = CGRect(x: bounds.minX, y: bounds.minY, width: w, height: bounds.height)
+        bBounds = CGRect(
+          x: bounds.minX + w, y: bounds.minY, width: bounds.width - w, height: bounds.height)
+      case .vertical:
+        let h = bounds.height * ratio
+        aBounds = CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: h)
+        bBounds = CGRect(
+          x: bounds.minX, y: bounds.minY + h, width: bounds.width, height: bounds.height - h)
       }
-      if let path = findPath(b, target: target) {
-        return [.right] + path
-      }
-      return nil
+      var result = collectRects(a, in: aBounds)
+      for (k, v) in collectRects(b, in: bBounds) { result[k] = v }
+      return result
     }
-  }
-
-  private static func findAdjacent(
-    _ root: PaneLayoutNode,
-    path: [PathStep],
-    direction: NavigationDirection
-  ) -> MisttyPane? {
-    let splitDir: SplitDirection
-    let fromSide: PathStep
-    switch direction {
-    case .left:
-      splitDir = .horizontal
-      fromSide = .right
-    case .right:
-      splitDir = .horizontal
-      fromSide = .left
-    case .up:
-      splitDir = .vertical
-      fromSide = .right
-    case .down:
-      splitDir = .vertical
-      fromSide = .left
-    }
-
-    // Walk the tree following the path, collecting (node, step) pairs
-    var nodes: [(PaneLayoutNode, PathStep)] = []
-    var current = root
-    for step in path {
-      guard case .split(_, let a, let b, _) = current else { break }
-      nodes.append((current, step))
-      current = (step == .left) ? a : b
-    }
-
-    // Walk backwards looking for a matching split where we came from the correct side
-    for (node, step) in nodes.reversed() {
-      guard case .split(let dir, let a, let b, _) = node else { continue }
-      if dir == splitDir && step == fromSide {
-        let otherSubtree = (step == .left) ? b : a
-        return (direction == .left || direction == .up)
-          ? lastLeaf(otherSubtree)
-          : firstLeaf(otherSubtree)
-      }
-    }
-    return nil
   }
 
   // MARK: - Swap Panes
@@ -266,19 +271,4 @@ struct PaneLayout {
     }
   }
 
-  private static func firstLeaf(_ node: PaneLayoutNode) -> MisttyPane? {
-    switch node {
-    case .leaf(let p): return p
-    case .empty: return nil
-    case .split(_, let a, let b, _): return firstLeaf(a) ?? firstLeaf(b)
-    }
-  }
-
-  private static func lastLeaf(_ node: PaneLayoutNode) -> MisttyPane? {
-    switch node {
-    case .leaf(let p): return p
-    case .empty: return nil
-    case .split(_, let a, let b, _): return lastLeaf(b) ?? lastLeaf(a)
-    }
-  }
 }

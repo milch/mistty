@@ -242,7 +242,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       }
       self.store.activeSession = session
       session.activeTab = tab
-      tab.activePane = pane
+      tab.focusPane(pane)
       reply(self.encode(self.paneResponse(pane)), nil)
     }
   }
@@ -288,7 +288,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         return
       }
 
-      tab.activePane = target
+      tab.focusPane(target)
       reply(self.encode(self.paneResponse(target)), nil)
     }
   }

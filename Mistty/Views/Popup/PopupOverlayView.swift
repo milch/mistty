@@ -34,7 +34,7 @@ struct PopupOverlayView: View {
         .background(.ultraThinMaterial)
 
         // Terminal surface
-        TerminalSurfaceRepresentable(pane: popup.pane)
+        TerminalSurfaceRepresentable(pane: popup.pane, isActive: true)
       }
       .clipShape(RoundedRectangle(cornerRadius: 8))
       .overlay(

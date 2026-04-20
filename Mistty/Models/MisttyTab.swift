@@ -57,7 +57,7 @@ final class MisttyTab: Identifiable {
     newPane.directory = directory
     layout.split(pane: activePane, direction: direction, newPane: newPane)
     panes = layout.leaves
-    self.activePane = layout.leaves.last
+    self.activePane = newPane
   }
 
   func addExistingPane(_ pane: MisttyPane, direction: SplitDirection) {
@@ -71,6 +71,14 @@ final class MisttyTab: Identifiable {
     layout.remove(pane: pane)
     panes = layout.leaves
     if activePane?.id == pane.id { activePane = panes.last }
+  }
+
+  /// Make `pane` the active pane AND route keyboard input to it. Prefer this
+  /// over writing `activePane` directly — the two must move together or the
+  /// focus ring and first-responder desync.
+  func focusPane(_ pane: MisttyPane) {
+    activePane = pane
+    pane.focusKeyboardInput()
   }
 
   func applyStandardLayout(_ standardLayout: StandardLayout) {

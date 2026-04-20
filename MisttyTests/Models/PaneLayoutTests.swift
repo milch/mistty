@@ -246,6 +246,86 @@ final class PaneLayoutTests: XCTestCase {
     XCTAssertNil(target)
   }
 
+  // MARK: - 2x2 navigation
+
+  /// Build the classic 2x2 grid by splitting pane1 horizontally, then
+  /// splitting each side vertically. Returns panes in the order [1, 2, 3, 4]
+  /// where visual position is:
+  ///   1 | 2
+  ///   --+--
+  ///   3 | 4
+  private func make2x2() -> (PaneLayout, MisttyPane, MisttyPane, MisttyPane, MisttyPane) {
+    let p1 = makePane()
+    var layout = PaneLayout(pane: p1)
+    let p2 = makePane()
+    layout.split(pane: p1, direction: .horizontal, newPane: p2)
+    let p3 = makePane()
+    layout.split(pane: p1, direction: .vertical, newPane: p3)
+    let p4 = makePane()
+    layout.split(pane: p2, direction: .vertical, newPane: p4)
+    return (layout, p1, p2, p3, p4)
+  }
+
+  func test_2x2_horizontalNavStaysOnSameRow_top() {
+    let (layout, p1, p2, _, _) = make2x2()
+    XCTAssertEqual(layout.adjacentPane(from: p1, direction: .right)?.id, p2.id)
+    XCTAssertEqual(layout.adjacentPane(from: p2, direction: .left)?.id, p1.id)
+  }
+
+  func test_2x2_horizontalNavStaysOnSameRow_bottom() {
+    let (layout, _, _, p3, p4) = make2x2()
+    XCTAssertEqual(layout.adjacentPane(from: p3, direction: .right)?.id, p4.id)
+    XCTAssertEqual(layout.adjacentPane(from: p4, direction: .left)?.id, p3.id)
+  }
+
+  func test_2x2_verticalNavStaysOnSameColumn_left() {
+    let (layout, p1, _, p3, _) = make2x2()
+    XCTAssertEqual(layout.adjacentPane(from: p1, direction: .down)?.id, p3.id)
+    XCTAssertEqual(layout.adjacentPane(from: p3, direction: .up)?.id, p1.id)
+  }
+
+  func test_2x2_verticalNavStaysOnSameColumn_right() {
+    let (layout, _, p2, _, p4) = make2x2()
+    XCTAssertEqual(layout.adjacentPane(from: p2, direction: .down)?.id, p4.id)
+    XCTAssertEqual(layout.adjacentPane(from: p4, direction: .up)?.id, p2.id)
+  }
+
+  func test_2x2_edgeReturnsNil() {
+    let (layout, p1, p2, p3, p4) = make2x2()
+    XCTAssertNil(layout.adjacentPane(from: p1, direction: .left))
+    XCTAssertNil(layout.adjacentPane(from: p1, direction: .up))
+    XCTAssertNil(layout.adjacentPane(from: p2, direction: .right))
+    XCTAssertNil(layout.adjacentPane(from: p2, direction: .up))
+    XCTAssertNil(layout.adjacentPane(from: p3, direction: .left))
+    XCTAssertNil(layout.adjacentPane(from: p3, direction: .down))
+    XCTAssertNil(layout.adjacentPane(from: p4, direction: .right))
+    XCTAssertNil(layout.adjacentPane(from: p4, direction: .down))
+  }
+
+  /// Tall pane on the left, two stacked on the right:
+  ///     | B
+  ///  A  +--
+  ///     | C
+  func test_tallLeftTwoRight_rightFromTall() {
+    let pA = makePane()
+    let pB = makePane()
+    let pC = makePane()
+    // Build: horizontal(leaf(A), vertical(leaf(B), leaf(C)))
+    let root: PaneLayoutNode = .split(
+      .horizontal,
+      .leaf(pA),
+      .split(.vertical, .leaf(pB), .leaf(pC), 0.5),
+      0.5)
+    let layout = PaneLayout(root: root)
+
+    // From B, left → A (only pane on the left)
+    XCTAssertEqual(layout.adjacentPane(from: pB, direction: .left)?.id, pA.id)
+    XCTAssertEqual(layout.adjacentPane(from: pC, direction: .left)?.id, pA.id)
+    // From A, right → tie between B and C (centers equidistant); any non-nil is acceptable
+    let rightFromA = layout.adjacentPane(from: pA, direction: .right)
+    XCTAssertTrue(rightFromA?.id == pB.id || rightFromA?.id == pC.id)
+  }
+
   // MARK: - Tab integration
 
   func test_tabIntegration_splitUpdatesLayout() {
@@ -256,5 +336,27 @@ final class PaneLayoutTests: XCTestCase {
     tab.splitActivePane(direction: .horizontal)
     XCTAssertEqual(tab.layout.leaves.count, 2)
     XCTAssertEqual(tab.panes.count, 2)
+  }
+
+  /// Splitting inside a nested subtree: starting layout
+  ///   1 | 2
+  ///     +---
+  ///     | 3
+  /// Splitting pane 1 vertically adds pane 4 below it. The new pane must
+  /// become active — NOT "the last leaf in traversal order" (which would
+  /// incorrectly resolve to pane 3 here).
+  func test_tabIntegration_splitInNestedSubtreeFocusesNewPane() {
+    let store = SessionStore()
+    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let tab = session.tabs[0]
+    tab.splitActivePane(direction: .horizontal)  // 1 | 2  (active=2)
+    tab.splitActivePane(direction: .vertical)  // 1 | 2/3 (active=3)
+    tab.activePane = tab.panes.first  // focus pane 1
+    let leafIdsBefore = Set(tab.layout.leaves.map { $0.id })
+    tab.splitActivePane(direction: .vertical)  // 1/4 | 2/3 — new pane 4 below 1
+    let leafIdsAfter = Set(tab.layout.leaves.map { $0.id })
+    let newPaneId = leafIdsAfter.subtracting(leafIdsBefore).first
+    XCTAssertNotNil(newPaneId)
+    XCTAssertEqual(tab.activePane?.id, newPaneId)
   }
 }

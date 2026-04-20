@@ -15,7 +15,7 @@ struct PaneView: View {
   @State private var isHovering = false
 
   var body: some View {
-    TerminalSurfaceRepresentable(pane: pane, onSelect: onSelect)
+    TerminalSurfaceRepresentable(pane: pane, isActive: isActive, onSelect: onSelect)
       .id(pane.id)
       .overlay(alignment: .topTrailing) {
         if isHovering, let onClose {

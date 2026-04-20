@@ -11,6 +11,12 @@ final class TerminalSurfaceView: NSView {
   var onSelect: (() -> Void)?
   var scrollbarState = ScrollbarState()
 
+  /// Whether this surface owns its tab's focus. Gates the first-responder
+  /// grab in `viewDidMoveToWindow` so that re-mounting a multi-pane session
+  /// doesn't hand keyboard input to whichever pane happens to be hosted last.
+  /// Plumbed in from SwiftUI via `TerminalSurfaceRepresentable`.
+  var isActive: Bool = false
+
   /// Back-reference to the owning pane (set by MisttyPane).
   weak var pane: MisttyPane?
 
@@ -231,7 +237,9 @@ final class TerminalSurfaceView: NSView {
     super.viewDidMoveToWindow()
     guard window != nil else { return }
     setFrameSize(frame.size)
-    window?.makeFirstResponder(self)
+    if isActive {
+      window?.makeFirstResponder(self)
+    }
   }
 
   // MARK: - Keyboard Input
