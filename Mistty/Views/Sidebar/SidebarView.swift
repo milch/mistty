@@ -53,10 +53,11 @@ struct SessionRowView: View {
   var body: some View {
     DisclosureGroup(isExpanded: $isExpanded) {
       ForEach(session.tabs) { tab in
+        let isActiveTab = isActive && session.activeTab?.id == tab.id
         HStack {
           Text(String(ProcessIcon.glyph(forProcessTitle: tab.activePane?.processTitle)))
             .font(.custom(ProcessIcon.fontName, size: 12))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(isActiveTab ? Color.accentColor : .secondary)
             .frame(width: 14, alignment: .center)
           if tab.hasBell {
             Circle()
@@ -64,7 +65,8 @@ struct SessionRowView: View {
               .frame(width: 6, height: 6)
           }
           Text(tab.displayTitle)
-            .font(.system(size: 12))
+            .font(.system(size: 12, weight: isActiveTab ? .semibold : .regular))
+            .foregroundStyle(isActiveTab ? .primary : .secondary)
           if tab.zoomedPane != nil {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
               .font(.system(size: 9, weight: .semibold))
@@ -75,6 +77,19 @@ struct SessionRowView: View {
         }
         .padding(.leading, 8)
         .padding(.vertical, 2)
+        .background {
+          RoundedRectangle(cornerRadius: 4)
+            .fill(isActiveTab ? Color.accentColor.opacity(0.18) : Color.clear)
+            .overlay(alignment: .leading) {
+              if isActiveTab {
+                Rectangle()
+                  .fill(Color.accentColor)
+                  .frame(width: 2)
+              }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .animation(.easeInOut(duration: 0.15), value: isActiveTab)
         .contentShape(Rectangle())
         .onTapGesture {
           store.activeSession = session
@@ -94,5 +109,6 @@ struct SessionRowView: View {
       .contentShape(Rectangle())
       .onTapGesture { store.activeSession = session }
     }
+    .animation(.easeInOut(duration: 0.15), value: isActive)
   }
 }
