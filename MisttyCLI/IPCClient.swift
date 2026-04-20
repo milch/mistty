@@ -22,10 +22,17 @@ enum IPCClientError: LocalizedError, CustomStringConvertible {
 /// close). To support commands that issue multiple calls, every `call()` opens a
 /// fresh socket and closes it when done.
 final class IPCClient {
-    /// Ensure the Mistty app is reachable, launching it if not. Does not retain
-    /// a socket — each `call()` opens its own.
-    func connect() throws {
-        if probeConnection() { return }
+    /// One-time launch+probe gate; `ensureReachable()` short-circuits once true.
+    private var verifiedReachable = false
+
+    /// Ensure the Mistty app is reachable, launching it if not. Cheap and
+    /// idempotent: after the first successful probe this is a no-op.
+    func ensureReachable() throws {
+        if verifiedReachable { return }
+        if probeConnection() {
+            verifiedReachable = true
+            return
+        }
 
         let launchProcess = Process()
         launchProcess.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -33,22 +40,29 @@ final class IPCClient {
         try? launchProcess.run()
         launchProcess.waitUntilExit()
 
+        // Total worst-case wait: ~3.1s. Print a single notice on the first
+        // miss so users know the delay is intentional.
+        FileHandle.standardError.write(Data("Waiting for Mistty.app to launch...\n".utf8))
         let delays: [UInt32] = [100_000, 200_000, 400_000, 800_000, 1_600_000]
         for delay in delays {
             usleep(delay)
-            if probeConnection() { return }
+            if probeConnection() {
+                verifiedReachable = true
+                return
+            }
         }
 
         throw IPCClientError.connectionFailed(
-            "Could not connect to Mistty.app. Is it running?"
+            "Could not connect to Mistty.app after launch attempt. Is it installed?"
         )
     }
 
     /// Send an IPC request and return the response data.
     func call(_ method: String, _ params: [String: Any] = [:]) throws -> Data {
-        let fd = openSocket()
+        let fd = UnixSocket.connect(path: MisttyIPC.socketPath)
         guard fd >= 0 else {
-            throw IPCClientError.connectionFailed("Could not connect to Mistty.app")
+            let reason = String(cString: strerror(errno))
+            throw IPCClientError.connectionFailed("Could not connect to Mistty.app (\(reason))")
         }
         defer { Darwin.close(fd) }
 
@@ -85,47 +99,13 @@ final class IPCClient {
         return Data(payload)
     }
 
-    // MARK: - Socket setup
+    // MARK: - Probe
 
     private func probeConnection() -> Bool {
-        let fd = openSocket()
+        let fd = UnixSocket.connect(path: MisttyIPC.socketPath)
         guard fd >= 0 else { return false }
         Darwin.close(fd)
         return true
-    }
-
-    private func openSocket() -> Int32 {
-        let path = MisttyIPC.socketPath
-
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return -1 }
-
-        var on: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
-
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        let pathBytes = path.utf8CString
-        withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
-            ptr.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { dest in
-                pathBytes.withUnsafeBufferPointer { src in
-                    _ = memcpy(dest, src.baseAddress!, src.count)
-                }
-            }
-        }
-
-        let result = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                Darwin.connect(fd, sockPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
-            }
-        }
-
-        if result != 0 {
-            close(fd)
-            return -1
-        }
-
-        return fd
     }
 
     // MARK: - Socket I/O Helpers

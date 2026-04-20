@@ -40,20 +40,10 @@ final class IPCListener {
     }
 
     // Bind
-    var addr = sockaddr_un()
-    addr.sun_family = sa_family_t(AF_UNIX)
-    let pathBytes = path.utf8CString
-    guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
+    guard var addr = UnixSocket.makeSockaddr(path: path) else {
       print("Warning: socket path too long")
       Darwin.close(fd)
       return
-    }
-    withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
-      ptr.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { dest in
-        pathBytes.withUnsafeBufferPointer { src in
-          _ = memcpy(dest, src.baseAddress!, src.count)
-        }
-      }
     }
 
     let bindResult = withUnsafePointer(to: &addr) { ptr in

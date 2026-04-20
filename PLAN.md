@@ -47,6 +47,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Misc & Bugs
 
+- tab_bar_mode = "when_sidebar_hidden_and_multiple_tabs" seems to be broken after we added the override shortcut
 - The pane focusing seems to get "out of sync" sometimes - e.g. I'll have a split left and right, and after moving around sometimes it will show "no split to left". If I mouse click into the same pane it will "re-sync" and continues working again for a while. The other thing I notice is that the blue outline moves but the ACTUAL focus (i.e. where I type) stays on the other pane.
   - The trigger seems to be the CLI. Using the CLI shifts the focus ring but doesn't actually change focus between the panes
 - Sometimes the tab name is just "exit $PATH", which seems like a bug

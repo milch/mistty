@@ -33,7 +33,7 @@ struct TabCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             var params: [String: Any] = ["sessionId": session]
             if let name { params["name"] = name }
@@ -64,7 +64,7 @@ struct TabCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -91,7 +91,7 @@ struct TabCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -118,7 +118,7 @@ struct TabCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("closeTab", ["id": id])
@@ -146,7 +146,7 @@ struct TabCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {

@@ -35,7 +35,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             var params: [String: Any] = ["tabId": tab]
             if let direction { params["direction"] = direction }
@@ -65,7 +65,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -92,7 +92,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -119,7 +119,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("closePane", ["id": id])
@@ -156,7 +156,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -198,7 +198,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call(
@@ -221,7 +221,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -254,7 +254,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("sendKeys", ["paneId": pane, "keys": keys])
@@ -285,7 +285,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("runCommand", ["paneId": pane, "command": command])
@@ -313,7 +313,7 @@ struct PaneCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {

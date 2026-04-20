@@ -24,7 +24,7 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -48,7 +48,7 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -75,7 +75,7 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -102,7 +102,7 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("closeWindow", ["id": id])
@@ -127,7 +127,7 @@ struct WindowCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("focusWindow", ["id": id])

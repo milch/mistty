@@ -32,7 +32,7 @@ struct SessionCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             var params: [String: Any] = ["name": name]
             if let directory { params["directory"] = directory }
@@ -60,7 +60,7 @@ struct SessionCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -87,7 +87,7 @@ struct SessionCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let data: Data
             do {
@@ -114,7 +114,7 @@ struct SessionCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("closeSession", ["id": id])

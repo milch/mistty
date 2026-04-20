@@ -44,7 +44,7 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
             let popupName = name ?? exec ?? "popup"
@@ -89,7 +89,7 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             do {
                 _ = try client.call("closePopup", ["popupId": id])
@@ -117,7 +117,7 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
 
@@ -151,7 +151,7 @@ struct PopupCommand: ParsableCommand {
         func run() throws {
             let formatter = OutputFormatter(format: format)
             let client = IPCClient()
-            try client.connect()
+            try client.ensureReachable()
 
             let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
 
