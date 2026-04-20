@@ -94,6 +94,14 @@ struct ContentView: View {
         } else {
           removeKeyMonitor()
           sessionManagerVM = nil
+          // The session manager's NSTextField holds first responder while
+          // open; without an explicit hand-back AppKit leaves the text
+          // field as first responder even after SwiftUI tears the overlay
+          // down. The Edit menu's default Cmd-X → Cut shortcut then wins
+          // over our "Window Mode" equivalent (both bound to Cmd-X), so
+          // window mode appears to ignore the shortcut until something
+          // else forces focus back to the terminal.
+          returnFocusToActivePane()
         }
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNewTab)) { _ in
