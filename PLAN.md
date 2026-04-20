@@ -30,6 +30,10 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 ### Keyboard shortcut configuration
 
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
+- Additional shortcuts:
+  - Next/prev tab (cmd+up/down) (in addition to existing)
+  - Next/prev session (cmd+shift+]/[) (in addition to existing)
+  - Switch sessions with ctrl-1/2/3... (similar to the existing switching tabs with cmd-1/2/3...)
 
 ### Preference Pane
 
@@ -47,13 +51,11 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Misc & Bugs
 
-- The pane focusing seems to get "out of sync" sometimes - e.g. I'll have a split left and right, and after moving around sometimes it will show "no split to left". If I mouse click into the same pane it will "re-sync" and continues working again for a while. The other thing I notice is that the blue outline moves but the ACTUAL focus (i.e. where I type) stays on the other pane.
-  - The trigger seems to be the CLI. Using the CLI shifts the focus ring but doesn't actually change focus between the panes
-- Sometimes the tab name is just "exit $PATH", which seems like a bug
-- I noticed randomly I coulnd't activate window mode using the shortcut (as in nothing would happen). After activating it through the menu bar it went back to working.
-- Switching between dark/light mode doesn't work - the terminal stays in whatever it was launched. Applications inside of the terminal switch fine
-- It seems there are some missing macOS permissions. When launching through the CLI via `open Mistty.app` it shows the full zoxide session list. But when opening interactively it only shows SSH sessions in the session manager
-- In window mode the resize shortcuts change the size by more than one row/column. We should have shortcuts for 1 and 5 rows/columns respectively
+- We added a blue indicator bar next to the tab title in the session manager to highlight the active tab. Maybe we can do the same for the session title
+- Renaming a tab works from the tab bar by double clicking on the title, but not from the sidebar
+  - Similarly, when the tab bar is hidden and you select rename from the menu bar or use the shortcut, it doesn't work
+- Cmd+V to paste doesn't work
+- Some warnings about unsound concurrency that need to be fixed
 
 ## Implemented
 
@@ -94,7 +96,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 ### Window mode (cmd+x)
 
 - Toast popup with orange border and help overlay
-- Grow/shrink panes (cmd+arrows, 5% delta)
+- Grow/shrink panes: `cmd+arrows` = 5 rows/cols, `cmd+shift+arrows` = 1 row/col (new helper `PaneLayout.resizeSplit(containing:cells:along:cellSize:tabSize:)` converts cells → ratio against the target split's actual container size so nested splits don't jump)
 - Swap panes in direction (arrow keys)
 - Break pane to new tab (b)
 - Merge/join pane to existing tab (m, then number key to pick target)
@@ -190,6 +192,13 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Config file parsing from ~/.config/mistty/config.toml
 - Preference pane (cmd+,) for font size, cursor style, scrollback, sidebar visibility
 - Popup definition configuration
+- `zoxide_path` top-level key to explicitly point at the zoxide binary (skips the candidate probe + `bash -lc` fallback; useful for exotic installs or to avoid spawning bash on every cold start)
+
+### Repo / agent hygiene
+
+- `just setup-worktree` recipe: initializes `vendor/ghostty` submodule and symlinks the prebuilt `GhosttyKit.xcframework` from the main checkout so `git worktree add` dirs build immediately
+- `just run [<worktree>]` wraps install + open, optionally from a `.worktrees/<name>` directory for quick manual verification of a branch
+- `AGENTS.md` at repo root: agent-facing doc covering build/test commands, worktree flow, and project-specific conventions
 
 ### Native macOS UI
 
@@ -227,3 +236,9 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Cmd-W routing: both the SwiftUI menu Button and the global `NSEvent` keyDown monitor now check `store.trackedWindows` before posting the close-pane notification, so Cmd-W closes the focused Settings window instead of leaking through to the terminal behind it
 - CLI popup "write failed": `IPCClient` now opens a fresh socket per call (the listener is one-shot), unblocking commands that issue multiple RPCs (e.g. `popup open` calling `listSessions` then `openPopup`)
 - Tab-bar override: the Cmd+Shift+B shortcut's override is now ephemeral per-window `@State` (was `@AppStorage`, which pinned it forever). Two presses cycles back to `.auto`, and the override auto-resolves whenever the configured `tab_bar_mode` rule would produce the same visibility (driven by `.onChange` on sidebar visibility and active tab count). See `docs/superpowers/specs/2026-04-19-tab-bar-override-design.md`
+- Focus sync across CLI, nav, and splits: `MisttyTab.focusPane(_:)` + `MisttyPane.focusKeyboardInput()` helpers unify the "write activePane + grab first-responder" dance. `IPCService.focusPane`/`focusPaneByDirection` now call the helper (previously moved only the focus ring, not keyboard input). `TerminalSurfaceView.viewDidMoveToWindow` is gated on an `isActive` flag plumbed from SwiftUI so re-mounting a multi-pane session no longer hands first-responder to whichever pane happens to be hosted last. `splitActivePane` focuses the newly-created pane directly (was `layout.leaves.last`, which misfired under nested splits)
+- 2x2 ctrl-h/j/k/l navigation: `PaneLayout.adjacentPane` rewritten to use unit-rect geometry. Previously the tree-walking algorithm picked `firstLeaf`/`lastLeaf` of the sibling subtree without regard for the source pane's orthogonal position — from top-right it would jump to bottom-left
+- Dark/light mode switching: `TerminalSurfaceView.viewDidChangeEffectiveAppearance` now calls `ghostty_surface_set_color_scheme` (the app-level scheme update alone doesn't push down to existing surfaces' conditional state, so only brand-new panes picked up the right theme previously)
+- zoxide discovery on GUI launch: `ZoxideService` resolves the absolute path once per process via a candidate list (Homebrew ARM/Intel, nix-darwin, home-manager, nix single-user, `~/.cargo/bin`, `~/.local/bin`) with a `bash -lc 'command -v zoxide'` fallback and a new `zoxide_path` config override. Fixes the session manager showing only SSH hosts when Mistty is launched from Dock/Finder (minimal PATH) instead of `open Mistty.app` from a terminal
+- Tab title sanitation: `TerminalTitle.sanitized` drops OSC 2 payloads whose first whitespace-delimited token is `exit` (shell `preexec` hooks send the literal command line just before the shell dies, leaving `"exit"` / `"exit $PATH"` pinned on the tab). Stale tab titles are cleared on active-pane close — resync to the new active pane's `processTitle`, or back to the default
+- Window-mode Cmd+X after session-manager dismiss: Cmd+J's search field was leaking first-responder on Escape, letting Edit > Cut (standard Cmd+X) shadow View > Window Mode. `showingSessionManager` onChange now calls `returnFocusToActivePane` on dismissal
