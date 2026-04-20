@@ -8,7 +8,6 @@ struct MisttyApp: App {
   @State private var store = SessionStore()
   @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
-  @AppStorage("tabBarOverride") var tabBarOverrideRaw = TabBarVisibilityOverride.auto.rawValue
   // Shared parse — see `MisttyConfig.loadedAtLaunch`. Reading the same cache
   // GhosttyAppManager uses keeps SwiftUI state and libghostty in lockstep and
   // avoids parsing the TOML twice at bootstrap.
@@ -62,13 +61,7 @@ struct MisttyApp: App {
         .keyboardShortcut("s", modifiers: .command)
 
         Button("Toggle Tab Bar") {
-          let tabCount = store.activeSession?.tabs.count ?? 1
-          let configured = config.ui.tabBarMode.shouldShow(
-            sidebarVisible: sidebarVisible, tabCount: tabCount)
-          let current = TabBarVisibilityOverride(rawValue: tabBarOverrideRaw) ?? .auto
-          withAnimation(.easeInOut(duration: 0.15)) {
-            tabBarOverrideRaw = current.toggled(configuredShow: configured).rawValue
-          }
+          NotificationCenter.default.post(name: .misttyToggleTabBar, object: nil)
         }
         .keyboardShortcut("b", modifiers: [.command, .shift])
 
@@ -279,6 +272,7 @@ extension Notification.Name {
   static let misttySessionManager = Notification.Name("misttySessionManager")
   static let misttyClosePane = Notification.Name("misttyClosePane")
   static let misttyCloseTab = Notification.Name("misttyCloseTab")
+  static let misttyToggleTabBar = Notification.Name("misttyToggleTabBar")
   static let misttyRenameTab = Notification.Name("misttyRenameTab")
   static let misttyWindowMode = Notification.Name("misttyWindowMode")
   static let misttyCopyMode = Notification.Name("misttyCopyMode")

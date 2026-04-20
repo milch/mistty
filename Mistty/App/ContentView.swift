@@ -7,7 +7,7 @@ struct ContentView: View {
   var store: SessionStore
   var config: MisttyConfig
   @AppStorage("sidebarVisible") var sidebarVisible = true
-  @AppStorage("tabBarOverride") var tabBarOverrideRaw = TabBarVisibilityOverride.auto.rawValue
+  @State private var tabBarOverride: TabBarVisibilityOverride = .auto
   @SceneStorage("sidebarWidth") var sidebarWidth: Double = 220
   @State var showingSessionManager = false
   @State private var sessionManagerVM: SessionManagerViewModel?
@@ -107,6 +107,14 @@ struct ContentView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
         showingSessionManager = true
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyToggleTabBar)) { _ in
+        let tabCount = store.activeSession?.tabs.count ?? 1
+        let configured = config.ui.tabBarMode.shouldShow(
+          sidebarVisible: sidebarVisible, tabCount: tabCount)
+        withAnimation(.easeInOut(duration: 0.15)) {
+          tabBarOverride = tabBarOverride.toggled(configuredShow: configured)
+        }
       }
   }
 
@@ -277,8 +285,7 @@ struct ContentView: View {
   private func shouldShowTabBar(tabCount: Int) -> Bool {
     let configured = config.ui.tabBarMode.shouldShow(
       sidebarVisible: sidebarVisible, tabCount: tabCount)
-    let override = TabBarVisibilityOverride(rawValue: tabBarOverrideRaw) ?? .auto
-    return override.effectiveShow(configuredShow: configured)
+    return tabBarOverride.effectiveShow(configuredShow: configured)
   }
 
   private func splitPane(direction: SplitDirection) {
