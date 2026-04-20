@@ -80,7 +80,8 @@ bundle-release: build-release
 install: bundle
     #!/usr/bin/env bash
     set -euo pipefail
-    osascript -e 'tell application "Mistty" to quit' 2>/dev/null || true
+    # Quit only the dev build so running a release copy isn't killed.
+    osascript -e 'if application "/Applications/Mistty-dev.app" is running then tell application "/Applications/Mistty-dev.app" to quit' 2>/dev/null || true
     rm -rf /Applications/Mistty-dev.app
     cp -R build/Mistty-dev.app /Applications/Mistty-dev.app
     echo "Installed: /Applications/Mistty-dev.app"
@@ -89,7 +90,8 @@ install: bundle
 install-release: bundle-release
     #!/usr/bin/env bash
     set -euo pipefail
-    osascript -e 'tell application "Mistty" to quit' 2>/dev/null || true
+    # Quit only the release build so a running dev copy isn't killed.
+    osascript -e 'if application "/Applications/Mistty.app" is running then tell application "/Applications/Mistty.app" to quit' 2>/dev/null || true
     rm -rf /Applications/Mistty.app
     cp -R build/Mistty.app /Applications/Mistty.app
     echo "Installed: /Applications/Mistty.app (release)"
