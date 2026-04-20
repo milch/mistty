@@ -132,6 +132,7 @@ struct ContentView: View {
 
   @ViewBuilder
   private var mainContent: some View {
+    let tabBarShouldShow = shouldShowTabBar()
     HStack(spacing: 0) {
       if sidebarVisible {
         HStack(spacing: 0) {
@@ -141,7 +142,8 @@ struct ContentView: View {
               get: { CGFloat(sidebarWidth) },
               set: { sidebarWidth = Double($0) }
             ),
-            titleBarStyle: config.ui.titleBarStyle)
+            titleBarStyle: config.ui.titleBarStyle,
+            tabBarVisible: tabBarShouldShow)
           Divider()
         }
         .transition(.move(edge: .leading))
@@ -151,7 +153,6 @@ struct ContentView: View {
         if let session = store.activeSession,
           let tab = session.activeTab
         {
-          let tabBarShouldShow = shouldShowTabBar()
           VStack(spacing: 0) {
             if tabBarShouldShow {
               VStack(spacing: 0) {
