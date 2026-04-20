@@ -3,24 +3,45 @@
 # Default recipe
 default: build
 
-# Re-render app icon from assets/AppIcon.svg → Mistty/Resources/AppIcon.icns.
+# Re-render app icons from assets/AppIcon.svg.
+# Produces both the base icon and a "DEV" variant (orange bottom banner)
+# so debug builds are visually distinguishable from release in the Dock.
 # Requires: magick (nix devshell), iconutil (macOS).
 icon:
     #!/usr/bin/env bash
     set -euo pipefail
     SVG="assets/AppIcon.svg"
     OUT="Mistty/Resources/AppIcon.icns"
+    OUT_DEV="Mistty/Resources/AppIcon-dev.icns"
     ICONSET="build/AppIcon.iconset"
-    rm -rf "$ICONSET"
-    mkdir -p "$ICONSET"
+    ICONSET_DEV="build/AppIcon-dev.iconset"
+    rm -rf "$ICONSET" "$ICONSET_DEV"
+    mkdir -p "$ICONSET" "$ICONSET_DEV"
     for spec in 16:icon_16x16.png 32:icon_16x16@2x.png 32:icon_32x32.png 64:icon_32x32@2x.png \
                 128:icon_128x128.png 256:icon_128x128@2x.png 256:icon_256x256.png \
                 512:icon_256x256@2x.png 512:icon_512x512.png 1024:icon_512x512@2x.png; do
       size=${spec%%:*}; name=${spec##*:}
       magick -background none "$SVG" -resize ${size}x${size} "$ICONSET/$name"
+      # DEV variant: overlay an orange banner with white "DEV" text across the
+      # bottom fifth. Text is illegible below ~32px but the orange still reads
+      # as "not the release build" at small sizes.
+      banner_h=$(awk "BEGIN {print int($size * 0.22)}")
+      font_pt=$(awk "BEGIN {print int($size * 0.18)}")
+      # Composite the banner on the base, then re-clip the result's alpha to
+      # the base's alpha so the banner follows the bezel's rounded corners
+      # instead of poking out to the square canvas edges.
+      magick "$ICONSET/$name" \
+        \( -size ${size}x${banner_h} -background "rgba(255,149,0,0.92)" \
+           -gravity center -fill white -pointsize $font_pt \
+           -font "/Library/Fonts/SF-Mono-Heavy.otf" label:DEV \) \
+        -gravity south -compose Over -composite \
+        \( "$ICONSET/$name" -alpha extract \) \
+        -compose CopyOpacity -composite \
+        "$ICONSET_DEV/$name"
     done
     iconutil -c icns "$ICONSET" -o "$OUT"
-    echo "Icon: $OUT"
+    iconutil -c icns "$ICONSET_DEV" -o "$OUT_DEV"
+    echo "Icons: $OUT + $OUT_DEV"
 
 # Build the app (debug)
 build:
@@ -57,7 +78,14 @@ bundle: build
     swift build --target MisttyCLI
     cp .build/debug/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
-    cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
+    # Prefer the dev-variant icon so the Dock/Finder distinguishes dev from
+    # release at a glance. Falls back to the base icon if the dev variant
+    # hasn't been generated yet (first-time build before `just icon`).
+    if [ -f Mistty/Resources/AppIcon-dev.icns ]; then
+      cp Mistty/Resources/AppIcon-dev.icns "$APP/Contents/Resources/AppIcon.icns"
+    else
+      cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
+    fi
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
 
@@ -137,9 +165,28 @@ clean:
     swift package clean
     rm -rf build/
 
-# Build libghostty from the vendored submodule (requires nix)
+# Build libghostty from the vendored submodule (requires nix).
+# On failure, prints a hint if the user is on Xcode 26.4+, because zig
+# 0.15.2 (pinned by ghostty's build.zig.zon) can't link against that
+# SDK and the raw error is a flood of "undefined symbol: _abort / …".
 build-libghostty:
-    nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast"
+    #!/usr/bin/env bash
+    if ! nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast"; then
+      xcode_version=$(xcodebuild -version 2>/dev/null | awk '/^Xcode/ {print $2}')
+      if [ -n "$xcode_version" ]; then
+        v=$(awk -F. '{print $1*100 + $2}' <<<"$xcode_version")
+        if [ "$v" -ge 2604 ]; then
+          echo "" >&2
+          echo "Hint: Xcode $xcode_version detected. Zig 0.15.2 (pinned by upstream ghostty) can't" >&2
+          echo "link against the Xcode 26.4+ macOS SDK — known upstream issue." >&2
+          echo "Workarounds:" >&2
+          echo "  - sudo xcode-select --switch /Applications/Xcode-26.3.app (or older)" >&2
+          echo "  - build libghostty on another machine and copy" >&2
+          echo "    vendor/ghostty/macos/GhosttyKit.xcframework" >&2
+        fi
+      fi
+      exit 1
+    fi
 
 # Enter the nix dev shell
 dev:
