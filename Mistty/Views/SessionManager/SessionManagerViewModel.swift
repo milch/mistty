@@ -91,7 +91,14 @@ enum SessionManagerItem {
 final class SessionManagerViewModel {
   /// Multiplier applied to subtitle (path/hostname) match scores so a clean
   /// hit on the displayName outranks a scattered hit across a long subtitle.
-  private static let subtitlePenalty: Double = 0.6
+  static let subtitlePenalty: Double = 0.6
+
+  /// Multiplier applied to running-session match scores so an open session
+  /// outranks a comparable directory or SSH host match.
+  static let runningSessionBoost: Double = 1.5
+
+  /// Multiplier applied to SSH-host matches when the query starts with "ssh ".
+  static let sshQueryBoost: Double = 1.5
 
   var query = ""
   private var allItems: [SessionManagerItem] = []
@@ -225,12 +232,12 @@ final class SessionManagerViewModel {
       // Running session boost — prefer existing sessions over directories/SSH hosts
       // when match quality is comparable.
       if case .runningSession = item {
-        finalScore = min(finalScore * 1.5, 1.0)
+        finalScore = min(finalScore * Self.runningSessionBoost, 1.0)
       }
 
       // SSH boost
       if isSSHQuery, case .sshHost = item {
-        finalScore = min(finalScore * 1.5, 1.0)
+        finalScore = min(finalScore * Self.sshQueryBoost, 1.0)
       }
 
       let result = ItemMatchResult(

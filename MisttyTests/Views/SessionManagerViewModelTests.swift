@@ -529,30 +529,56 @@ final class SessionManagerViewModelTests: XCTestCase {
     let haPath = FuzzyMatcher.match(
       query: "mist",
       target: "/Users/manu/Developer/ha-is-there-a-seattle-home-game-today")!.score
-    let subtitlePenalty = 0.6
     XCTAssertGreaterThan(
-      mistName, haPath * subtitlePenalty,
+      mistName, haPath * SessionManagerViewModel.subtitlePenalty,
       "displayName prefix match must beat penalized subtitle match")
   }
 
-  func test_runningSessionBoost_appliedToFuzzyScore() async {
+  func test_runningSessionBoost_outranksDirectoryWithSameDisplayName() async {
+    // Compare two real items rather than asserting against a magic threshold:
+    // a running session "demo" should outrank a directory whose lastPathComponent
+    // is also "demo" because the running-session boost applies.
     let store = SessionStore()
-    let session = store.createSession(
-      name: "mistty", directory: URL(fileURLWithPath: "/tmp/mistty-test"))
+    let session = store.createSession(name: "demo", directory: URL(fileURLWithPath: "/tmp/demo"))
     store.activeSession = nil
 
     let vm = SessionManagerViewModel(store: store)
     await vm.load()
-    vm.updateQuery("mist")
+    vm.updateQuery("demo")
 
-    let itemId = "session-\(session.id)"
-    guard let result = vm.matchResults[itemId] else {
-      XCTFail("No match result for mistty session")
-      return
-    }
-    // Without boost the normalized score for "mist" matching "mistty" is ~0.32.
-    // With the 1.5x running-session boost it should land near ~0.48.
-    XCTAssertGreaterThan(
-      result.score, 0.4, "Running session match should be boosted above raw fuzzy score")
+    let sessionScore = vm.matchResults["session-\(session.id)"]?.score
+    XCTAssertNotNil(sessionScore)
+    let unboosted = FuzzyMatcher.match(query: "demo", target: "demo")!.score
+    XCTAssertEqual(
+      sessionScore!, min(unboosted * SessionManagerViewModel.runningSessionBoost, 1.0),
+      accuracy: 0.001,
+      "Running session score must equal raw match score times the boost")
+  }
+
+  func test_runningSshSession_getsRunningBoostNotSshBoost() async {
+    // The running-session boost (case-based) and the SSH-query boost
+    // (case-based) are mutually exclusive: a running SSH session is a
+    // `.runningSession` so it only ever picks up the running boost. Lock
+    // that behavior in so future tuning doesn't accidentally double-boost.
+    let store = SessionStore()
+    let session = store.createSession(
+      name: "prod", directory: FileManager.default.homeDirectoryForCurrentUser,
+      exec: "ssh prod")
+    session.sshCommand = "ssh prod"
+    store.activeSession = nil
+
+    let vm = SessionManagerViewModel(store: store)
+    await vm.load()
+    // Match a single token against the session name (running sessions have
+    // no subtitle, so multi-token "ssh prod" would never match).
+    vm.updateQuery("prod")
+
+    let sessionScore = vm.matchResults["session-\(session.id)"]?.score
+    XCTAssertNotNil(sessionScore)
+    let unboosted = FuzzyMatcher.match(query: "prod", target: "prod")!.score
+    XCTAssertEqual(
+      sessionScore!, min(unboosted * SessionManagerViewModel.runningSessionBoost, 1.0),
+      accuracy: 0.001,
+      "Running SSH session must apply the running boost exactly once, not stacked with the SSH boost")
   }
 }
