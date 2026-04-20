@@ -439,7 +439,8 @@ struct ContentView: View {
 
   private func handleSetTitle(_ notification: Notification) {
     guard let paneID = notification.userInfo?["paneID"] as? Int,
-      let title = notification.userInfo?["title"] as? String
+      let raw = notification.userInfo?["title"] as? String,
+      let title = TerminalTitle.sanitized(raw)
     else { return }
     for session in store.sessions {
       for tab in session.tabs {
