@@ -124,6 +124,32 @@ setup:
     git submodule update --init --recursive
     @echo "Now run 'just build-libghostty' to build libghostty"
 
+# Set up a fresh git worktree: init the ghostty submodule and symlink the
+# prebuilt GhosttyKit.xcframework from the main checkout so `swift build`
+# can link without rebuilding libghostty per worktree.
+setup-worktree:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    MAIN_WT=$(git worktree list --porcelain | awk '/^worktree / {print $2; exit}')
+    if [ "$(pwd)" = "$MAIN_WT" ]; then
+      echo "setup-worktree runs inside secondary worktrees only. Use 'just setup' in the main checkout."
+      exit 1
+    fi
+    git submodule update --init vendor/ghostty
+    XCF="vendor/ghostty/macos/GhosttyKit.xcframework"
+    MAIN_XCF="$MAIN_WT/$XCF"
+    if [ -e "$XCF" ]; then
+      echo "xcframework already present at $XCF"
+    elif [ -e "$MAIN_XCF" ]; then
+      ln -s "$MAIN_XCF" "$XCF"
+      echo "Symlinked $XCF -> $MAIN_XCF"
+    else
+      echo "Error: main checkout has no prebuilt xcframework at $MAIN_XCF"
+      echo "Run 'just build-libghostty' in the main checkout first."
+      exit 1
+    fi
+    echo "Worktree ready. Try: swift build"
+
 # Format Swift code (requires swift-format)
 fmt:
     swift format --in-place --recursive Mistty/ MisttyTests/
