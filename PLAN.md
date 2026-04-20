@@ -51,7 +51,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Misc & Bugs
 
-_(empty — all known bugs closed)_
+- Sometimes when you press cmd-w instead of closing the pane it closes the whole window
 
 ## Implemented
 
