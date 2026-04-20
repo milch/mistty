@@ -58,6 +58,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
       backing: .buffered,
       defer: false
     )
+    // Pin the appearance so snapshots are stable regardless of the host's
+    // current system Appearance setting.
+    window.appearance = NSAppearance(named: .darkAqua)
     window.contentView = hosting
     window.layoutIfNeeded()
     hosting.layoutSubtreeIfNeeded()
@@ -197,9 +200,13 @@ final class ChromePolishSnapshotTests: XCTestCase {
     let view = ContentView(store: store, config: .default)
       .frame(width: 1200, height: 800)
 
+    // Terminal subprocesses print "Last login: <date>" non-deterministically,
+    // so allow a small pixel tolerance over the chrome area.
     assertSnapshot(
       of: host(view, size: CGSize(width: 1200, height: 800)),
-      as: .image(size: CGSize(width: 1200, height: 800)),
+      as: .image(
+        precision: 0.95, perceptualPrecision: 0.95,
+        size: CGSize(width: 1200, height: 800)),
       named: "content-view-full-window"
     )
   }
@@ -346,7 +353,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     tabBarMode: TabBarMode,
     titleBarStyle: TitleBarStyle,
     testName: String,
-    file: StaticString = #file,
+    filePath: StaticString = #filePath,
     line: UInt = #line
   ) {
     UserDefaults.standard.set(true, forKey: "sidebarVisible")
@@ -391,7 +398,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
       of: host(view, size: CGSize(width: 1200, height: 800)),
       as: .image(size: CGSize(width: 1200, height: 800)),
       named: snapshotName,
-      file: file,
+      file: filePath,
       testName: testName,
       line: line
     )
