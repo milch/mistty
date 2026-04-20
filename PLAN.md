@@ -51,11 +51,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Misc & Bugs
 
-- We added a blue indicator bar next to the tab title in the session manager to highlight the active tab. Maybe we can do the same for the session title
-- Renaming a tab works from the tab bar by double clicking on the title, but not from the sidebar
-  - Similarly, when the tab bar is hidden and you select rename from the menu bar or use the shortcut, it doesn't work
-- Cmd+V to paste doesn't work
-- Some warnings about unsound concurrency that need to be fixed
+_(empty — all known bugs closed)_
 
 ## Implemented
 
@@ -242,3 +238,7 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - zoxide discovery on GUI launch: `ZoxideService` resolves the absolute path once per process via a candidate list (Homebrew ARM/Intel, nix-darwin, home-manager, nix single-user, `~/.cargo/bin`, `~/.local/bin`) with a `bash -lc 'command -v zoxide'` fallback and a new `zoxide_path` config override. Fixes the session manager showing only SSH hosts when Mistty is launched from Dock/Finder (minimal PATH) instead of `open Mistty.app` from a terminal
 - Tab title sanitation: `TerminalTitle.sanitized` drops OSC 2 payloads whose first whitespace-delimited token is `exit` (shell `preexec` hooks send the literal command line just before the shell dies, leaving `"exit"` / `"exit $PATH"` pinned on the tab). Stale tab titles are cleared on active-pane close — resync to the new active pane's `processTitle`, or back to the default
 - Window-mode Cmd+X after session-manager dismiss: Cmd+J's search field was leaking first-responder on Escape, letting Edit > Cut (standard Cmd+X) shadow View > Window Mode. `showingSessionManager` onChange now calls `returnFocusToActivePane` on dismissal
+- Cmd+V paste: `readClipboardCallback` / `confirmReadClipboardCallback` were TODO stubs — they read NSPasteboard but never called `ghostty_surface_complete_clipboard_request`, so libghostty silently dropped every paste. Wired through; unsafe-content callback auto-confirms (matching ghostty's default) until a real NSAlert UI is added
+- Tab rename from sidebar / hidden tab bar: `TabBarItem` was the sole host of the inline-rename `TextField` and the only observer of `.misttyRenameTab`. Extracted `SidebarTabRow` with its own inline editor, double-click affordance, and notification listener. The sidebar's listener is gated on tab-bar visibility so only one editor activates at a time
+- Active session indicator: leading thin accent bar on the active session row in the sidebar, matching the active-tab pattern (bar only, no tinted background since the bold label + accent-tinted process icon already distinguish the row)
+- Concurrency warnings: the sole remaining `@Sendable` closure block in `GhosttyAppManager.init` (scheduled config-parse-error NSAlert) switched to `Task { @MainActor in for await _ in NotificationCenter.default.notifications(named:) }`, eliminating all 33 build warnings without any cross-file ripple
