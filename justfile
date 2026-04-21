@@ -51,22 +51,6 @@ build:
 build-release: build-libghostty
     swift build -c release
 
-# Build the CLI tool
-build-cli:
-    swift build --target MisttyCLI
-
-# Build CLI in release mode
-build-cli-release:
-    swift build --target MisttyCLI -c release
-
-# Install CLI to /usr/local/bin
-install-cli: build-cli-release
-    cp .build/release/MisttyCLI /usr/local/bin/mistty-cli
-
-# Uninstall CLI
-uninstall-cli:
-    rm -f /usr/local/bin/mistty-cli
-
 # Package as .app bundle (debug)
 bundle: build
     #!/usr/bin/env bash
@@ -158,23 +142,27 @@ install-release: bundle-release
     echo "Installed: /Applications/Mistty.app (release)"
     just _link-cli /Applications/Mistty.app/Contents/MacOS/mistty-cli
 
-# Symlink /usr/local/bin/mistty-cli -> the app's bundled binary. Keeps the CLI
+# Symlink ~/.local/bin/mistty-cli -> the app's bundled binary. Keeps the CLI
 # reachable from shells whose startup scripts reset PATH (nix-darwin's
 # set-environment, path_helper, etc.) and strip ghostty's appended
-# Contents/MacOS. Idempotent — prompts for sudo only when the link is stale.
+# Contents/MacOS. User-writable dir — no sudo. Prints a PATH hint if
+# ~/.local/bin isn't already on the caller's PATH, since shells vary on
+# whether that dir is included by default.
 [private]
 _link-cli target:
     #!/usr/bin/env bash
     set -euo pipefail
-    LINK="/usr/local/bin/mistty-cli"
-    if [ "$(readlink "$LINK" 2>/dev/null)" = "{{target}}" ]; then
-      exit 0
-    fi
-    if sudo ln -sfn "{{target}}" "$LINK"; then
+    BIN="$HOME/.local/bin"
+    LINK="$BIN/mistty-cli"
+    mkdir -p "$BIN"
+    if [ "$(readlink "$LINK" 2>/dev/null)" != "{{target}}" ]; then
+      ln -sfn "{{target}}" "$LINK"
       echo "Linked: $LINK -> {{target}}"
-    else
-      echo "Warning: could not create $LINK. Add {{ parent_directory(target) }} to PATH or rerun 'just install'." >&2
     fi
+    case ":$PATH:" in
+      *":$BIN:"*) ;;
+      *) echo "Hint: $BIN is not on your PATH. Add it to your shell config to use 'mistty-cli' directly." >&2 ;;
+    esac
 
 # Run the app (debug). Optionally from a worktree at .worktrees/<name>.
 run worktree="":
