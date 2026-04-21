@@ -87,6 +87,7 @@ bundle: build
     else
       cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
     fi
+    just _copy-ghostty-resources "$APP"
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
 
@@ -103,8 +104,37 @@ bundle-release: build-release
     cp Mistty/Resources/Fonts/SymbolsNerdFontMono-Regular.ttf "$APP/Contents/Resources/"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
     cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
+    just _copy-ghostty-resources "$APP"
     codesign -s - -f "$APP"
     echo "Bundled: $APP"
+
+# Copy libghostty's bundled resources (themes, shell-integration, terminfo)
+# into the target `.app/Contents/Resources/`. Without this, a UI-launched
+# Mistty has no `GHOSTTY_RESOURCES_DIR` inherited from a parent terminal and
+# ghostty's sentinel climb (`Contents/Resources/terminfo/78/xterm-ghostty`)
+# fails — so themes silently fall back to defaults and spawned shells get
+# `TERM=xterm-256color` instead of `xterm-ghostty`. CLI launches from within
+# Ghostty accidentally "worked" because they inherited the parent's env.
+#
+# Resolves the source against the main worktree so secondary worktrees that
+# don't rebuild libghostty themselves (see `setup-worktree`) still find the
+# files next to the shared xcframework.
+[private]
+_copy-ghostty-resources app:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SHARE="vendor/ghostty/zig-out/share"
+    if [ ! -d "$SHARE/ghostty" ] || [ ! -d "$SHARE/terminfo" ]; then
+      MAIN_WT=$(git worktree list --porcelain | awk '/^worktree / {print $2; exit}')
+      if [ -n "$MAIN_WT" ] && [ -d "$MAIN_WT/$SHARE/ghostty" ]; then
+        SHARE="$MAIN_WT/$SHARE"
+      else
+        echo "Error: $SHARE/{ghostty,terminfo} missing. Run 'just build-libghostty' first." >&2
+        exit 1
+      fi
+    fi
+    cp -R "$SHARE/ghostty" "{{app}}/Contents/Resources/ghostty"
+    cp -R "$SHARE/terminfo" "{{app}}/Contents/Resources/terminfo"
 
 # Install to /Applications (debug)
 install: bundle
@@ -115,6 +145,7 @@ install: bundle
     rm -rf /Applications/Mistty-dev.app
     cp -R build/Mistty-dev.app /Applications/Mistty-dev.app
     echo "Installed: /Applications/Mistty-dev.app"
+    just _link-cli /Applications/Mistty-dev.app/Contents/MacOS/mistty-cli
 
 # Install to /Applications (release)
 install-release: bundle-release
@@ -125,6 +156,25 @@ install-release: bundle-release
     rm -rf /Applications/Mistty.app
     cp -R build/Mistty.app /Applications/Mistty.app
     echo "Installed: /Applications/Mistty.app (release)"
+    just _link-cli /Applications/Mistty.app/Contents/MacOS/mistty-cli
+
+# Symlink /usr/local/bin/mistty-cli -> the app's bundled binary. Keeps the CLI
+# reachable from shells whose startup scripts reset PATH (nix-darwin's
+# set-environment, path_helper, etc.) and strip ghostty's appended
+# Contents/MacOS. Idempotent — prompts for sudo only when the link is stale.
+[private]
+_link-cli target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    LINK="/usr/local/bin/mistty-cli"
+    if [ "$(readlink "$LINK" 2>/dev/null)" = "{{target}}" ]; then
+      exit 0
+    fi
+    if sudo ln -sfn "{{target}}" "$LINK"; then
+      echo "Linked: $LINK -> {{target}}"
+    else
+      echo "Warning: could not create $LINK. Add {{ parent_directory(target) }} to PATH or rerun 'just install'." >&2
+    fi
 
 # Run the app (debug). Optionally from a worktree at .worktrees/<name>.
 run worktree="":
@@ -222,6 +272,21 @@ setup-worktree:
       echo "Error: main checkout has no prebuilt xcframework at $MAIN_XCF"
       echo "Run 'just build-libghostty' in the main checkout first."
       exit 1
+    fi
+    # Share libghostty's bundled resources (themes, shell-integration,
+    # terminfo) with the worktree. `just bundle` copies these into the .app
+    # so a UI-launched Mistty can resolve its theme and spawn shells with
+    # `TERM=xterm-ghostty` instead of falling back to xterm-256color.
+    SHARE="vendor/ghostty/zig-out/share"
+    MAIN_SHARE="$MAIN_WT/$SHARE"
+    if [ -e "$SHARE" ]; then
+      echo "share dir already present at $SHARE"
+    elif [ -e "$MAIN_SHARE" ]; then
+      mkdir -p "$(dirname "$SHARE")"
+      ln -s "$MAIN_SHARE" "$SHARE"
+      echo "Symlinked $SHARE -> $MAIN_SHARE"
+    else
+      echo "Warning: main checkout has no $MAIN_SHARE — 'just bundle' in this worktree will fail until you run 'just build-libghostty' in the main checkout." >&2
     fi
     echo "Worktree ready. Try: swift build"
 
