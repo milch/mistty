@@ -41,7 +41,7 @@ final class TerminalSurfaceView: NSView {
     workingDirectory: URL? = nil,
     command: String? = nil,
     initialInput: String? = nil,
-    waitAfterCommand: Bool = true
+    waitAfterCommand: Bool = false
   ) {
     // Use the shared launch-time parse so init doesn't re-read config.toml
     // per pane and stays consistent with the lines sent to libghostty.

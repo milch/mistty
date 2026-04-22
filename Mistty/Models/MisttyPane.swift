@@ -17,12 +17,15 @@ final class MisttyPane: Identifiable {
   /// runs it — used by SSH panes where the shell must stay alive after
   /// the command exits.
   var useCommandField: Bool = true
-  /// Only meaningful when `useCommandField == true`. False makes the pane
-  /// close as soon as the ghostty-spawned command exits (popup close-on-exit);
-  /// true keeps it around until the user hits a key (the default ghostty UX).
-  /// Requires the Mistty patch to `vendor/ghostty/src/apprt/embedded.zig`
-  /// that stops forcing wait-after-command when a command is given.
-  var waitAfterCommand: Bool = true
+  /// When true, the pane stays open after its process exits and shows
+  /// "press any key to close". When false (default, matching ghostty's own
+  /// default), the pane closes as soon as the process exits — so typing
+  /// `exit` in a regular shell pane closes it like you'd expect. Popups
+  /// that want to linger (`close_on_exit = false`) flip this to true.
+  ///
+  /// Relies on the Mistty libghostty patch that stops unconditionally
+  /// forcing `wait-after-command = true` whenever `cfg.command` is set.
+  var waitAfterCommand: Bool = false
 
   var processTitle: String?
 
