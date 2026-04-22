@@ -30,6 +30,12 @@ scrollback_lines = 10000
 # Toggle at runtime with cmd+\.
 sidebar_visible = true
 
+# Multiplier applied to precision (trackpad / Magic Mouse) scroll deltas
+# before they reach the terminal. 1.0 uses raw macOS deltas (usually too
+# fast), 2.0 matches ghostty's own AppKit default. Mouse-wheel scrolling is
+# unaffected — use `[ghostty] mouse-scroll-multiplier` for that.
+scroll_multiplier = 2.0
+
 # Absolute path to the `zoxide` binary. Optional.
 # When unset, Mistty probes common install locations (Homebrew ARM/Intel,
 # nix-darwin, home-manager, nix single-user, ~/.cargo/bin, ~/.local/bin),

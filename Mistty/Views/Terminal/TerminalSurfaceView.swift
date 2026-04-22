@@ -582,7 +582,29 @@ final class TerminalSurfaceView: NSView {
 
   override func scrollWheel(with event: NSEvent) {
     guard let surface else { return }
-    ghostty_surface_mouse_scroll(surface, event.scrollingDeltaX, event.scrollingDeltaY, 0)
+
+    var x = event.scrollingDeltaX
+    var y = event.scrollingDeltaY
+    let precision = event.hasPreciseScrollingDeltas
+    if precision {
+      let mult = MisttyConfig.loadedAtLaunch.config.scrollMultiplier
+      x *= mult
+      y *= mult
+    }
+
+    var mods: Int32 = precision ? 1 : 0
+    let momentum: ghostty_input_mouse_momentum_e = switch event.momentumPhase {
+    case .began: GHOSTTY_MOUSE_MOMENTUM_BEGAN
+    case .stationary: GHOSTTY_MOUSE_MOMENTUM_STATIONARY
+    case .changed: GHOSTTY_MOUSE_MOMENTUM_CHANGED
+    case .ended: GHOSTTY_MOUSE_MOMENTUM_ENDED
+    case .cancelled: GHOSTTY_MOUSE_MOMENTUM_CANCELLED
+    case .mayBegin: GHOSTTY_MOUSE_MOMENTUM_MAY_BEGIN
+    default: GHOSTTY_MOUSE_MOMENTUM_NONE
+    }
+    mods |= Int32(momentum.rawValue) << 1
+
+    ghostty_surface_mouse_scroll(surface, x, y, mods)
   }
 
   private func ghosttyMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {

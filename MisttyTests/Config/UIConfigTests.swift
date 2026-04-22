@@ -373,4 +373,34 @@ final class UIConfigTests: XCTestCase {
     XCTAssertEqual(config.ui.tabBarMode, .whenMultipleTabs)
     XCTAssertEqual(config.ui.titleBarStyle, .hiddenWithLights)
   }
+
+  func test_scrollMultiplier_defaultsTo2() {
+    XCTAssertEqual(MisttyConfig.default.scrollMultiplier, 2.0, accuracy: 0.0001)
+  }
+
+  func test_scrollMultiplier_parsesFloat() throws {
+    let config = try MisttyConfig.parse("scroll_multiplier = 1.5")
+    XCTAssertEqual(config.scrollMultiplier, 1.5, accuracy: 0.0001)
+  }
+
+  func test_scrollMultiplier_parsesInt() throws {
+    let config = try MisttyConfig.parse("scroll_multiplier = 3")
+    XCTAssertEqual(config.scrollMultiplier, 3.0, accuracy: 0.0001)
+  }
+
+  func test_scrollMultiplier_rejectsNonPositive() throws {
+    let config = try MisttyConfig.parse("scroll_multiplier = 0")
+    XCTAssertEqual(config.scrollMultiplier, 2.0, accuracy: 0.0001)
+  }
+
+  func test_scrollMultiplier_roundTripsThroughSave() throws {
+    var config = MisttyConfig()
+    config.scrollMultiplier = 1.25
+    let tempURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mistty-scroll-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+    try config.save(to: tempURL)
+    let loaded = try MisttyConfig.loadThrowing(from: tempURL)
+    XCTAssertEqual(loaded.scrollMultiplier, 1.25, accuracy: 0.0001)
+  }
 }

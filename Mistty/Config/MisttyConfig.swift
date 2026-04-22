@@ -187,6 +187,13 @@ struct MisttyConfig: Sendable, Equatable {
   /// because logs go through a file handle per write.
   var debugLogging: Bool = false
 
+  /// Multiplier applied to precision (trackpad / Magic Mouse) scroll deltas
+  /// before they reach libghostty. 1.0 = raw macOS deltas (too fast in
+  /// practice); 2.0 matches ghostty's own AppKit default feel. Mouse-wheel
+  /// (non-precision) speed is unaffected — tune via
+  /// `[ghostty] mouse-scroll-multiplier` if needed.
+  var scrollMultiplier: Double = 2.0
+
   /// Values to show in Settings UI / Stepper bindings. Read-only surface over
   /// the optional storage.
   var resolvedFontSize: Int { fontSize ?? Self.defaultFontSize }
@@ -225,6 +232,11 @@ struct MisttyConfig: Sendable, Equatable {
       config.zoxidePath = trimmed.isEmpty ? nil : (trimmed as NSString).expandingTildeInPath
     }
     if let debug = table["debug_logging"]?.bool { config.debugLogging = debug }
+    if let mult = table["scroll_multiplier"]?.double, mult > 0 {
+      config.scrollMultiplier = mult
+    } else if let mult = table["scroll_multiplier"]?.int, mult > 0 {
+      config.scrollMultiplier = Double(mult)
+    }
     if let popupArray = table["popup"]?.array {
       config.popups = popupArray.compactMap { entry -> PopupDefinition? in
         guard let t = entry.table else { return nil }
@@ -389,6 +401,9 @@ struct MisttyConfig: Sendable, Equatable {
     lines.append("sidebar_visible = \(sidebarVisible)")
     if debugLogging {
       lines.append("debug_logging = true")
+    }
+    if scrollMultiplier != MisttyConfig().scrollMultiplier {
+      lines.append("scroll_multiplier = \(scrollMultiplier)")
     }
     for popup in popups {
       lines.append("")
