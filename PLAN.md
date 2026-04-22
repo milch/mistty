@@ -18,22 +18,17 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ## TODO
 
-### Window mode
-
-- s to save layout for this session / r to restore layout
-
 ### Save layouts
 
 - There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
+  - Just use standard macOS state restoration for now. Something more complex can come later.
 - Configurable allowlist of processes that should be relaunched when restoring a layout, e.g. nvim, claude, ssh
+  - Some sort of strategy configuration, e.g. `claude = "claude --resume"`
 
 ### Keyboard shortcut configuration
 
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
-- Additional shortcuts:
-  - Next/prev tab (cmd+up/down) (in addition to existing)
-  - Next/prev session (cmd+shift+]/[) (in addition to existing)
-  - Switch sessions with ctrl-1/2/3... (similar to the existing switching tabs with cmd-1/2/3...)
+- Session reordering so ctrl-1..9 is actually useful (shortcut + drag-and-drop in sidebar)
 
 ### Preference Pane
 
@@ -52,7 +47,7 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 ### Misc & Bugs
 
 - Sometimes when you press cmd-w instead of closing the pane it closes the whole window. Diagnostic logging is wired (enable via Settings → Debug) but repro is still needed.
-- Scrolling with the mouse wheel is too fast
+- OSC777/OSC9/OSC99 notifications support
 
 ## Implemented
 
@@ -176,8 +171,10 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 
 - Ctrl-h/j/k/l between panes with smart neovim pass-through
 - Cmd-1 through cmd-9 to focus tab by index
-- Cmd-]/cmd-[ for next/prev tab (circular)
-- Cmd-shift-up/down to cycle between sessions (circular)
+- Ctrl-1 through ctrl-9 to focus session by index
+- Cmd-]/cmd-[ for next/prev tab (circular), also cmd-down/up as alternates
+- Cmd-shift-up/down to cycle between sessions (circular), also cmd-shift-]/[ as alternates
+- Cmd-opt-up/down to move the active session up/down in the sidebar, also cmd-opt-[/] as alternates
 
 ### SSH integration
 
@@ -250,3 +247,8 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Split pane CWD: `splitActivePane` now inherits the focused pane's live working directory (via OSC 7 / `GHOSTTY_ACTION_PWD`) instead of reusing the tab's initial directory. Wires the previously-ignored PWD action through a new `.ghosttyPwd` notification to update `MisttyPane.currentWorkingDirectory`
 - Copy mode Enter: Return posts `.exitCopyMode` from any submode except search, which keeps its own Return binding for confirming the query. If a selection is active the existing yank-on-exit path runs, so Enter doubles as "confirm and copy" à la tmux/vim
 - Popup command reliability: popups now run their command through `cfg.command` (exec'd via `/bin/sh -c`, tmux-style) instead of typing `exec CMD\n` into a login shell, eliminating the race where a slow `.zshrc` could swallow the input and drop the user at a bare prompt. Requires a local libghostty patch (`patches/ghostty/0001-respect-wait-after-command-opt.patch`) that removes ghostty's unconditional `wait-after-command = true` override — without it, all command panes would require a keypress to close. `just patch-ghostty` applies it, and `just build-libghostty` now depends on it
+- Scroll speed: `TerminalSurfaceView.scrollWheel` was passing `0` for the scroll-mods bitmask, so libghostty couldn't tell a trackpad pixel delta from a wheel tick and treated every event as discrete ticks (pixel delta → "this many rows"). Now packs `hasPreciseScrollingDeltas` + `momentumPhase` into the mods (matching ghostty's own AppKit surface) and applies a configurable `scroll_multiplier` (default 2.0, precision-only) that replaces ghostty's hard-coded 2× trackpad feel. Non-precision wheel speed stays on the ghostty discrete path — tune via `[ghostty] mouse-scroll-multiplier` if needed
+- Mode chrome colors: window mode keeps orange (tmux-prefix feel + ZOOMED badge + pane border), copy/visual/search use blue, hint/yank picker uses purple. `CopySubMode.chromeColor` is the single source of truth; `CopyModeHints` toast, `CopyModeHelpOverlay` border, and `CopyModeHintOverlay` label pills pull from it. Hint-pill text flipped to white for contrast against the purple fill
+- Window mode stuck after session/tab switch: window mode's global keyDown monitor is installed once and reads `store.activeSession?.activeTab`, so pressing `esc` on _any other tab_ removed the monitor while the original tab's `windowModeState` still read `.normal` — toast kept showing, arrows/esc did nothing, only `cmd-x` could toggle out. Fixed by adding a `previousActiveTab` tracker: whenever the active tab id changes, clear window mode on the tab we're leaving and drop the monitor if the new active tab isn't in window mode. Matches tmux-prefix ephemeral semantics — switching away cancels the mode cleanly
+- Window mode stay-vs-exit audit: zoom (z) and break-to-tab (b) exit (both commit a terminal state change — zoom is a view state, break moves the pane away). Resize (cmd+arrow), swap (arrow), rotate (r), and standard layouts (1–5) all _stay_ in window mode since users typically chain them with follow-up adjustments. Layouts used to exit but have been changed to match — applying `.tiled` then nudging one pane with cmd+arrow now works without a second cmd-x
+- Dev/release CLI socket split: both builds bound to `~/Library/Application Support/Mistty/mistty.sock` and `unlink`'d it on startup, so launching one app killed the other's CLI. Fix is two-part: (1) `MisttyIPC.serverSocketPath` walks up the executable path to the enclosing `.app` and suffixes `-dev` when inside `Mistty-dev.app`, so release and dev bind distinct sockets; (2) `TerminalSurfaceView` sets `MISTTY_SOCKET=<server path>` via ghostty's `env_vars` on every spawned shell, and `MisttyIPC.socketPath` (CLI-side) prefers that env var. That way a single `mistty-cli` on `$PATH` always talks back to the specific instance whose pane invoked it, no matter which app was installed last. The listener stays on `serverSocketPath` explicitly so `MISTTY_SOCKET` leaked in from an external shell can't make the dev app bind the release socket
