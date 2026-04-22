@@ -51,7 +51,9 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Misc & Bugs
 
-- Sometimes when you press cmd-w instead of closing the pane it closes the whole window
+- Sometimes when you press cmd-w instead of closing the pane it closes the whole window. Diagnostic logging is wired (enable via Settings → Debug) but repro is still needed.
+- Sometimes when you open a new popup, it doesn't actually run the command and you land in a shell. Ghostty's C API currently forces `wait-after-command = true` when `cfg.command` is set, so the obvious "set the command as per-pane config" fix would make popups require a keypress to close. Open on approach — see Bug 6 investigation in conversation history.
+- Scrolling with the mouse wheel is too fast
 
 ## Implemented
 
@@ -169,6 +171,7 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Toggle via configurable keyboard shortcuts
 - CLI popup commands (open/close/toggle/list)
 - Popup inherits current pane's working directory
+- Per-popup `cwd` config (`session` / `active_pane` / `home`, default `active_pane`) exposed as a segmented picker in Settings; `active_pane` now reads the live OSC 7 CWD, falling back to initial pane dir, then session dir
 
 ### Navigation
 
@@ -189,6 +192,7 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Preference pane (cmd+,) for font size, cursor style, scrollback, sidebar visibility
 - Popup definition configuration
 - `zoxide_path` top-level key to explicitly point at the zoxide binary (skips the candidate probe + `bash -lc` fallback; useful for exotic installs or to avoid spawning bash on every cold start)
+- `debug_logging` opt-in: writes diagnostic traces to `~/Library/Logs/Mistty/mistty-debug.log` via a `DebugLog` helper. Toggle + log path + Reveal button surfaced in Settings → Debug. Used today to instrument the Cmd-W misroute path (register/unregister of tracked windows, `isTerminalWindowKey` returning false, menu vs. monitor decision)
 
 ### Repo / agent hygiene
 
@@ -242,3 +246,7 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - Tab rename from sidebar / hidden tab bar: `TabBarItem` was the sole host of the inline-rename `TextField` and the only observer of `.misttyRenameTab`. Extracted `SidebarTabRow` with its own inline editor, double-click affordance, and notification listener. The sidebar's listener is gated on tab-bar visibility so only one editor activates at a time
 - Active session indicator: leading thin accent bar on the active session row in the sidebar, matching the active-tab pattern (bar only, no tinted background since the bold label + accent-tinted process icon already distinguish the row)
 - Concurrency warnings: the sole remaining `@Sendable` closure block in `GhosttyAppManager.init` (scheduled config-parse-error NSAlert) switched to `Task { @MainActor in for await _ in NotificationCenter.default.notifications(named:) }`, eliminating all 33 build warnings without any cross-file ripple
+- Pane close focus: `MisttyTab.closePane` now calls `focusKeyboardInput()` on the surviving pane after moving `activePane`. Previously the focus ring followed the switch but first-responder stayed on the destroyed surface, so keystrokes vanished until the user clicked. Mirrors the existing `focusPane(_:)` pattern
+- Display-scale propagation: `TerminalSurfaceView.viewDidChangeBackingProperties` re-pushes size-in-pixels + content scale to libghostty so plugging/unplugging monitors (external @1x ↔ internal @2x) no longer leaves a surface rendering at the wrong density. `setFrameSize` only fires on point-size changes, which doesn't happen on a pure scale swap — this mirrors the `viewDidChangeEffectiveAppearance` path for dark/light
+- Split pane CWD: `splitActivePane` now inherits the focused pane's live working directory (via OSC 7 / `GHOSTTY_ACTION_PWD`) instead of reusing the tab's initial directory. Wires the previously-ignored PWD action through a new `.ghosttyPwd` notification to update `MisttyPane.currentWorkingDirectory`
+- Copy mode Enter: Return posts `.exitCopyMode` from any submode except search, which keeps its own Return binding for confirming the query. If a selection is active the existing yank-on-exit path runs, so Enter doubles as "confirm and copy" à la tmux/vim
