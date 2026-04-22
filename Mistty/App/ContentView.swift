@@ -74,6 +74,9 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .ghosttyRingBell)) { notification in
         handleRingBell(notification)
       }
+      .onReceive(NotificationCenter.default.publisher(for: .ghosttyPwd)) { notification in
+        handlePwd(notification)
+      }
       .onChange(of: store.activeSession?.activeTab?.id) { _, _ in
         store.activeSession?.activeTab?.hasBell = false
       }
@@ -463,6 +466,22 @@ struct ContentView: View {
         if let pane = tab.panes.first(where: { $0.id == paneID }) {
           pane.processTitle = title
           tab.title = title
+          return
+        }
+      }
+    }
+  }
+
+  private func handlePwd(_ notification: Notification) {
+    guard let paneID = notification.userInfo?["paneID"] as? Int,
+      let pwd = notification.userInfo?["pwd"] as? String,
+      !pwd.isEmpty
+    else { return }
+    let url = URL(fileURLWithPath: pwd, isDirectory: true)
+    for session in store.sessions {
+      for tab in session.tabs {
+        if let pane = tab.panes.first(where: { $0.id == paneID }) {
+          pane.currentWorkingDirectory = url
           return
         }
       }

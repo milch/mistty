@@ -5,7 +5,12 @@ import Foundation
 @MainActor
 final class MisttyPane: Identifiable {
   let id: Int
+  /// Directory passed to ghostty at surface creation. Doesn't track `cd`s.
   var directory: URL?
+  /// Live CWD reported via OSC 7 / ghostty's `GHOSTTY_ACTION_PWD`. `nil` until
+  /// the shell emits its first PWD report. Used by split/new-tab to inherit
+  /// the focused pane's current location instead of the initial session dir.
+  var currentWorkingDirectory: URL?
   var command: String?
   /// When true, use ghostty's command field (which forces wait-after-command).
   /// When false, send the command as initial input so the shell exits naturally.

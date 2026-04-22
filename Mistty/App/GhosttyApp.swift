@@ -68,6 +68,24 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
     }
     return true
 
+  case GHOSTTY_ACTION_PWD:
+    if target.tag == GHOSTTY_TARGET_SURFACE {
+      let surface = target.target.surface
+      if let pwd = action.action.pwd.pwd {
+        let pwdStr = String(cString: pwd)
+        DispatchQueue.main.async {
+          guard let userdata = ghostty_surface_userdata(surface) else { return }
+          let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+          NotificationCenter.default.post(
+            name: .ghosttyPwd,
+            object: nil,
+            userInfo: ["paneID": view.pane?.id as Any, "pwd": pwdStr]
+          )
+        }
+      }
+    }
+    return true
+
   case GHOSTTY_ACTION_SCROLLBAR:
     if target.tag == GHOSTTY_TARGET_SURFACE {
       let surface = target.target.surface
@@ -163,6 +181,7 @@ extension Notification.Name {
   static let ghosttySetTitle = Notification.Name("ghosttySetTitle")
   static let ghosttyCloseSurface = Notification.Name("ghosttyCloseSurface")
   static let ghosttyRingBell = Notification.Name("ghosttyRingBell")
+  static let ghosttyPwd = Notification.Name("ghosttyPwd")
 }
 
 // MARK: - GhosttyAppManager

@@ -54,7 +54,11 @@ final class MisttyTab: Identifiable {
   func splitActivePane(direction: SplitDirection) {
     guard let activePane else { return }
     let newPane = MisttyPane(id: paneIDGenerator())
-    newPane.directory = directory
+    // Inherit the focused pane's live CWD if the shell has reported one
+    // (OSC 7); fall back to its initial directory, then the tab default.
+    newPane.directory = activePane.currentWorkingDirectory
+      ?? activePane.directory
+      ?? directory
     layout.split(pane: activePane, direction: direction, newPane: newPane)
     panes = layout.leaves
     self.activePane = newPane
