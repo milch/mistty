@@ -153,6 +153,17 @@ struct MisttyApp: App {
           .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
         }
 
+        ForEach(1...9, id: \.self) { index in
+          Button("Focus Session \(index)") {
+            NotificationCenter.default.post(
+              name: .misttyFocusSessionByIndex,
+              object: nil,
+              userInfo: ["index": index - 1]
+            )
+          }
+          .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .control)
+        }
+
         Button("Next Tab") {
           NotificationCenter.default.post(name: .misttyNextTab, object: nil)
         }
@@ -172,6 +183,16 @@ struct MisttyApp: App {
           NotificationCenter.default.post(name: .misttyNextSession, object: nil)
         }
         .keyboardShortcut(.downArrow, modifiers: [.command, .shift])
+
+        Button("Move Session Up") {
+          NotificationCenter.default.post(name: .misttyMoveSessionUp, object: nil)
+        }
+        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+
+        Button("Move Session Down") {
+          NotificationCenter.default.post(name: .misttyMoveSessionDown, object: nil)
+        }
+        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
 
         Divider()
 
@@ -290,9 +311,12 @@ extension Notification.Name {
   static let misttyYankHints = Notification.Name("misttyYankHints")
   static let misttyPopupToggle = Notification.Name("misttyPopupToggle")
   static let misttyFocusTabByIndex = Notification.Name("misttyFocusTabByIndex")
+  static let misttyFocusSessionByIndex = Notification.Name("misttyFocusSessionByIndex")
   static let misttyNextTab = Notification.Name("misttyNextTab")
   static let misttyPrevTab = Notification.Name("misttyPrevTab")
   static let misttyNextSession = Notification.Name("misttyNextSession")
   static let misttyPrevSession = Notification.Name("misttyPrevSession")
+  static let misttyMoveSessionUp = Notification.Name("misttyMoveSessionUp")
+  static let misttyMoveSessionDown = Notification.Name("misttyMoveSessionDown")
   static let misttyScrollChanged = Notification.Name("misttyScrollChanged")
 }
