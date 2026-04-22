@@ -14,6 +14,9 @@ struct SidebarView: View {
       ForEach(store.sessions) { session in
         SessionRowView(session: session, store: store, tabBarVisible: tabBarVisible)
       }
+      .onMove { source, destination in
+        store.moveSessions(from: source, to: destination)
+      }
     }
     .listStyle(.sidebar)
     .padding(.top, titleBarStyle.hasTrafficLights ? 28 : 0)
