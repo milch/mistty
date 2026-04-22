@@ -13,6 +13,7 @@ struct ContentView: View {
   @State private var sessionManagerVM: SessionManagerViewModel?
   @State private var eventMonitor: Any?
   @State private var windowModeMonitor: Any?
+  @State private var previousActiveTab: MisttyTab?
   @State private var copyModeMonitor: Any?
   @State private var ctrlNavMonitor: Any?
   @State private var closeMonitor: Any?
@@ -93,6 +94,19 @@ struct ContentView: View {
       }
       .onChange(of: store.activeSession?.activeTab?.id) { _, _ in
         store.activeSession?.activeTab?.hasBell = false
+        // Window mode is ephemeral (tmux-style prefix). When the user switches
+        // away to a different session/tab, clear it from the tab we're leaving
+        // so it doesn't appear "stuck" on return — and drop the global
+        // keyDown monitor, which otherwise acts on whatever tab is active
+        // now (not the one we activated it for).
+        let newTab = store.activeSession?.activeTab
+        if let prev = previousActiveTab, prev !== newTab, prev.isWindowModeActive {
+          prev.windowModeState = .inactive
+        }
+        if newTab?.isWindowModeActive != true {
+          removeWindowModeMonitor()
+        }
+        previousActiveTab = newTab
       }
       .onReceive(NotificationCenter.default.publisher(for: .ghosttyCloseSurface)) { notification in
         handleCloseSurface(notification)
@@ -647,8 +661,10 @@ struct ContentView: View {
       case 125:  // Down arrow
         swapActivePane(.down)
         return nil
-      case 6:  // z — zoom toggle
+      case 6:  // z — zoom toggle; exit window mode once zoom is committed
         toggleZoom()
+        store.activeSession?.activeTab?.windowModeState = .inactive
+        removeWindowModeMonitor()
         return nil
       case 11:  // b — break pane to new tab
         breakPaneToTab()
@@ -660,7 +676,7 @@ struct ContentView: View {
         guard let tab = store.activeSession?.activeTab else { return nil }
         tab.windowModeState = .joinPick
         return nil
-      case 18, 19, 20, 21, 23:  // 1-5: standard layouts
+      case 18, 19, 20, 21, 23:  // 1-5: standard layouts — stay so resize/swap follow-ups work
         if let tab = store.activeSession?.activeTab, tab.panes.count >= 2 {
           let standardLayout: StandardLayout =
             switch event.keyCode {
@@ -672,8 +688,6 @@ struct ContentView: View {
             default: .evenHorizontal
             }
           tab.applyStandardLayout(standardLayout)
-          tab.windowModeState = .inactive
-          removeWindowModeMonitor()
         }
         return nil
       default:
