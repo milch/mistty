@@ -236,8 +236,15 @@ struct ContentView: View {
       }
     }
     .onDisappear {
+      DebugLog.shared.log(
+        "view",
+        "ContentView.onDisappear fired; scheduling stale-window sweep")
       DispatchQueue.main.async { [store] in
         for tracked in store.trackedWindows where !tracked.window.isVisible {
+          DebugLog.shared.log(
+            "view",
+            "onDisappear sweep: unregistering invisible id=\(tracked.id) num=\(tracked.window.windowNumber)"
+          )
           store.unregisterWindow(tracked.window)
         }
       }
@@ -977,9 +984,18 @@ struct ContentView: View {
       // the key window is one of our tracked terminal windows; otherwise let
       // the event flow through so the system can close the focused window
       // (Settings, etc.).
-      guard store.isTerminalWindowKey() else { return event }
+      guard store.isTerminalWindowKey() else {
+        DebugLog.shared.log(
+          "cmdw",
+          "monitor: passing through — not a terminal window"
+        )
+        return event
+      }
       let name: Notification.Name =
         flags.contains(.shift) ? .misttyCloseTab : .misttyClosePane
+      DebugLog.shared.log(
+        "cmdw", "monitor: consuming, posting \(name.rawValue)"
+      )
       NotificationCenter.default.post(name: name, object: nil)
       return nil
     }

@@ -54,6 +54,8 @@ struct SettingsView: View {
         Toggle("Show Sidebar by Default", isOn: $config.sidebarVisible)
       }
 
+      debugSection
+
       Section("Popups") {
         ForEach(config.popups.indices, id: \.self) { index in
           VStack(alignment: .leading, spacing: 4) {
@@ -185,6 +187,34 @@ struct SettingsView: View {
     .onChange(of: config.sidebarVisible) { _, _ in saveConfig() }
     .onChange(of: config.popups) { _, _ in saveConfig() }
     .onChange(of: config.ssh) { _, _ in saveConfig() }
+    .onChange(of: config.debugLogging) { _, new in
+      saveConfig()
+      DebugLog.shared.configure(enabled: new)
+    }
+  }
+
+  @ViewBuilder
+  private var debugSection: some View {
+    Section("Debug") {
+      Toggle("Enable debug logging", isOn: $config.debugLogging)
+      HStack(alignment: .firstTextBaseline) {
+        Text("Log file")
+          .foregroundStyle(.secondary)
+        Text(DebugLog.shared.logFilePath)
+          .font(.caption.monospaced())
+          .foregroundStyle(.secondary)
+          .textSelection(.enabled)
+          .lineLimit(1)
+          .truncationMode(.middle)
+        Spacer()
+        Button("Reveal") {
+          let url = URL(fileURLWithPath: DebugLog.shared.logFilePath)
+          NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+        .disabled(!FileManager.default.fileExists(
+          atPath: DebugLog.shared.logFilePath))
+      }
+    }
   }
 
   private func saveConfig() {

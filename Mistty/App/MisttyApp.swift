@@ -16,6 +16,7 @@ struct MisttyApp: App {
   init() {
     _ = GhosttyAppManager.shared
     Self.registerBundledFonts()
+    DebugLog.shared.configure(enabled: config.debugLogging)
   }
 
   private static func registerBundledFonts() {
@@ -91,8 +92,13 @@ struct MisttyApp: App {
           // If a non-terminal window (e.g. Settings) is key, let the system
           // close that window instead of routing the shortcut to the terminal.
           if store.isTerminalWindowKey() {
+            DebugLog.shared.log("cmdw", "menu Close Pane → posting notification")
             NotificationCenter.default.post(name: .misttyClosePane, object: nil)
           } else {
+            DebugLog.shared.log(
+              "cmdw",
+              "menu Close Pane → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
+            )
             NSApp.keyWindow?.performClose(nil)
           }
         }
@@ -100,8 +106,13 @@ struct MisttyApp: App {
 
         Button("Close Tab") {
           if store.isTerminalWindowKey() {
+            DebugLog.shared.log("cmdw", "menu Close Tab → posting notification")
             NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
           } else {
+            DebugLog.shared.log(
+              "cmdw",
+              "menu Close Tab → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
+            )
             NSApp.keyWindow?.performClose(nil)
           }
         }

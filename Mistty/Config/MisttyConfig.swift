@@ -181,6 +181,12 @@ struct MisttyConfig: Sendable, Equatable {
   /// a login shell to resolve the path. Leading `~` is expanded.
   var zoxidePath: String? = nil
 
+  /// Writes diagnostic logs to `~/Library/Logs/Mistty/mistty-debug.log` when
+  /// on. Intended for debugging intermittent bugs (tracked-window drift,
+  /// focus loss, etc.). Off by default; has measurable-but-small overhead
+  /// because logs go through a file handle per write.
+  var debugLogging: Bool = false
+
   /// Values to show in Settings UI / Stepper bindings. Read-only surface over
   /// the optional storage.
   var resolvedFontSize: Int { fontSize ?? Self.defaultFontSize }
@@ -218,6 +224,7 @@ struct MisttyConfig: Sendable, Equatable {
       let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
       config.zoxidePath = trimmed.isEmpty ? nil : (trimmed as NSString).expandingTildeInPath
     }
+    if let debug = table["debug_logging"]?.bool { config.debugLogging = debug }
     if let popupArray = table["popup"]?.array {
       config.popups = popupArray.compactMap { entry -> PopupDefinition? in
         guard let t = entry.table else { return nil }
@@ -376,6 +383,9 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("scrollback_lines = \(scrollback)")
     }
     lines.append("sidebar_visible = \(sidebarVisible)")
+    if debugLogging {
+      lines.append("debug_logging = true")
+    }
     for popup in popups {
       lines.append("")
       lines.append("[[popup]]")

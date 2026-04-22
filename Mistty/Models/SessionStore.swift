@@ -99,15 +99,31 @@ final class SessionStore {
 
   func registerWindow(_ window: NSWindow) -> Int {
     if let existing = trackedWindows.first(where: { $0.window === window }) {
+      DebugLog.shared.log(
+        "window",
+        "registerWindow: already tracked id=\(existing.id) num=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) count=\(trackedWindows.count)"
+      )
       return existing.id
     }
     let id = generateWindowID()
     trackedWindows.append(TrackedWindow(id: id, window: window))
+    DebugLog.shared.log(
+      "window",
+      "registerWindow: id=\(id) num=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) count=\(trackedWindows.count)"
+    )
     return id
   }
 
   func unregisterWindow(_ window: NSWindow) {
+    let before = trackedWindows.count
+    let removedIds = trackedWindows
+      .filter { $0.window === window }
+      .map { $0.id }
     trackedWindows.removeAll { $0.window === window }
+    DebugLog.shared.log(
+      "window",
+      "unregisterWindow: removed=\(removedIds) num=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) count=\(before)→\(trackedWindows.count)"
+    )
   }
 
   func trackedWindow(byId id: Int) -> TrackedWindow? {
@@ -177,7 +193,20 @@ final class SessionStore {
   /// scope app-wide shortcuts (Cmd-W, etc.) so they don't fire while an
   /// auxiliary window like Settings has focus.
   func isTerminalWindowKey() -> Bool {
-    guard let key = NSApp.keyWindow else { return false }
-    return trackedWindows.contains { $0.window === key }
+    guard let key = NSApp.keyWindow else {
+      DebugLog.shared.log(
+        "cmdw",
+        "isTerminalWindowKey=false: no keyWindow, trackedCount=\(trackedWindows.count)"
+      )
+      return false
+    }
+    let isTracked = trackedWindows.contains { $0.window === key }
+    if !isTracked {
+      DebugLog.shared.log(
+        "cmdw",
+        "isTerminalWindowKey=false: key=\(ObjectIdentifier(key)) num=\(key.windowNumber) title=\"\(key.title)\" class=\(type(of: key)) trackedIds=\(trackedWindows.map(\.id))"
+      )
+    }
+    return isTracked
   }
 }
