@@ -257,6 +257,26 @@ final class TerminalSurfaceView: NSView {
     ghostty_surface_set_color_scheme(surface, scheme)
   }
 
+  /// Push new backing scale to libghostty when the view's display changes
+  /// (plug/unplug a monitor, move the window to a different screen). Without
+  /// this, the surface keeps the scale it was created with — so a Retina-born
+  /// surface that later lands on a @1x display renders at half size, and
+  /// vice versa. `setFrameSize` already handles size-driven updates, but
+  /// screen moves with identical point dimensions don't resize.
+  override func viewDidChangeBackingProperties() {
+    super.viewDidChangeBackingProperties()
+    guard let surface, let window else { return }
+    let scale = window.backingScaleFactor
+    let w = UInt32(bounds.width * scale)
+    let h = UInt32(bounds.height * scale)
+    ghostty_surface_set_size(surface, w, h)
+    ghostty_surface_set_content_scale(surface, Double(scale), Double(scale))
+    DebugLog.shared.log(
+      "scale",
+      "viewDidChangeBackingProperties: scale=\(scale) size=\(w)x\(h)px bounds=\(bounds.size)"
+    )
+  }
+
   // MARK: - Keyboard Input
 
   /// Text accumulated from `interpretKeyEvents → insertText` during a keyDown.
