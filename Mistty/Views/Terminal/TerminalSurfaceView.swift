@@ -37,7 +37,11 @@ final class TerminalSurfaceView: NSView {
   private let configuredPaddingBalance: Bool
 
   init(
-    frame: NSRect, workingDirectory: URL? = nil, command: String? = nil, initialInput: String? = nil
+    frame: NSRect,
+    workingDirectory: URL? = nil,
+    command: String? = nil,
+    initialInput: String? = nil,
+    waitAfterCommand: Bool = true
   ) {
     // Use the shared launch-time parse so init doesn't re-read config.toml
     // per pane and stays consistent with the lines sent to libghostty.
@@ -68,6 +72,10 @@ final class TerminalSurfaceView: NSView {
     cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
     cfg.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 2.0)
     cfg.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
+    // Requires the Mistty patch that removes ghostty's unconditional
+    // `wait-after-command = true` when `cfg.command` is set. Without the
+    // patch this flag is effectively ignored (always true for command panes).
+    cfg.wait_after_command = waitAfterCommand
 
     // Set working directory for the shell
     if let dir = workingDirectory {

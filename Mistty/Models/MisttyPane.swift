@@ -12,9 +12,17 @@ final class MisttyPane: Identifiable {
   /// the focused pane's current location instead of the initial session dir.
   var currentWorkingDirectory: URL?
   var command: String?
-  /// When true, use ghostty's command field (which forces wait-after-command).
-  /// When false, send the command as initial input so the shell exits naturally.
+  /// When true, use ghostty's `cfg.command` (exec via `/bin/sh -c`).
+  /// When false, send the command as `cfg.initial_input` so a login shell
+  /// runs it — used by SSH panes where the shell must stay alive after
+  /// the command exits.
   var useCommandField: Bool = true
+  /// Only meaningful when `useCommandField == true`. False makes the pane
+  /// close as soon as the ghostty-spawned command exits (popup close-on-exit);
+  /// true keeps it around until the user hits a key (the default ghostty UX).
+  /// Requires the Mistty patch to `vendor/ghostty/src/apprt/embedded.zig`
+  /// that stops forcing wait-after-command when a command is given.
+  var waitAfterCommand: Bool = true
 
   var processTitle: String?
 
@@ -37,7 +45,8 @@ final class MisttyPane: Identifiable {
       frame: .zero,
       workingDirectory: directory,
       command: useCommandField ? command : nil,
-      initialInput: useCommandField ? nil : command
+      initialInput: useCommandField ? nil : command,
+      waitAfterCommand: waitAfterCommand
     )
     view.pane = self
     return view

@@ -81,9 +81,11 @@ final class MisttySession: Identifiable {
     let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = popupDirectory(for: definition.cwdSource)
     pane.command = definition.command
-    if definition.closeOnExit {
-      pane.useCommandField = false
-    }
+    // Popups always run the command via cfg.command (tmux-style: exec under
+    // `/bin/sh -c`, no user login shell in the middle). `waitAfterCommand`
+    // chooses between "close when the command exits" and "wait for a keypress
+    // to close", matching the popup definition's `closeOnExit`.
+    pane.waitAfterCommand = !definition.closeOnExit
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup
@@ -102,9 +104,11 @@ final class MisttySession: Identifiable {
     let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = popupDirectory(for: definition.cwdSource)
     pane.command = definition.command
-    if definition.closeOnExit {
-      pane.useCommandField = false
-    }
+    // Popups always run the command via cfg.command (tmux-style: exec under
+    // `/bin/sh -c`, no user login shell in the middle). `waitAfterCommand`
+    // chooses between "close when the command exits" and "wait for a keypress
+    // to close", matching the popup definition's `closeOnExit`.
+    pane.waitAfterCommand = !definition.closeOnExit
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup
