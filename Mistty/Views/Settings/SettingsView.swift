@@ -97,6 +97,13 @@ struct SettingsView: View {
               }
               Toggle("Close on exit", isOn: $config.popups[index].closeOnExit)
                 .font(.caption)
+              Toggle("Wrap in sh -c", isOn: $config.popups[index].shellWrap)
+                .font(.caption)
+                .help(
+                  "Wraps the command in `sh -c '…'` so multi-statement " +
+                  "commands like `cd /foo && nvim` work. Turn off if you're " +
+                  "invoking your own shell (`zsh -c …`, `fish -c …`)."
+                )
             }
             HStack {
               Text("Start in:")

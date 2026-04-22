@@ -237,7 +237,8 @@ struct MisttyConfig: Sendable, Equatable {
           width: max(0.1, min(1.0, t["width"]?.double ?? 0.8)),
           height: max(0.1, min(1.0, t["height"]?.double ?? 0.8)),
           closeOnExit: t["close_on_exit"]?.bool ?? true,
-          cwdSource: cwdSource
+          cwdSource: cwdSource,
+          shellWrap: t["shell_wrap"]?.bool ?? true
         )
       }
     }
@@ -402,6 +403,9 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("close_on_exit = \(popup.closeOnExit)")
       if popup.cwdSource != .activePane {
         lines.append("cwd = \"\(popup.cwdSource.rawValue)\"")
+      }
+      if !popup.shellWrap {
+        lines.append("shell_wrap = false")
       }
     }
     if ssh.defaultCommand != "ssh" || !ssh.hosts.isEmpty {

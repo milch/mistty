@@ -80,11 +80,12 @@ final class MisttySession: Identifiable {
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = popupDirectory(for: definition.cwdSource)
-    pane.command = Self.wrapPopupCommand(definition.command)
-    // Popups always run the command via cfg.command (tmux-style: exec under
-    // `/bin/sh -c`, no user login shell in the middle). `waitAfterCommand`
-    // chooses between "close when the command exits" and "wait for a keypress
-    // to close", matching the popup definition's `closeOnExit`.
+    // `shell_wrap` (default true) wraps the command in `sh -c '…'` so
+    // multi-statement lines survive ghostty's `exec -l {cmd}` step.
+    // Users running their own shell (`fish -c …`, `zsh -c …`) can opt
+    // out to avoid a redundant extra shell layer.
+    pane.command = definition.shellWrap
+      ? Self.wrapPopupCommand(definition.command) : definition.command
     pane.waitAfterCommand = !definition.closeOnExit
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
@@ -103,11 +104,12 @@ final class MisttySession: Identifiable {
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = popupDirectory(for: definition.cwdSource)
-    pane.command = Self.wrapPopupCommand(definition.command)
-    // Popups always run the command via cfg.command (tmux-style: exec under
-    // `/bin/sh -c`, no user login shell in the middle). `waitAfterCommand`
-    // chooses between "close when the command exits" and "wait for a keypress
-    // to close", matching the popup definition's `closeOnExit`.
+    // `shell_wrap` (default true) wraps the command in `sh -c '…'` so
+    // multi-statement lines survive ghostty's `exec -l {cmd}` step.
+    // Users running their own shell (`fish -c …`, `zsh -c …`) can opt
+    // out to avoid a redundant extra shell layer.
+    pane.command = definition.shellWrap
+      ? Self.wrapPopupCommand(definition.command) : definition.command
     pane.waitAfterCommand = !definition.closeOnExit
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
