@@ -16,6 +16,7 @@ struct ContentView: View {
   @State private var copyModeMonitor: Any?
   @State private var ctrlNavMonitor: Any?
   @State private var closeMonitor: Any?
+  @State private var altShortcutMonitor: Any?
 
   var body: some View {
     contentWithNotifications
@@ -26,6 +27,13 @@ struct ContentView: View {
           index < session.tabs.count
         else { return }
         session.activeTab = session.tabs[index]
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyFocusSessionByIndex)) {
+        notification in
+        guard let index = notification.userInfo?["index"] as? Int,
+          index < store.sessions.count
+        else { return }
+        store.activeSession = store.sessions[index]
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNextTab)) { _ in
         store.activeSession?.nextTab()
@@ -38,6 +46,12 @@ struct ContentView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyPrevSession)) { _ in
         store.prevSession()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionUp)) { _ in
+        store.moveActiveSessionUp()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionDown)) { _ in
+        store.moveActiveSessionDown()
       }
   }
 
@@ -237,6 +251,9 @@ struct ContentView: View {
       if closeMonitor == nil {
         installCloseMonitor()
       }
+      if altShortcutMonitor == nil {
+        installAltShortcutMonitor()
+      }
     }
     .onDisappear {
       DebugLog.shared.log(
@@ -256,6 +273,7 @@ struct ContentView: View {
       removeCopyModeMonitor()
       removeCtrlNavMonitor()
       removeCloseMonitor()
+      removeAltShortcutMonitor()
       store.activeSession?.activeTab?.windowModeState = .inactive
       if store.activeSession?.activeTab?.isCopyModeActive == true {
         exitCopyMode()
@@ -990,6 +1008,83 @@ struct ContentView: View {
     if let monitor = ctrlNavMonitor {
       NSEvent.removeMonitor(monitor)
       ctrlNavMonitor = nil
+    }
+  }
+
+  // MARK: - Alternate Shortcut Monitor
+  //
+  // SwiftUI Buttons only support one .keyboardShortcut each, so alternate
+  // bindings for existing menu actions are handled here to keep the menu
+  // uncluttered. Covers:
+  //   - Cmd+Up/Down → prev/next tab (primary: Cmd+[ / Cmd+])
+  //   - Cmd+Shift+[ / Cmd+Shift+] → prev/next session (primary: Cmd+Shift+Up/Down)
+  private func installAltShortcutMonitor() {
+    altShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      // Arrow keys carry .function and .numericPad bits, which are inside
+      // .deviceIndependentFlagsMask and would break a strict `==` match.
+      // Restrict comparison to the four user-intent modifiers.
+      let meaningful: NSEvent.ModifierFlags = [.shift, .control, .option, .command]
+      let flags = event.modifierFlags.intersection(meaningful)
+
+      // Cmd+Up/Down → prev/next tab. Skip when window/copy/session-manager
+      // modes own the arrow keys (window mode binds Cmd+arrows to resize).
+      if flags == .command {
+        let activeTab = store.activeSession?.activeTab
+        guard !showingSessionManager,
+          activeTab?.isWindowModeActive != true,
+          activeTab?.isCopyModeActive != true
+        else { return event }
+
+        switch event.keyCode {
+        case 126:  // up arrow
+          NotificationCenter.default.post(name: .misttyPrevTab, object: nil)
+          return nil
+        case 125:  // down arrow
+          NotificationCenter.default.post(name: .misttyNextTab, object: nil)
+          return nil
+        default:
+          break
+        }
+      }
+
+      // Cmd+Shift+[/] → prev/next session. Match on keyCode because
+      // charactersIgnoringModifiers still applies shift (returning `{`/`}`),
+      // and going through `characters` introduces layout-dependent mappings.
+      if flags == [.command, .shift] {
+        switch event.keyCode {
+        case 33:  // left bracket
+          NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
+          return nil
+        case 30:  // right bracket
+          NotificationCenter.default.post(name: .misttyNextSession, object: nil)
+          return nil
+        default:
+          break
+        }
+      }
+
+      // Cmd+Opt+[/] → move session up/down (alt for Cmd+Opt+Up/Down).
+      if flags == [.command, .option] {
+        switch event.keyCode {
+        case 33:  // left bracket
+          NotificationCenter.default.post(name: .misttyMoveSessionUp, object: nil)
+          return nil
+        case 30:  // right bracket
+          NotificationCenter.default.post(name: .misttyMoveSessionDown, object: nil)
+          return nil
+        default:
+          break
+        }
+      }
+
+      return event
+    }
+  }
+
+  private func removeAltShortcutMonitor() {
+    if let monitor = altShortcutMonitor {
+      NSEvent.removeMonitor(monitor)
+      altShortcutMonitor = nil
     }
   }
 

@@ -181,6 +181,24 @@ final class SessionStore {
     activeSession = sessions[(index - 1 + sessions.count) % sessions.count]
   }
 
+  // Move the active session one slot toward the top/bottom of the list.
+  // No-ops at the edges — reorder doesn't wrap.
+  func moveActiveSessionUp() {
+    guard let current = activeSession,
+      let index = sessions.firstIndex(where: { $0.id == current.id }),
+      index > 0
+    else { return }
+    sessions.swapAt(index, index - 1)
+  }
+
+  func moveActiveSessionDown() {
+    guard let current = activeSession,
+      let index = sessions.firstIndex(where: { $0.id == current.id }),
+      index < sessions.count - 1
+    else { return }
+    sessions.swapAt(index, index + 1)
+  }
+
   func activePaneInfo() -> (session: MisttySession, tab: MisttyTab, pane: MisttyPane)? {
     guard let session = activeSession,
       let tab = session.activeTab,
