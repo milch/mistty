@@ -76,6 +76,9 @@ final class MisttyTab: Identifiable {
       // The closed pane's OSC 2 title was what the tab last latched onto.
       // Replace with the new active pane's known title (or back to default).
       title = activePane?.processTitle ?? "Shell"
+      // Without this, the focus ring moves to the new pane but first-responder
+      // stays on the destroyed surface, so keystrokes go nowhere.
+      activePane?.focusKeyboardInput()
     }
   }
 
