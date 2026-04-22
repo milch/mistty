@@ -77,6 +77,23 @@ final class CopyModeStateTests: XCTestCase {
     XCTAssertTrue(actions.contains(.exitCopyMode))
   }
 
+  func test_return_inNormal_exitsCopyMode() {
+    var state = makeState()
+    let actions = state.handleKey(
+      key: "\r", keyCode: 36, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.exitCopyMode))
+  }
+
+  func test_return_inVisual_exitsCopyMode() {
+    var state = makeState()
+    _ = state.handleKey(key: "v", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertEqual(state.subMode, .visual)
+
+    let actions = state.handleKey(
+      key: "\r", keyCode: 36, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertTrue(actions.contains(.exitCopyMode))
+  }
+
   func test_escape_inVisual_returnsToNormal() {
     var state = makeState()
     _ = state.handleKey(key: "v", keyCode: 0, modifiers: [], lineReader: emptyLineReader)

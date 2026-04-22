@@ -114,9 +114,15 @@ struct CopyModeState {
       return handleEscape()
     }
 
-    // Search mode
+    // Search mode (has its own Return handling to confirm the query)
     if isSearching {
       return handleSearchKey(key: key, keyCode: keyCode)
+    }
+
+    // Return: exit copy mode directly. Yank happens in the action handler
+    // when a selection is active, matching the `y` shortcut's semantics.
+    if keyCode == 36 {
+      return [.exitCopyMode]
     }
 
     // Pending find char: next key is the target character
