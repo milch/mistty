@@ -199,6 +199,12 @@ final class SessionStore {
     sessions.swapAt(index, index + 1)
   }
 
+  // Bulk move — matches the signature SwiftUI's `.onMove` hands us, so
+  // sidebar drag-to-reorder flows through the same mutation point.
+  func moveSessions(from source: IndexSet, to destination: Int) {
+    sessions.move(fromOffsets: source, toOffset: destination)
+  }
+
   func activePaneInfo() -> (session: MisttySession, tab: MisttyTab, pane: MisttyPane)? {
     guard let session = activeSession,
       let tab = session.activeTab,
