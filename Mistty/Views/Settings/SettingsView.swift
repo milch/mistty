@@ -98,6 +98,19 @@ struct SettingsView: View {
               Toggle("Close on exit", isOn: $config.popups[index].closeOnExit)
                 .font(.caption)
             }
+            HStack {
+              Text("Start in:")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+              Picker("", selection: $config.popups[index].cwdSource) {
+                ForEach(PopupCwdSource.allCases, id: \.self) { source in
+                  Text(source.displayName).tag(source)
+                }
+              }
+              .labelsHidden()
+              .pickerStyle(.segmented)
+              .font(.caption)
+            }
           }
           .padding(.vertical, 2)
         }

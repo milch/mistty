@@ -77,10 +77,9 @@ final class MisttySession: Identifiable {
       return
     }
 
-    // Create new popup — use current pane's directory if available
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
-    pane.directory = activeTab?.activePane?.directory ?? directory
+    pane.directory = popupDirectory(for: definition.cwdSource)
     pane.command = definition.command
     if definition.closeOnExit {
       pane.useCommandField = false
@@ -99,10 +98,9 @@ final class MisttySession: Identifiable {
       }
       return
     }
-    // Create new popup — use current pane's directory if available
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
-    pane.directory = activeTab?.activePane?.directory ?? directory
+    pane.directory = popupDirectory(for: definition.cwdSource)
     pane.command = definition.command
     if definition.closeOnExit {
       pane.useCommandField = false
@@ -110,6 +108,23 @@ final class MisttySession: Identifiable {
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup
+  }
+
+  /// Resolve the starting directory for a new popup pane. Falls through from
+  /// live CWD → initial pane directory → session directory → home so a newly
+  /// spawned pane (no OSC 7 yet) still gets a sensible value.
+  private func popupDirectory(for source: PopupCwdSource) -> URL {
+    switch source {
+    case .session:
+      return directory
+    case .home:
+      return FileManager.default.homeDirectoryForCurrentUser
+    case .activePane:
+      if let pane = activeTab?.activePane {
+        return pane.currentWorkingDirectory ?? pane.directory ?? directory
+      }
+      return directory
+    }
   }
 
   func closePopup(_ popup: PopupState) {

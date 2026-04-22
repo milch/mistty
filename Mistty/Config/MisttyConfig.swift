@@ -228,13 +228,16 @@ struct MisttyConfig: Sendable, Equatable {
     if let popupArray = table["popup"]?.array {
       config.popups = popupArray.compactMap { entry -> PopupDefinition? in
         guard let t = entry.table else { return nil }
+        let cwdSource = (t["cwd"]?.string).flatMap(PopupCwdSource.init(rawValue:))
+          ?? .activePane
         return PopupDefinition(
           name: t["name"]?.string ?? "",
           command: t["command"]?.string ?? "",
           shortcut: t["shortcut"]?.string,
           width: max(0.1, min(1.0, t["width"]?.double ?? 0.8)),
           height: max(0.1, min(1.0, t["height"]?.double ?? 0.8)),
-          closeOnExit: t["close_on_exit"]?.bool ?? true
+          closeOnExit: t["close_on_exit"]?.bool ?? true,
+          cwdSource: cwdSource
         )
       }
     }
@@ -397,6 +400,9 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("width = \(popup.width)")
       lines.append("height = \(popup.height)")
       lines.append("close_on_exit = \(popup.closeOnExit)")
+      if popup.cwdSource != .activePane {
+        lines.append("cwd = \"\(popup.cwdSource.rawValue)\"")
+      }
     }
     if ssh.defaultCommand != "ssh" || !ssh.hosts.isEmpty {
       lines.append("")
