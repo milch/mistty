@@ -74,7 +74,7 @@ struct CopyModeHelpOverlay: View {
     .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 8))
     .overlay(
       RoundedRectangle(cornerRadius: 8)
-        .stroke(Color.orange.opacity(0.6), lineWidth: 1)
+        .stroke(Color.blue.opacity(0.6), lineWidth: 1)
     )
   }
 

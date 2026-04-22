@@ -1,5 +1,19 @@
 import SwiftUI
 
+extension CopySubMode {
+  /// Chrome color for toasts / overlays. Copy + visual + search share one
+  /// "reading" color; hint mode uses a distinct "picker" color so the user
+  /// can tell them apart at a glance. Window mode has its own orange chrome
+  /// (see `WindowModeHints`) — no case here because it's not a CopySubMode.
+  var chromeColor: Color {
+    switch self {
+    case .hint: return .purple
+    case .normal, .visual, .visualLine, .visualBlock, .searchForward, .searchReverse:
+      return .blue
+    }
+  }
+}
+
 struct CopyModeHints: View {
   let state: CopyModeState
 
@@ -90,7 +104,7 @@ struct CopyModeHints: View {
     .foregroundStyle(.white)
     .padding(.horizontal, 10)
     .padding(.vertical, 5)
-    .background(Color.orange.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
+    .background(state.subMode.chromeColor.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
   }
 
   private func hintBadge(key: String, label: String) -> some View {

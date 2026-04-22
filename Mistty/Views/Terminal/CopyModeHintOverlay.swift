@@ -38,11 +38,11 @@ struct CopyModeHintOverlay: View {
     let y = CGFloat(match.range.startRow) * cellHeight
     return Text(label)
       .font(.system(size: cellHeight * 0.7, weight: .bold, design: .monospaced))
-      .foregroundStyle(dimmed ? Color.white.opacity(0.2) : Color.black)
+      .foregroundStyle(dimmed ? Color.white.opacity(0.2) : Color.white)
       .padding(.horizontal, 2)
       .background(
         RoundedRectangle(cornerRadius: 2)
-          .fill(dimmed ? Color.gray.opacity(0.3) : Color.orange)
+          .fill(dimmed ? Color.gray.opacity(0.3) : Color.purple)
       )
       .offset(x: x, y: y)
   }
