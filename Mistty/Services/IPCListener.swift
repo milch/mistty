@@ -22,7 +22,7 @@ final class IPCListener {
   }
 
   func start() {
-    let path = MisttyIPC.socketPath
+    let path = MisttyIPC.serverSocketPath
 
     // Ensure parent directory exists with 0700 permissions
     let dir = (path as NSString).deletingLastPathComponent
@@ -85,7 +85,7 @@ final class IPCListener {
     }
     // Closing the fd unblocks the accept() call in the background thread
     if fd >= 0 { Darwin.close(fd) }
-    unlink(MisttyIPC.socketPath)
+    unlink(MisttyIPC.serverSocketPath)
   }
 
   // MARK: - Accept Loop

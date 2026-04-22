@@ -149,11 +149,11 @@ install-release: bundle-release
 # ~/.local/bin isn't already on the caller's PATH, since shells vary on
 # whether that dir is included by default.
 [private]
-_link-cli target:
+_link-cli target name="mistty-cli":
     #!/usr/bin/env bash
     set -euo pipefail
     BIN="$HOME/.local/bin"
-    LINK="$BIN/mistty-cli"
+    LINK="$BIN/{{name}}"
     mkdir -p "$BIN"
     if [ "$(readlink "$LINK" 2>/dev/null)" != "{{target}}" ]; then
       ln -sfn "{{target}}" "$LINK"
@@ -161,7 +161,7 @@ _link-cli target:
     fi
     case ":$PATH:" in
       *":$BIN:"*) ;;
-      *) echo "Hint: $BIN is not on your PATH. Add it to your shell config to use 'mistty-cli' directly." >&2 ;;
+      *) echo "Hint: $BIN is not on your PATH. Add it to your shell config to use '{{name}}' directly." >&2 ;;
     esac
 
 # Run the app (debug). Optionally from a worktree at .worktrees/<name>.

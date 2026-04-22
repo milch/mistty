@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyKit
+import MisttyShared
 
 final class TerminalSurfaceView: NSView {
   /// When true, skip libghostty surface creation entirely. Snapshot tests
@@ -142,7 +143,20 @@ final class TerminalSurfaceView: NSView {
       }
     }
 
-    createSurface(&cfg)
+    // Expose this Mistty instance's CLI socket to every spawned shell so
+    // `mistty-cli` from inside a pane always talks back to this app, even
+    // when both dev and release builds are running concurrently.
+    let socketPath = MisttyIPC.serverSocketPath
+    socketPath.withCString { valPtr in
+      MisttyIPC.socketPathEnvVar.withCString { keyPtr in
+        var envVar = ghostty_env_var_s(key: keyPtr, value: valPtr)
+        withUnsafeMutablePointer(to: &envVar) { envPtr in
+          cfg.env_vars = envPtr
+          cfg.env_var_count = 1
+          createSurface(&cfg)
+        }
+      }
+    }
 
     if surface == nil {
       print("[TerminalSurfaceView] ghostty_surface_new failed")
