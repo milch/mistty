@@ -80,7 +80,7 @@ final class MisttySession: Identifiable {
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = popupDirectory(for: definition.cwdSource)
-    pane.command = definition.command
+    pane.command = Self.wrapPopupCommand(definition.command)
     // Popups always run the command via cfg.command (tmux-style: exec under
     // `/bin/sh -c`, no user login shell in the middle). `waitAfterCommand`
     // chooses between "close when the command exits" and "wait for a keypress
@@ -103,7 +103,7 @@ final class MisttySession: Identifiable {
     activePopup?.isVisible = false
     let pane = MisttyPane(id: paneIDGenerator())
     pane.directory = popupDirectory(for: definition.cwdSource)
-    pane.command = definition.command
+    pane.command = Self.wrapPopupCommand(definition.command)
     // Popups always run the command via cfg.command (tmux-style: exec under
     // `/bin/sh -c`, no user login shell in the middle). `waitAfterCommand`
     // chooses between "close when the command exits" and "wait for a keypress
@@ -112,6 +112,17 @@ final class MisttySession: Identifiable {
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup
+  }
+
+  /// Wrap a user-supplied popup command in `sh -c '…'` so multi-statement
+  /// commands (`cd /foo && nvim`, `echo a; echo b`) survive ghostty's
+  /// `exec -l {cmd}` wrapping. Without this, ghostty has bash parse the
+  /// first semicolon-delimited piece as `exec -l WORD`, which replaces
+  /// bash immediately and silently drops the rest of the pipeline.
+  /// POSIX single-quote escape: `'` → `'\''`.
+  static func wrapPopupCommand(_ cmd: String) -> String {
+    let escaped = cmd.replacingOccurrences(of: "'", with: "'\\''")
+    return "sh -c '\(escaped)'"
   }
 
   /// Resolve the starting directory for a new popup pane. Falls through from
