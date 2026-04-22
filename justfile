@@ -205,11 +205,27 @@ clean:
     swift package clean
     rm -rf build/
 
+# Apply all patches under patches/ghostty/ to the vendored submodule. Idempotent
+# (skips a patch if `git apply --check` fails, on the assumption it's already
+# in). Run after `git submodule update`; `build-libghostty` runs this first.
+patch-ghostty:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    for p in patches/ghostty/*.patch; do
+      if git -C vendor/ghostty apply --check "../../$p" >/dev/null 2>&1; then
+        echo "Applying $p"
+        git -C vendor/ghostty apply "../../$p"
+      else
+        echo "Skipping $p (already applied or does not apply)"
+      fi
+    done
+
 # Build libghostty from the vendored submodule (requires nix).
 # On failure, prints a hint if the user is on Xcode 26.4+, because zig
 # 0.15.2 (pinned by ghostty's build.zig.zon) can't link against that
 # SDK and the raw error is a flood of "undefined symbol: _abort / …".
-build-libghostty:
+build-libghostty: patch-ghostty
     #!/usr/bin/env bash
     if ! nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast"; then
       xcode_version=$(xcodebuild -version 2>/dev/null | awk '/^Xcode/ {print $2}')

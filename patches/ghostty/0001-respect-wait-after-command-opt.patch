@@ -1,0 +1,24 @@
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 0d5a4f8da..def87b3fc 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -526,11 +526,18 @@ pub const Surface = struct {
+         }
+ 
+         // If we have a command from the options then we set it.
++        //
++        // Mistty patch: respect opts.wait_after_command here. Upstream forces
++        // `wait-after-command = true` whenever a command is given, which makes
++        // it impossible to have a popup pane that execs a command and closes
++        // when the command exits without typing `exec …` into a login shell.
++        // `opts.wait_after_command` is already honored by the block further
++        // down, so callers that want the old "stay open until keypress"
++        // behavior just pass `wait_after_command = true`.
+         if (opts.command) |c_command| {
+             const cmd = std.mem.sliceTo(c_command, 0);
+             if (cmd.len > 0) {
+                 config.command = .{ .shell = cmd };
+-                config.@"wait-after-command" = true;
+             }
+         }
+ 
