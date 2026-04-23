@@ -70,4 +70,16 @@ final class ForegroundProcessResolverTests: XCTestCase {
     )
     XCTAssertNil(ForegroundProcessResolver.current(via: probe))
   }
+
+  // Real-syscall smoke test — runs against the current process. Primarily
+  // guards readArgv against the KERN_PROCARGS2 offset-skip bug that returns
+  // empty argv elements for padding nuls.
+  func test_describe_onCurrentProcess_returnsNonEmptyArgv() {
+    guard let result = ForegroundProcessResolver.describe(pid: getpid())
+    else { return XCTFail("describe returned nil for current process") }
+    XCTAssertFalse(result.executable.isEmpty, "executable basename should be non-empty")
+    XCTAssertFalse(result.argv.isEmpty, "argv should be non-empty")
+    XCTAssertFalse(result.argv[0].isEmpty,
+                   "argv[0] should not be empty — bug: readArgv is consuming padding nuls as argv entries")
+  }
 }

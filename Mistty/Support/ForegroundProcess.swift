@@ -58,8 +58,11 @@ enum ForegroundProcessResolver {
 
   // MARK: - Real-syscall helpers
 
-  /// BFS through children of `rootPid`, returning the deepest PID still alive.
-  /// Uses `proc_listpids(PROC_PPID_ONLY, parent, …)` to enumerate at each level.
+  /// BFS through descendants of `rootPid`, returning the deepest PID. When
+  /// multiple children exist at the same depth the kernel's ordering decides
+  /// which one wins — the fallback path is a heuristic, not a guarantee
+  /// of "most-recently-forked." Reached only when `tcgetpgrp` is
+  /// unavailable; callers should treat this as best-effort.
   static func deepestLiveDescendant(of rootPid: pid_t) -> pid_t? {
     var deepest: pid_t? = nil
     var frontier = [rootPid]
@@ -76,16 +79,18 @@ enum ForegroundProcessResolver {
   }
 
   private static func childrenOf(_ parent: pid_t) -> [pid_t] {
-    // proc_listpids signature: (type, typeinfo, buffer, buffersize)
-    let count = proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), nil, 0)
-    guard count > 0 else { return [] }
-    let bufSize = Int(count) * MemoryLayout<pid_t>.stride
-    var buf = [pid_t](repeating: 0, count: Int(count))
-    let actual = buf.withUnsafeMutableBufferPointer { ptr in
-      proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), ptr.baseAddress, Int32(bufSize))
+    // proc_listpids(type, typeinfo, buffer, buffersize-in-bytes). Both the
+    // first probe and the second populated call return *bytes* written, not
+    // pid count. We need to convert to pid_t elements.
+    let byteCount = proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), nil, 0)
+    guard byteCount > 0 else { return [] }
+    let pidCapacity = Int(byteCount) / MemoryLayout<pid_t>.stride
+    var buf = [pid_t](repeating: 0, count: pidCapacity)
+    let actualBytes = buf.withUnsafeMutableBufferPointer { ptr in
+      proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), ptr.baseAddress, byteCount)
     }
-    guard actual > 0 else { return [] }
-    let n = Int(actual) / MemoryLayout<pid_t>.stride
+    guard actualBytes > 0 else { return [] }
+    let n = Int(actualBytes) / MemoryLayout<pid_t>.stride
     return Array(buf.prefix(n).filter { $0 > 0 })
   }
 
@@ -121,11 +126,12 @@ enum ForegroundProcessResolver {
       let base = ptr.baseAddress!
       let argc = base.withMemoryRebound(to: Int32.self, capacity: 1) { $0.pointee }
       var offset = MemoryLayout<Int32>.size
-      // Skip argv[0]'s leading nulls (executable path echoed before argv).
-      while offset < size && base[offset] == 0 { offset += 1 }
-      // Skip the executable path (one nul-terminated string).
+      // Skip the executable-path echo (no leading nuls on modern macOS —
+      // exec_path starts immediately after the argc int).
       while offset < size && base[offset] != 0 { offset += 1 }
-      offset += 1  // past the nul
+      offset += 1  // past the nul terminator
+      // Skip alignment padding between exec_path and argv[0].
+      while offset < size && base[offset] == 0 { offset += 1 }
       var result: [String] = []
       var remaining = Int(argc)
       while remaining > 0 && offset < size {
