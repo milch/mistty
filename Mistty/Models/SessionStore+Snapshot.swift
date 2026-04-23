@@ -173,11 +173,14 @@ extension SessionStore {
   private func snapshotLayout(_ node: PaneLayoutNode) -> LayoutNodeSnapshot {
     switch node {
     case .leaf(let pane):
+      let captured = ForegroundProcessResolver.current(for: pane).map {
+        CapturedProcess(executable: $0.executable, argv: $0.argv)
+      }
       return .leaf(pane: PaneSnapshot(
         id: pane.id,
         directory: pane.directory,
         currentWorkingDirectory: pane.currentWorkingDirectory,
-        captured: nil  // filled in by Phase 2
+        captured: captured
       ))
     case .empty:
       // PaneLayoutNode.empty is a transient state that should never appear in a
