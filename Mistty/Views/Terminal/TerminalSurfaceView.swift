@@ -9,6 +9,19 @@ final class TerminalSurfaceView: NSView {
   nonisolated(unsafe) static var skipSurfaceCreation = false
 
   nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
+
+  /// Shell / command child PID from libghostty. `-1` when unavailable.
+  var shellPID: pid_t {
+    guard let surface else { return -1 }
+    return pid_t(ghostty_surface_command_pid(surface))
+  }
+
+  /// PTY master fd from libghostty. `-1` when unavailable.
+  var ptyFD: Int32 {
+    guard let surface else { return -1 }
+    return Int32(ghostty_surface_pty_fd(surface))
+  }
+
   var onSelect: (() -> Void)?
   var scrollbarState = ScrollbarState()
 

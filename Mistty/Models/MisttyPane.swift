@@ -29,6 +29,20 @@ final class MisttyPane: Identifiable {
 
   var processTitle: String?
 
+  /// Process ID of the shell (or the command passed via `cfg.command`) that
+  /// libghostty spawned for this pane. `-1` when the surface hasn't started
+  /// yet, has exited, or libghostty wasn't built with the shell-PID patch.
+  /// Reads without forcing surface allocation.
+  var shellPID: pid_t {
+    surfaceViewIfLoaded?.shellPID ?? -1
+  }
+
+  /// Master fd of the pty pair. Use with `tcgetpgrp()` to resolve the
+  /// foreground process group on the tty. `-1` when unavailable.
+  var ptyFD: Int32 {
+    surfaceViewIfLoaded?.ptyFD ?? -1
+  }
+
   var isRunningNeovim: Bool {
     guard let title = processTitle?.lowercased() else { return false }
     let neovimNames = ["nvim", "neovim", "vim"]
@@ -39,11 +53,17 @@ final class MisttyPane: Identifiable {
     self.id = id
   }
 
-  /// The persistent terminal surface view for this pane.
-  /// Created lazily on first access so the ghostty surface lives
-  /// for the lifetime of the pane, surviving SwiftUI view rebuilds.
+  /// Backing storage. `nil` until something reads `surfaceView` for the
+  /// first time. Read via `surfaceViewIfLoaded` when you need to peek
+  /// without forcing allocation.
   @ObservationIgnored
-  lazy var surfaceView: TerminalSurfaceView = {
+  private var _surfaceView: TerminalSurfaceView?
+
+  /// The persistent terminal surface view for this pane. Created on first
+  /// access so the ghostty surface lives for the lifetime of the pane,
+  /// surviving SwiftUI view rebuilds.
+  var surfaceView: TerminalSurfaceView {
+    if let existing = _surfaceView { return existing }
     let view = TerminalSurfaceView(
       frame: .zero,
       workingDirectory: directory,
@@ -52,8 +72,13 @@ final class MisttyPane: Identifiable {
       waitAfterCommand: waitAfterCommand
     )
     view.pane = self
+    _surfaceView = view
     return view
-  }()
+  }
+
+  /// Peek at the surface view without forcing creation. Returns nil if
+  /// nothing has called `surfaceView` yet.
+  var surfaceViewIfLoaded: TerminalSurfaceView? { _surfaceView }
 
   /// Route keyboard input to this pane's surface. Safe to call on the
   /// next runloop tick so the view has a chance to be hosted in a window
