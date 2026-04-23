@@ -11,12 +11,17 @@ final class TerminalSurfaceView: NSView {
   nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
 
   /// Shell / command child PID from libghostty. `-1` when unavailable.
+  /// Must be read on the main actor — `surface` is mutated during ghostty
+  /// lifecycle callbacks but all Mistty-side consumers are SwiftUI/AppKit.
+  @MainActor
   var shellPID: pid_t {
     guard let surface else { return -1 }
     return pid_t(ghostty_surface_command_pid(surface))
   }
 
-  /// PTY master fd from libghostty. `-1` when unavailable.
+  /// Master fd of the pty pair. `-1` when unavailable. Main-actor only; see
+  /// `shellPID`.
+  @MainActor
   var ptyFD: Int32 {
     guard let surface else { return -1 }
     return Int32(ghostty_surface_pty_fd(surface))
