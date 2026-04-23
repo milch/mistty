@@ -119,6 +119,36 @@ final class ForegroundProcessResolverTests: XCTestCase {
     XCTAssertNil(ForegroundProcessResolver.current(via: probe))
   }
 
+  func test_stripLoginShellDash_stripsWhenSuffixMatchesExecutable() {
+    let result = ForegroundProcessResolver.stripLoginShellDash(
+      ["-ssh", "isengard"], executable: "ssh")
+    XCTAssertEqual(result, ["ssh", "isengard"])
+  }
+
+  func test_stripLoginShellDash_leavesGenuineFlagsAlone() {
+    // A real flag like `-l` is NOT argv[0] — it'd appear at argv[1+].
+    // argv[0] with a `-` prefix but suffix that doesn't match executable
+    // (e.g. argv[0] = "-bash", executable = "sh") is still treated as
+    // login-shell marker (only matched when the suffix == basename).
+    let result = ForegroundProcessResolver.stripLoginShellDash(
+      ["nvim", "-u", "init.lua"], executable: "nvim")
+    XCTAssertEqual(result, ["nvim", "-u", "init.lua"])
+  }
+
+  func test_stripLoginShellDash_preservesNonMatchingDashPrefix() {
+    // If the suffix after `-` doesn't match executable, it's not the
+    // login-shell convention and we leave it alone.
+    let result = ForegroundProcessResolver.stripLoginShellDash(
+      ["-weirdname", "arg"], executable: "ssh")
+    XCTAssertEqual(result, ["-weirdname", "arg"])
+  }
+
+  func test_stripLoginShellDash_noopOnEmptyArgv() {
+    XCTAssertEqual(
+      ForegroundProcessResolver.stripLoginShellDash([], executable: "ssh"),
+      [])
+  }
+
   // Real-syscall smoke test — runs against the current process. Primarily
   // guards readArgv against the KERN_PROCARGS2 offset-skip bug that returns
   // empty argv elements for padding nuls.

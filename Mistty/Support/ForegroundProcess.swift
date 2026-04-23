@@ -123,8 +123,28 @@ enum ForegroundProcessResolver {
       String(decoding: buf.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
     let executable = (path as NSString).lastPathComponent
-    let argv = Self.readArgv(pid: pid) ?? [executable]
+    let rawArgv = Self.readArgv(pid: pid) ?? [executable]
+    let argv = Self.stripLoginShellDash(rawArgv, executable: executable)
     return ForegroundProcess(executable: executable, path: path, argv: argv, pid: pid)
+  }
+
+  /// Normalize argv[0] for login-shell invocations. POSIX convention is
+  /// that when argv[0] is prefixed with `-` the process is being invoked
+  /// as a login shell. Ghostty's macOS `cfg.command` path wraps the user
+  /// command as `bash -c "exec -l ssh …"`, which leaves the spawned ssh
+  /// process with argv `["-ssh", "host"]`. On restore we replay argv via
+  /// the user's interactive shell, which then treats `-ssh` as a literal
+  /// command name and fails. Strip the leading dash when the remaining
+  /// suffix matches the resolved executable basename — that way we only
+  /// touch the login-shell marker case, not genuine CLI flags.
+  static func stripLoginShellDash(_ argv: [String], executable: String) -> [String] {
+    guard let first = argv.first,
+          first.hasPrefix("-"),
+          String(first.dropFirst()) == executable
+    else { return argv }
+    var copy = argv
+    copy[0] = executable
+    return copy
   }
 
   /// Read argv via `sysctl [CTL_KERN, KERN_PROCARGS2, pid]`. Layout:
