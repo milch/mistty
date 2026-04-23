@@ -72,9 +72,17 @@ final class MisttyPane: Identifiable {
   /// surviving SwiftUI view rebuilds.
   var surfaceView: TerminalSurfaceView {
     if let existing = _surfaceView { return existing }
+    // Restore-aware spawn dir: when a pane is materialized after state
+    // restoration, currentWorkingDirectory holds the live CWD from save
+    // time (where we want the new shell to come up). For fresh panes
+    // currentWorkingDirectory is nil until OSC 7 fires, so we fall
+    // through to `directory` (the initial directory). Keeps session
+    // labels anchored to `directory` while still honouring `cd`s across
+    // restart.
+    let spawnDirectory = currentWorkingDirectory ?? directory
     let view = TerminalSurfaceView(
       frame: .zero,
-      workingDirectory: directory,
+      workingDirectory: spawnDirectory,
       command: useCommandField ? command : nil,
       initialInput: useCommandField ? nil : command,
       execInitialInput: execInitialInput,

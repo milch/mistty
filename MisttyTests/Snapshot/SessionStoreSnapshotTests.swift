@@ -171,6 +171,49 @@ final class SessionStoreSnapshotTests: XCTestCase {
     XCTAssertGreaterThan(fresh.tabs[0].panes[0].id, 99)
   }
 
+  // Regression for the "session label drifts into cd'd-into subfolder"
+  // bug. Before: on restore we overwrote pane.directory with the saved
+  // CWD, which meant a session in ~/Developer where the user had done
+  // `cd test` got relabeled "test" after restore (because sidebarLabel
+  // derives the session name from activePane.directory.lastPathComponent).
+  // Now: directory preserves the saved initial dir; currentWorkingDirectory
+  // carries the live CWD separately.
+  func test_restore_preservesInitialPaneDirectorySeparateFromLiveCWD() {
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).standardizedFileURL
+    let subdir = tmp.appendingPathComponent("state-restoration-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: subdir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: subdir) }
+    let snapshot = WorkspaceSnapshot(
+      sessions: [
+        SessionSnapshot(
+          id: 1, name: "w",
+          directory: tmp,
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 1,
+              layout: .leaf(pane: PaneSnapshot(
+                id: 1,
+                directory: tmp,
+                currentWorkingDirectory: subdir,
+                captured: nil
+              )),
+              activePaneID: 1
+            ),
+          ],
+          activeTabID: 1
+        ),
+      ],
+      activeSessionID: 1
+    )
+    store.restore(from: snapshot, config: RestoreConfig())
+    let pane = store.sessions[0].tabs[0].panes[0]
+    XCTAssertEqual(pane.directory, tmp,
+      "pane.directory should preserve the snapshot's initial directory so the session label stays anchored")
+    XCTAssertEqual(pane.currentWorkingDirectory, subdir,
+      "pane.currentWorkingDirectory should carry the cd'd-into subfolder; surface view uses this as spawn dir")
+  }
+
   func test_restore_missingDirectoryFallsBackToHome() {
     let missing = URL(fileURLWithPath: "/definitely/not/real/path-\(UUID().uuidString)")
     let snapshot = WorkspaceSnapshot(

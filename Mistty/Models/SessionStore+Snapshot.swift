@@ -139,9 +139,15 @@ extension SessionStore {
     case .leaf(let paneSnap):
       maxPaneID = max(maxPaneID, paneSnap.id)
       let pane = MisttyPane(id: paneSnap.id)
-      pane.directory = resolveCWD(
-        paneSnap.currentWorkingDirectory ?? paneSnap.directory)
-      pane.currentWorkingDirectory = paneSnap.currentWorkingDirectory
+      // Preserve the INITIAL directory on `directory`. The sidebar label
+      // (see MisttySession.sidebarLabel) derives the session name from
+      // `activePane.directory.lastPathComponent`, so overwriting this
+      // with the live CWD would rename the session to whatever subfolder
+      // the user had cd'd into. Live CWD lives on
+      // `currentWorkingDirectory` and drives the restored shell's spawn
+      // directory via MisttyPane.surfaceView.
+      pane.directory = resolveCWD(paneSnap.directory)
+      pane.currentWorkingDirectory = resolveCWD(paneSnap.currentWorkingDirectory)
       if let captured = paneSnap.captured,
          let command = config.resolve(captured) {
         pane.command = command
