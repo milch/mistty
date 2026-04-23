@@ -19,6 +19,8 @@ struct MisttyApp: App {
     Self.registerBundledFonts()
     DebugLog.shared.configure(enabled: config.debugLogging)
     DebugLog.shared.log("restore", "MisttyApp.init")
+    appDelegate.store = _store.wrappedValue
+    appDelegate.observer = StateRestorationObserver(store: _store.wrappedValue)
   }
 
   private static func registerBundledFonts() {
