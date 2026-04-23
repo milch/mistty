@@ -57,6 +57,14 @@ final class MisttySession: Identifiable {
     activeTab = tab
   }
 
+  /// Append a pre-constructed `MisttyTab` during restore. Bypasses `addTab`'s
+  /// fresh-tab creation flow because the tab is already hydrated from a
+  /// snapshot.
+  func addTabByRestore(_ tab: MisttyTab) {
+    tabs.append(tab)
+    activeTab = tab
+  }
+
   func closeTab(_ tab: MisttyTab) {
     tabs.removeAll { $0.id == tab.id }
     if activeTab?.id == tab.id { activeTab = tabs.last }

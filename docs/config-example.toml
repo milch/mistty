@@ -228,3 +228,33 @@ title_bar_style = "hidden_with_lights"
 # Path or list of paths to GLSL shader files. Use ~ or absolute paths.
 # custom-shader = "~/.config/ghostty/shaders/retro.glsl"
 # custom-shader-animation = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# State restoration — allowlist of processes to relaunch on restore.
+#
+# When Mistty restarts, any pane where the captured foreground process's
+# basename matches a rule below is relaunched. Omit `strategy` to replay the
+# captured argv verbatim (preserves e.g. `nvim mytext.txt`). Set `strategy`
+# to override — useful for tools with a dedicated resume flag.
+#
+# Non-allowlisted panes restore as a bare shell at the saved CWD.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[restore.command]]
+match = "nvim"                 # replay argv → nvim mytext.txt comes back intact
+
+[[restore.command]]
+match = "vim"                  # aliases get their own entry
+
+[[restore.command]]
+match = "claude"
+strategy = "claude --resume"   # explicit strategy replaces argv
+
+[[restore.command]]
+match = "ssh"                  # ssh user@host replayed with original args
+
+[[restore.command]]
+match = "less"                 # less myfile.log replayed
+
+[[restore.command]]
+match = "htop"                 # bare-named utilities with no args

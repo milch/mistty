@@ -17,6 +17,14 @@ final class MisttyPane: Identifiable {
   /// runs it — used by SSH panes where the shell must stay alive after
   /// the command exits.
   var useCommandField: Bool = true
+
+  /// When `useCommandField == false`, controls whether the command is sent
+  /// to the login shell as `exec <cmd>` (replaces the shell — pane dies
+  /// when the command exits) or `<cmd>` (runs as a normal shell child —
+  /// pane survives with a shell prompt when the command exits). SSH panes
+  /// want `exec`; restored panes (e.g. nvim) want to fall through to a
+  /// shell so the user isn't kicked out of the pane on `:q`.
+  var execInitialInput: Bool = true
   /// When true, the pane stays open after its process exits and shows
   /// "press any key to close". When false (default, matching ghostty's own
   /// default), the pane closes as soon as the process exits — so typing
@@ -29,6 +37,20 @@ final class MisttyPane: Identifiable {
 
   var processTitle: String?
 
+  /// Process ID of the shell (or the command passed via `cfg.command`) that
+  /// libghostty spawned for this pane. `-1` when the surface hasn't started
+  /// yet, has exited, or libghostty wasn't built with the shell-PID patch.
+  /// Reads without forcing surface allocation.
+  var shellPID: pid_t {
+    surfaceViewIfLoaded?.shellPID ?? -1
+  }
+
+  /// Master fd of the pty pair. Use with `tcgetpgrp()` to resolve the
+  /// foreground process group on the tty. `-1` when unavailable.
+  var ptyFD: Int32 {
+    surfaceViewIfLoaded?.ptyFD ?? -1
+  }
+
   var isRunningNeovim: Bool {
     guard let title = processTitle?.lowercased() else { return false }
     let neovimNames = ["nvim", "neovim", "vim"]
@@ -39,21 +61,41 @@ final class MisttyPane: Identifiable {
     self.id = id
   }
 
-  /// The persistent terminal surface view for this pane.
-  /// Created lazily on first access so the ghostty surface lives
-  /// for the lifetime of the pane, surviving SwiftUI view rebuilds.
+  /// Backing storage. `nil` until something reads `surfaceView` for the
+  /// first time. Read via `surfaceViewIfLoaded` when you need to peek
+  /// without forcing allocation.
   @ObservationIgnored
-  lazy var surfaceView: TerminalSurfaceView = {
+  private var _surfaceView: TerminalSurfaceView?
+
+  /// The persistent terminal surface view for this pane. Created on first
+  /// access so the ghostty surface lives for the lifetime of the pane,
+  /// surviving SwiftUI view rebuilds.
+  var surfaceView: TerminalSurfaceView {
+    if let existing = _surfaceView { return existing }
+    // Restore-aware spawn dir: when a pane is materialized after state
+    // restoration, currentWorkingDirectory holds the live CWD from save
+    // time (where we want the new shell to come up). For fresh panes
+    // currentWorkingDirectory is nil until OSC 7 fires, so we fall
+    // through to `directory` (the initial directory). Keeps session
+    // labels anchored to `directory` while still honouring `cd`s across
+    // restart.
+    let spawnDirectory = currentWorkingDirectory ?? directory
     let view = TerminalSurfaceView(
       frame: .zero,
-      workingDirectory: directory,
+      workingDirectory: spawnDirectory,
       command: useCommandField ? command : nil,
       initialInput: useCommandField ? nil : command,
+      execInitialInput: execInitialInput,
       waitAfterCommand: waitAfterCommand
     )
     view.pane = self
+    _surfaceView = view
     return view
-  }()
+  }
+
+  /// Peek at the surface view without forcing creation. Returns nil if
+  /// nothing has called `surfaceView` yet.
+  var surfaceViewIfLoaded: TerminalSurfaceView? { _surfaceView }
 
   /// Route keyboard input to this pane's surface. Safe to call on the
   /// next runloop tick so the view has a chance to be hosted in a window

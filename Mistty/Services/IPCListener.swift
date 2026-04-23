@@ -301,6 +301,10 @@ final class IPCListener {
     case "listPopups":
       service.listPopups(sessionId: int("sessionId"), reply: reply)
 
+    // Debug
+    case "getStateSnapshot":
+      service.getStateSnapshot(reply: reply)
+
     default:
       reply(nil, MisttyIPC.error(.operationFailed, "Unknown method: \(method)"))
     }

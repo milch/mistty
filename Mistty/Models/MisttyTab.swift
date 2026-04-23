@@ -51,6 +51,13 @@ final class MisttyTab: Identifiable {
     activePane = pane
   }
 
+  /// Resync `panes` from the current `layout.leaves` after `restore` wires a
+  /// new tree into the tab. Not needed in normal operation because
+  /// split/close already keep them in sync.
+  func refreshPanesFromLayout() {
+    panes = layout.leaves
+  }
+
   func splitActivePane(direction: SplitDirection) {
     guard let activePane else { return }
     let newPane = MisttyPane(id: paneIDGenerator())

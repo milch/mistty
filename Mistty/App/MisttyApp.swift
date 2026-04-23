@@ -5,6 +5,7 @@ import SwiftUI
 
 @main
 struct MisttyApp: App {
+  @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
   @State private var store = SessionStore()
   @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
@@ -14,9 +15,20 @@ struct MisttyApp: App {
   private let config: MisttyConfig = MisttyConfig.loadedAtLaunch.config
 
   init() {
+    // Opt in to AppKit state restoration by default. Without this, macOS 14+
+    // defaults to clearing saved state on quit (the OS-level "Close windows
+    // when quitting an app" default), which defeats our restoration feature
+    // out of the box. Users who explicitly set `NSQuitAlwaysKeepsWindows =
+    // NO` in defaults still win — register() only fills in when no value is
+    // set by the user or the system.
+    UserDefaults.standard.register(defaults: ["NSQuitAlwaysKeepsWindows": true])
+
     _ = GhosttyAppManager.shared
     Self.registerBundledFonts()
     DebugLog.shared.configure(enabled: config.debugLogging)
+    DebugLog.shared.log("restore", "MisttyApp.init")
+    appDelegate.store = _store.wrappedValue
+    appDelegate.observer = StateRestorationObserver(store: _store.wrappedValue)
   }
 
   private static func registerBundledFonts() {

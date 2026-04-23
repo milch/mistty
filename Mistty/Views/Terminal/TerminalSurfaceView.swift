@@ -9,6 +9,24 @@ final class TerminalSurfaceView: NSView {
   nonisolated(unsafe) static var skipSurfaceCreation = false
 
   nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
+
+  /// Shell / command child PID from libghostty. `-1` when unavailable.
+  /// Must be read on the main actor — `surface` is mutated during ghostty
+  /// lifecycle callbacks but all Mistty-side consumers are SwiftUI/AppKit.
+  @MainActor
+  var shellPID: pid_t {
+    guard let surface else { return -1 }
+    return pid_t(ghostty_surface_command_pid(surface))
+  }
+
+  /// Master fd of the pty pair. `-1` when unavailable. Main-actor only; see
+  /// `shellPID`.
+  @MainActor
+  var ptyFD: Int32 {
+    guard let surface else { return -1 }
+    return Int32(ghostty_surface_pty_fd(surface))
+  }
+
   var onSelect: (() -> Void)?
   var scrollbarState = ScrollbarState()
 
@@ -42,6 +60,7 @@ final class TerminalSurfaceView: NSView {
     workingDirectory: URL? = nil,
     command: String? = nil,
     initialInput: String? = nil,
+    execInitialInput: Bool = true,
     waitAfterCommand: Bool = false
   ) {
     // Use the shared launch-time parse so init doesn't re-read config.toml
@@ -90,8 +109,14 @@ final class TerminalSurfaceView: NSView {
     // instead of cfg.command. ghostty forces wait-after-command=true when
     // cfg.command is set, which shows "press any key to close". Using
     // initial_input runs the command in the shell naturally.
+    //
+    // `execInitialInput` controls whether we replace the shell with the
+    // command (`exec`, used for SSH where we want the pane to die when the
+    // connection drops) or run it as a regular shell child (state-restore,
+    // where the user expects a shell prompt when they quit nvim etc.).
     if let input = initialInput {
-      self.initialInputString = "exec \(input)\n"
+      self.initialInputString =
+        execInitialInput ? "exec \(input)\n" : "\(input)\n"
     }
 
     // Both C pointers from withCString are only valid inside the closure,
