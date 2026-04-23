@@ -1,4 +1,5 @@
 import XCTest
+import MisttyShared
 
 @testable import Mistty
 
@@ -169,5 +170,49 @@ final class MisttyConfigTests: XCTestCase {
     let config = try MisttyConfig.parse(toml)
     XCTAssertEqual(config.ssh.resolveCommand(for: "prod-db"), "ssh")
     XCTAssertEqual(config.ssh.resolveCommand(for: "prod-web"), "et")
+  }
+
+  func test_parse_restoreCommand_emptyByDefault() throws {
+    let config = try MisttyConfig.parse("")
+    XCTAssertEqual(config.restore, RestoreConfig())
+  }
+
+  func test_parse_restoreCommand_singleRuleWithoutStrategy() throws {
+    let toml = """
+    [[restore.command]]
+    match = "nvim"
+    """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.restore.commands, [.init(match: "nvim", strategy: nil)])
+  }
+
+  func test_parse_restoreCommand_multipleRulesPreserveOrder() throws {
+    let toml = """
+    [[restore.command]]
+    match = "claude"
+    strategy = "claude --resume"
+
+    [[restore.command]]
+    match = "nvim"
+    """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.restore.commands, [
+      .init(match: "claude", strategy: "claude --resume"),
+      .init(match: "nvim", strategy: nil),
+    ])
+  }
+
+  func test_save_restoreCommand_roundTrip() throws {
+    var config = MisttyConfig()
+    config.restore = RestoreConfig(commands: [
+      .init(match: "nvim", strategy: nil),
+      .init(match: "claude", strategy: "claude --resume"),
+    ])
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("mistty-restore-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try config.save(to: tmp)
+    let roundTripped = try MisttyConfig.loadThrowing(from: tmp)
+    XCTAssertEqual(roundTripped.restore, config.restore)
   }
 }

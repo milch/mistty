@@ -175,6 +175,7 @@ struct MisttyConfig: Sendable, Equatable {
   var copyModeHints: CopyModeHintsConfig = CopyModeHintsConfig()
   var ui: UIConfig = UIConfig()
   var ghostty: GhosttyPassthroughConfig = GhosttyPassthroughConfig()
+  var restore: RestoreConfig = RestoreConfig()
 
   /// Absolute path to the `zoxide` binary. When set, `ZoxideService` uses
   /// this directly instead of probing common install locations or spawning
@@ -306,6 +307,19 @@ struct MisttyConfig: Sendable, Equatable {
     }
     if let ghosttyTable = table["ghostty"]?.table {
       config.ghostty = GhosttyPassthroughConfig.parse(ghosttyTable)
+    }
+    if let restoreTable = table["restore"]?.table,
+       let commandArray = restoreTable["command"]?.array {
+      config.restore.commands = commandArray.compactMap { entry -> RestoreCommandRule? in
+        guard let t = entry.table,
+              let match = t["match"]?.string, !match.isEmpty
+        else { return nil }
+        let strategy = t["strategy"]?.string
+        return RestoreCommandRule(
+          match: match,
+          strategy: (strategy?.isEmpty == true) ? nil : strategy
+        )
+      }
     }
     return config
   }
@@ -489,6 +503,16 @@ struct MisttyConfig: Sendable, Equatable {
         } else {
           let joined = values.map(formatPassthroughValue).joined(separator: ", ")
           lines.append("\(key) = [\(joined)]")
+        }
+      }
+    }
+    if !restore.commands.isEmpty {
+      for rule in restore.commands {
+        lines.append("")
+        lines.append("[[restore.command]]")
+        lines.append("match = \"\(tomlEscape(rule.match))\"")
+        if let strategy = rule.strategy, !strategy.isEmpty {
+          lines.append("strategy = \"\(tomlEscape(strategy))\"")
         }
       }
     }
