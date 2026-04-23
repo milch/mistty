@@ -58,6 +58,30 @@ final class ForegroundProcessResolverTests: XCTestCase {
     XCTAssertEqual(result?.argv, ["ssh", "user@host"])
   }
 
+  // Auto-launched SSH via Session Manager goes through
+  // `/usr/bin/login -flp $USER /bin/bash --noprofile --norc -c "exec -l ssh …"`.
+  // Empirically login forks rather than exec-chaining, so shellPID stays
+  // pointed at login (with executable "login") while ssh runs as a
+  // descendant in the same process group. The resolver must descend
+  // through login to find the real app.
+  func test_primaryPath_descendsThroughLoginToFindSSH() {
+    let fake = FakeDescribe()
+    fake.byPID[81416] = .init(executable: "login", path: "/usr/bin/login",
+                              argv: ["login"], pid: 81416)
+    fake.byPID[81418] = .init(executable: "ssh", path: "/usr/bin/ssh",
+                              argv: ["ssh", "isengard"], pid: 81418)
+    let probe = ForegroundProcessProbe(
+      ptyFD: { 27 },
+      shellPID: { 81416 },           // ghostty tracks login
+      tcgetpgrpOnPTY: { _ in 81416 }, // foreground pgroup == login's pid
+      deepestDescendant: { _ in 81418 }, // ssh is the real child
+      describe: fake.describe
+    )
+    let result = ForegroundProcessResolver.current(via: probe)
+    XCTAssertEqual(result?.executable, "ssh")
+    XCTAssertEqual(result?.argv, ["ssh", "isengard"])
+  }
+
   func test_fallbackPath_walksDescendantsWhenPTYUnavailable() {
     let fake = FakeDescribe()
     fake.byPID[7] = .init(executable: "htop", path: "/usr/bin/htop",

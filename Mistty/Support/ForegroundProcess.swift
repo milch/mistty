@@ -33,38 +33,45 @@ enum ForegroundProcessResolver {
     return current(via: probe)
   }
 
-  /// Basenames we treat as "user is at a plain shell prompt — nothing to
-  /// capture." When `tcgetpgrp` returns the spawned process's pid (common
-  /// when that process is the shell itself, OR when `cfg.command` execs
-  /// into something like ssh that keeps the same pgid), we describe the
-  /// pid and check whether it's one of these.
+  /// Basenames we treat as "nothing to capture" — plain shells where the
+  /// user is at a prompt, plus macOS login-shell wrappers that ghostty
+  /// inserts between the spawned command and the actual target process.
+  /// On macOS a `cfg.command` pane gets spawned as
+  /// `/usr/bin/login -flp $USER /bin/bash --noprofile --norc -c "exec -l $cmd"`,
+  /// and login appears to fork rather than fully exec-through, so
+  /// `login` (or whatever shim it currently uses) stays as the tracked
+  /// pid while the real app runs as a descendant.
   static let shellExecutables: Set<String> = [
-    "bash", "dash", "fish", "ksh", "nu", "sh", "tcsh", "zsh",
+    "bash", "dash", "fish", "ksh", "login", "nu", "sh", "tcsh", "zsh",
   ]
 
   /// Pure dispatch logic; all I/O lives in the probe closures.
   static func current(via probe: ForegroundProcessProbe) -> ForegroundProcess? {
-    // Primary: tcgetpgrp on the pty.
+    // First: walk descendants of the spawned process. This catches both
+    // "user typed `ssh host` at zsh" (descends zsh → ssh) and
+    // "cfg.command = 'ssh host' went through login/bash/ssh" (descends
+    // login → bash → ssh, or whatever subset macOS actually forks).
+    let shell = probe.shellPID()
+    if shell > 0, let deepest = probe.deepestDescendant(shell), deepest != shell,
+       let described = probe.describe(deepest),
+       !shellExecutables.contains(described.executable)
+    {
+      return described
+    }
+    // Second: tcgetpgrp on the pty, for cases where exec-chains (rather
+    // than fork-chains) leave the spawned process's own pid as the
+    // foreground app — e.g. a user ran `ssh host` bare in a pane spawned
+    // without a cfg.command.
     let fd = probe.ptyFD()
     if fd >= 0 {
       let pgid = probe.tcgetpgrpOnPTY(fd)
-      if pgid > 0 {
-        if let described = probe.describe(pgid) {
-          // Ignore plain shells — the user is just at a prompt, no
-          // captured foreground app to restore. Any non-shell process
-          // (e.g. ssh spawned via cfg.command, nvim, htop) is real.
-          if !shellExecutables.contains(described.executable) {
-            return described
-          }
-          return nil
-        }
+      if pgid > 0, let described = probe.describe(pgid),
+         !shellExecutables.contains(described.executable)
+      {
+        return described
       }
     }
-    // Fallback: deepest descendant of shell PID.
-    let shell = probe.shellPID()
-    guard shell > 0, let deepest = probe.deepestDescendant(shell), deepest != shell
-    else { return nil }
-    return probe.describe(deepest)
+    return nil
   }
 
   // MARK: - Real-syscall helpers
