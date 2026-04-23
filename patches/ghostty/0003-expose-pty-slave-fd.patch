@@ -1,0 +1,41 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 00fd18513..b7393f0cc 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1084,6 +1084,9 @@ bool ghostty_surface_process_exited(ghostty_surface_t);
+ /* Mistty patch: see embedded.zig. */
+ int ghostty_surface_command_pid(ghostty_surface_t);
+ 
++/* Mistty patch: see embedded.zig. */
++int ghostty_surface_pty_fd(ghostty_surface_t);
++
+ void ghostty_surface_refresh(ghostty_surface_t);
+ void ghostty_surface_draw(ghostty_surface_t);
+ void ghostty_surface_set_content_scale(ghostty_surface_t, double, double);
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 69e1eaf08..3241d02ad 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1619,6 +1619,22 @@ pub const CAPI = struct {
+         }
+     }
+ 
++    /// Mistty patch: expose the pty master fd for this surface so the host
++    /// app can call `tcgetpgrp(fd)` to find the foreground process group on
++    /// the tty. Returns `-1` when the pty hasn't been opened yet or the
++    /// termio backend isn't `.exec`.
++    export fn ghostty_surface_pty_fd(surface: *Surface) c_int {
++        const core = &surface.core_surface;
++        switch (core.io.backend) {
++            .exec => |*exec| {
++                if (exec.subprocess.pty) |pty| {
++                    return @as(c_int, @intCast(pty.master));
++                }
++                return -1;
++            },
++        }
++    }
++
+     /// Returns true if the surface has a selection.
+     export fn ghostty_surface_has_selection(surface: *Surface) bool {
+         return surface.core_surface.hasSelection();

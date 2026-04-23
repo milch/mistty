@@ -1,0 +1,47 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 40ff55c9b..00fd18513 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1080,6 +1080,10 @@ ghostty_surface_config_s ghostty_surface_inherited_config(ghostty_surface_t, gho
+ void ghostty_surface_update_config(ghostty_surface_t, ghostty_config_t);
+ bool ghostty_surface_needs_confirm_quit(ghostty_surface_t);
+ bool ghostty_surface_process_exited(ghostty_surface_t);
++
++/* Mistty patch: see embedded.zig. */
++int ghostty_surface_command_pid(ghostty_surface_t);
++
+ void ghostty_surface_refresh(ghostty_surface_t);
+ void ghostty_surface_draw(ghostty_surface_t);
+ void ghostty_surface_set_content_scale(ghostty_surface_t, double, double);
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 0d5a4f8da..69e1eaf08 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1598,6 +1598,27 @@ pub const CAPI = struct {
+         return surface.core_surface.child_exited;
+     }
+ 
++    /// Mistty patch: expose the shell (or user-specified `command`) child
++    /// process PID so the host app can resolve the foreground process on the
++    /// surface's tty via `tcgetpgrp` / `proc_*`. Returns `-1` when the child
++    /// hasn't started yet, has exited, or the termio backend isn't a
++    /// standard POSIX fork/exec subprocess.
++    export fn ghostty_surface_command_pid(surface: *Surface) c_int {
++        const core = &surface.core_surface;
++        switch (core.io.backend) {
++            .exec => |*exec| {
++                const process = exec.subprocess.process orelse return -1;
++                switch (process) {
++                    .fork_exec => |cmd| {
++                        const pid = cmd.pid orelse return -1;
++                        return @as(c_int, @intCast(pid));
++                    },
++                    .flatpak => return -1,
++                }
++            },
++        }
++    }
++
+     /// Returns true if the surface has a selection.
+     export fn ghostty_surface_has_selection(surface: *Surface) bool {
+         return surface.core_surface.hasSelection();
