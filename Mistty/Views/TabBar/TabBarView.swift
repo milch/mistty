@@ -21,7 +21,9 @@ struct TabBarView: View {
       }
       .padding(.leading, leadingInset)
 
-      Button(action: { session.addTab() }) {
+      Button(action: {
+        NotificationCenter.default.post(name: .misttyNewTab, object: nil)
+      }) {
         Image(systemName: "plus")
           .frame(width: 24, height: 24)
       }

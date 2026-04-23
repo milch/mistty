@@ -136,13 +136,22 @@ struct ContentView: View {
         }
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNewTab)) { _ in
-        store.activeSession?.addTab()
+        addTab(inheritSsh: true)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyNewTabPlain)) { _ in
+        addTab(inheritSsh: false)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
-        splitPane(direction: .horizontal)
+        splitPane(direction: .horizontal, inheritSsh: true)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontalPlain)) { _ in
+        splitPane(direction: .horizontal, inheritSsh: false)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
-        splitPane(direction: .vertical)
+        splitPane(direction: .vertical, inheritSsh: true)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttySplitVerticalPlain)) { _ in
+        splitPane(direction: .vertical, inheritSsh: false)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
         showingSessionManager = true
@@ -362,20 +371,26 @@ struct ContentView: View {
     }
   }
 
-  private func splitPane(direction: SplitDirection) {
+  private func splitPane(direction: SplitDirection, inheritSsh: Bool) {
     guard let session = store.activeSession,
       let tab = session.activeTab
     else { return }
-    if let sshCommand = session.sshCommand,
-      !NSEvent.modifierFlags.contains(.option)
-    {
+    if inheritSsh, let sshCommand = session.sshCommand {
       let pane = MisttyPane(id: tab.paneIDGenerator())
       pane.directory = session.directory
       pane.command = sshCommand
-      pane.useCommandField = false
       tab.addExistingPane(pane, direction: direction)
     } else {
       tab.splitActivePane(direction: direction)
+    }
+  }
+
+  private func addTab(inheritSsh: Bool) {
+    guard let session = store.activeSession else { return }
+    if inheritSsh, let sshCommand = session.sshCommand {
+      session.addTab(exec: sshCommand)
+    } else {
+      session.addTab()
     }
   }
 

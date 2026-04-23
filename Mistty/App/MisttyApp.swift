@@ -83,15 +83,30 @@ struct MisttyApp: App {
         }
         .keyboardShortcut("t", modifiers: .command)
 
+        Button("New Tab (Plain)") {
+          NotificationCenter.default.post(name: .misttyNewTabPlain, object: nil)
+        }
+        .keyboardShortcut("t", modifiers: [.command, .option])
+
         Button("Split Pane Horizontally") {
           NotificationCenter.default.post(name: .misttySplitHorizontal, object: nil)
         }
         .keyboardShortcut("d", modifiers: .command)
 
+        Button("Split Pane Horizontally (Plain)") {
+          NotificationCenter.default.post(name: .misttySplitHorizontalPlain, object: nil)
+        }
+        .keyboardShortcut("d", modifiers: [.command, .option])
+
         Button("Split Pane Vertically") {
           NotificationCenter.default.post(name: .misttySplitVertical, object: nil)
         }
         .keyboardShortcut("d", modifiers: [.command, .shift])
+
+        Button("Split Pane Vertically (Plain)") {
+          NotificationCenter.default.post(name: .misttySplitVerticalPlain, object: nil)
+        }
+        .keyboardShortcut("d", modifiers: [.command, .shift, .option])
 
         Button("Session Manager") {
           NotificationCenter.default.post(name: .misttySessionManager, object: nil)
@@ -311,8 +326,11 @@ extension View {
 
 extension Notification.Name {
   static let misttyNewTab = Notification.Name("misttyNewTab")
+  static let misttyNewTabPlain = Notification.Name("misttyNewTabPlain")
   static let misttySplitHorizontal = Notification.Name("misttySplitHorizontal")
+  static let misttySplitHorizontalPlain = Notification.Name("misttySplitHorizontalPlain")
   static let misttySplitVertical = Notification.Name("misttySplitVertical")
+  static let misttySplitVerticalPlain = Notification.Name("misttySplitVerticalPlain")
   static let misttySessionManager = Notification.Name("misttySessionManager")
   static let misttyClosePane = Notification.Name("misttyClosePane")
   static let misttyCloseTab = Notification.Name("misttyCloseTab")
