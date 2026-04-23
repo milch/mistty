@@ -145,7 +145,11 @@ extension SessionStore {
       if let captured = paneSnap.captured,
          let command = config.resolve(captured) {
         pane.command = command
-        pane.useCommandField = true
+        // Route through the user's login shell (TerminalSurfaceView wraps
+        // initial_input in `exec $command\n`) so the restored process picks
+        // up PATH, aliases, and env vars from rc files. Matches SSH
+        // restoration's behavior (see ContentView.splitActivePaneForSession).
+        pane.useCommandField = false
       }
       panes[paneSnap.id] = pane
       return .leaf(pane)

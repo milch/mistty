@@ -250,7 +250,9 @@ final class SessionStoreSnapshotTests: XCTestCase {
     store.restore(from: snapshot, config: config)
     let pane = store.sessions[0].tabs[0].panes[0]
     XCTAssertEqual(pane.command, "nvim foo.txt")
-    XCTAssertTrue(pane.useCommandField)
+    // Restored commands run via initial_input (login-shell exec wrap) so
+    // they pick up the user's PATH / rc — mirrors SSH pane setup.
+    XCTAssertFalse(pane.useCommandField)
   }
 
   func test_restore_unmatchedCapturedProcessLeavesPaneBareShell() {
