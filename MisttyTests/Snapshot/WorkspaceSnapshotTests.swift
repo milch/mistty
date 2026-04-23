@@ -51,4 +51,48 @@ final class WorkspaceSnapshotTests: XCTestCase {
     )
     XCTAssertEqual(try roundTrip(tree), tree)
   }
+
+  func test_workspaceSnapshot_roundTrip() throws {
+    let workspace = WorkspaceSnapshot(
+      version: 1,
+      sessions: [
+        SessionSnapshot(
+          id: 1,
+          name: "work",
+          customName: "Work",
+          directory: URL(fileURLWithPath: "/tmp"),
+          sshCommand: nil,
+          lastActivatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+          tabs: [
+            TabSnapshot(
+              id: 10,
+              customTitle: "repl",
+              directory: URL(fileURLWithPath: "/tmp"),
+              layout: .leaf(pane: PaneSnapshot(id: 100)),
+              activePaneID: 100
+            ),
+          ],
+          activeTabID: 10
+        ),
+      ],
+      activeSessionID: 1
+    )
+    XCTAssertEqual(try roundTrip(workspace), workspace)
+  }
+
+  func test_workspaceSnapshot_unknownVersionRejected() throws {
+    let bogus = #"{"version": 999, "sessions": [], "activeSessionID": null}"#
+    let decoder = JSONDecoder()
+    let workspace = try decoder.decode(WorkspaceSnapshot.self, from: Data(bogus.utf8))
+    XCTAssertNotNil(workspace.unsupportedVersion)
+    XCTAssertEqual(workspace.unsupportedVersion, 999)
+  }
+
+  func test_workspaceSnapshot_knownVersionAccepted() throws {
+    let good = #"{"version": 1, "sessions": [], "activeSessionID": null}"#
+    let decoder = JSONDecoder()
+    let workspace = try decoder.decode(WorkspaceSnapshot.self, from: Data(good.utf8))
+    XCTAssertNil(workspace.unsupportedVersion)
+    XCTAssertTrue(workspace.sessions.isEmpty)
+  }
 }
