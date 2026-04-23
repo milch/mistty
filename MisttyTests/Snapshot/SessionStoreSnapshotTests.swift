@@ -213,4 +213,72 @@ final class SessionStoreSnapshotTests: XCTestCase {
     XCTAssertEqual(beforeIDs, afterIDs)
     XCTAssertEqual(second.sessions[0].tabs[0].panes.count, 2)
   }
+
+  func test_restore_unsupportedVersionPreservesExistingSessions() {
+    _ = store.createSession(name: "existing", directory: URL(fileURLWithPath: "/tmp"))
+    let bad = WorkspaceSnapshot(version: 999, sessions: [], activeSessionID: nil)
+    store.restore(from: bad, config: RestoreConfig())
+    XCTAssertEqual(store.sessions.count, 1)
+    XCTAssertEqual(store.sessions[0].name, "existing")
+  }
+
+  func test_restore_resolvesAllowlistedCommandIntoPane() {
+    let snapshot = WorkspaceSnapshot(
+      sessions: [
+        SessionSnapshot(
+          id: 1, name: "w",
+          directory: URL(fileURLWithPath: "/tmp"),
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 1,
+              layout: .leaf(pane: PaneSnapshot(
+                id: 1,
+                directory: URL(fileURLWithPath: "/tmp"),
+                currentWorkingDirectory: URL(fileURLWithPath: "/tmp"),
+                captured: CapturedProcess(executable: "nvim", argv: ["nvim", "foo.txt"])
+              )),
+              activePaneID: 1
+            ),
+          ],
+          activeTabID: 1
+        ),
+      ],
+      activeSessionID: 1
+    )
+    let config = RestoreConfig(commands: [.init(match: "nvim", strategy: nil)])
+    store.restore(from: snapshot, config: config)
+    let pane = store.sessions[0].tabs[0].panes[0]
+    XCTAssertEqual(pane.command, "nvim foo.txt")
+    XCTAssertTrue(pane.useCommandField)
+  }
+
+  func test_restore_unmatchedCapturedProcessLeavesPaneBareShell() {
+    let snapshot = WorkspaceSnapshot(
+      sessions: [
+        SessionSnapshot(
+          id: 1, name: "w",
+          directory: URL(fileURLWithPath: "/tmp"),
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 1,
+              layout: .leaf(pane: PaneSnapshot(
+                id: 1,
+                directory: URL(fileURLWithPath: "/tmp"),
+                currentWorkingDirectory: URL(fileURLWithPath: "/tmp"),
+                captured: CapturedProcess(executable: "htop", argv: ["htop"])
+              )),
+              activePaneID: 1
+            ),
+          ],
+          activeTabID: 1
+        ),
+      ],
+      activeSessionID: 1
+    )
+    store.restore(from: snapshot, config: RestoreConfig())  // no rules
+    let pane = store.sessions[0].tabs[0].panes[0]
+    XCTAssertNil(pane.command)
+  }
 }

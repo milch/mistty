@@ -38,7 +38,9 @@ extension SessionStore {
     }
 
     // Clear anything currently in the store before reconstructing.
-    for session in sessions { closeSession(session) }
+    // Copy the array first — closeSession mutates `sessions` in place.
+    let existing = sessions
+    for session in existing { closeSession(session) }
 
     var maxSessionID = 0, maxTabID = 0, maxPaneID = 0
 
@@ -161,7 +163,8 @@ extension SessionStore {
   private static func resolveCWD(_ url: URL?) -> URL? {
     guard let url else { return nil }
     let path = url.path
-    if FileManager.default.fileExists(atPath: path) {
+    var isDir: ObjCBool = false
+    if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
       return url
     }
     return FileManager.default.homeDirectoryForCurrentUser
