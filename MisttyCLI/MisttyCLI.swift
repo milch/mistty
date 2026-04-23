@@ -14,6 +14,7 @@ struct MisttyCLI: ParsableCommand {
             WindowCommand.self,
             PopupCommand.self,
             ConfigCommand.self,
+            DebugCommand.self,
         ]
     )
 }
