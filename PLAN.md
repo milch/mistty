@@ -57,6 +57,10 @@ v2+ followups (intentionally out of v1):
 
 - Sometimes when you press cmd-w instead of closing the pane it closes the whole window. Diagnostic logging is wired (enable via Settings → Debug) but repro is still needed.
 - OSC777/OSC9/OSC99 notifications support
+- Multiple windows are broken
+- Drag to resize panes is not implemented
+- In window mode you should also be able to change focus of the panes (e.g. so that you can quickly swap and move panes into the layout you want without having to engage/disengage window mode)
+- OSC for state restoration? TUI communicates with term how to get it to resume from where it left. Could be something as simple as `$PROG file.txt` or `nvim -U session.vim` or something more complex.
 
 ## Implemented
 
