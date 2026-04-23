@@ -16,26 +16,26 @@ final class SessionStore {
     }
   }
 
-  private var nextSessionId = 1
-  private var nextTabId = 1
-  private var nextPaneId = 1
+  var nextSessionId = 1
+  var nextTabId = 1
+  var nextPaneId = 1
   private var nextWindowId = 1
-  private var nextPopupId = 1
+  var nextPopupId = 1
   private(set) var trackedWindows: [TrackedWindow] = []
 
-  private func generateSessionID() -> Int {
+  func generateSessionID() -> Int {
     let id = nextSessionId
     nextSessionId += 1
     return id
   }
 
-  private func generateTabID() -> Int {
+  func generateTabID() -> Int {
     let id = nextTabId
     nextTabId += 1
     return id
   }
 
-  private func generatePaneID() -> Int {
+  func generatePaneID() -> Int {
     let id = nextPaneId
     nextPaneId += 1
     return id
@@ -83,7 +83,7 @@ final class SessionStore {
     if activeSession?.id == session.id { activeSession = sessions.last }
   }
 
-  private func generatePopupID() -> Int {
+  func generatePopupID() -> Int {
     let id = nextPopupId
     nextPopupId += 1
     return id
@@ -128,6 +128,26 @@ final class SessionStore {
 
   func trackedWindow(byId id: Int) -> TrackedWindow? {
     trackedWindows.first { $0.id == id }
+  }
+
+  // MARK: - Restore helpers
+
+  /// Append a fully-constructed `MisttySession` during restore. Bypasses
+  /// `createSession`'s fresh-ID + default-tab flow because the session is
+  /// already hydrated from a snapshot.
+  func appendRestoredSession(_ session: MisttySession) {
+    sessions.append(session)
+  }
+
+  /// Advance the next-ID counters so newly-allocated IDs don't collide with
+  /// restored ones. Called once from `restore(from:config:)`.
+  func advanceIDCounters(
+    sessionMax: Int, tabMax: Int, paneMax: Int, popupMax: Int = 0
+  ) {
+    nextSessionId = max(nextSessionId, sessionMax + 1)
+    nextTabId = max(nextTabId, tabMax + 1)
+    nextPaneId = max(nextPaneId, paneMax + 1)
+    nextPopupId = max(nextPopupId, popupMax + 1)
   }
 
   // MARK: - Lookup helpers

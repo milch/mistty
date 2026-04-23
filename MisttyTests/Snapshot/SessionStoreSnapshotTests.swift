@@ -68,4 +68,149 @@ final class SessionStoreSnapshotTests: XCTestCase {
     XCTAssertEqual(snapshot.sessions[0].activeTabID, secondTab.id)
     XCTAssertEqual(snapshot.sessions[0].tabs[1].activePaneID, secondTab.panes[0].id)
   }
+
+  func test_restore_emptyWorkspaceLeavesStoreEmpty() {
+    _ = store.createSession(name: "leftover", directory: URL(fileURLWithPath: "/tmp"))
+    store.restore(from: WorkspaceSnapshot(), config: RestoreConfig())
+    XCTAssertTrue(store.sessions.isEmpty)
+    XCTAssertNil(store.activeSession)
+  }
+
+  func test_restore_rebuildsSingleSession() {
+    let snapshot = WorkspaceSnapshot(
+      version: 1,
+      sessions: [
+        SessionSnapshot(
+          id: 7,
+          name: "work",
+          customName: "Work",
+          directory: URL(fileURLWithPath: "/tmp"),
+          sshCommand: nil,
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 3,
+              customTitle: nil,
+              directory: URL(fileURLWithPath: "/tmp"),
+              layout: .leaf(pane: PaneSnapshot(id: 42)),
+              activePaneID: 42
+            ),
+          ],
+          activeTabID: 3
+        ),
+      ],
+      activeSessionID: 7
+    )
+    store.restore(from: snapshot, config: RestoreConfig())
+    XCTAssertEqual(store.sessions.count, 1)
+    XCTAssertEqual(store.sessions[0].id, 7)
+    XCTAssertEqual(store.sessions[0].customName, "Work")
+    XCTAssertEqual(store.activeSession?.id, 7)
+    XCTAssertEqual(store.sessions[0].tabs[0].id, 3)
+    XCTAssertEqual(store.sessions[0].tabs[0].panes[0].id, 42)
+  }
+
+  func test_restore_rebuildsSplitLayout() {
+    let snapshot = WorkspaceSnapshot(
+      sessions: [
+        SessionSnapshot(
+          id: 1, name: "w",
+          directory: URL(fileURLWithPath: "/tmp"),
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 1,
+              layout: .split(
+                direction: .horizontal,
+                a: .leaf(pane: PaneSnapshot(id: 10)),
+                b: .leaf(pane: PaneSnapshot(id: 11)),
+                ratio: 0.3
+              ),
+              activePaneID: 11
+            ),
+          ],
+          activeTabID: 1
+        ),
+      ],
+      activeSessionID: 1
+    )
+    store.restore(from: snapshot, config: RestoreConfig())
+    let tab = store.sessions[0].tabs[0]
+    XCTAssertEqual(tab.panes.count, 2)
+    XCTAssertEqual(tab.activePane?.id, 11)
+    guard case .split(let dir, _, _, let ratio) = tab.layout.root else {
+      return XCTFail("expected split")
+    }
+    XCTAssertEqual(dir, .horizontal)
+    XCTAssertEqual(ratio, 0.3, accuracy: 0.0001)
+  }
+
+  func test_restore_advancesIDCountersPastMax() {
+    let snapshot = WorkspaceSnapshot(
+      sessions: [
+        SessionSnapshot(
+          id: 50, name: "w",
+          directory: URL(fileURLWithPath: "/tmp"),
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 30,
+              layout: .leaf(pane: PaneSnapshot(id: 99)),
+              activePaneID: 99
+            ),
+          ],
+          activeTabID: 30
+        ),
+      ],
+      activeSessionID: 50
+    )
+    store.restore(from: snapshot, config: RestoreConfig())
+    let fresh = store.createSession(name: "post", directory: URL(fileURLWithPath: "/tmp"))
+    XCTAssertGreaterThan(fresh.id, 50)
+    XCTAssertGreaterThan(fresh.tabs[0].id, 30)
+    XCTAssertGreaterThan(fresh.tabs[0].panes[0].id, 99)
+  }
+
+  func test_restore_missingDirectoryFallsBackToHome() {
+    let missing = URL(fileURLWithPath: "/definitely/not/real/path-\(UUID().uuidString)")
+    let snapshot = WorkspaceSnapshot(
+      sessions: [
+        SessionSnapshot(
+          id: 1, name: "w",
+          directory: URL(fileURLWithPath: "/tmp"),
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 1,
+              layout: .leaf(pane: PaneSnapshot(
+                id: 1,
+                directory: missing,
+                currentWorkingDirectory: missing,
+                captured: nil
+              )),
+              activePaneID: 1
+            ),
+          ],
+          activeTabID: 1
+        ),
+      ],
+      activeSessionID: 1
+    )
+    store.restore(from: snapshot, config: RestoreConfig())
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    XCTAssertEqual(store.sessions[0].tabs[0].panes[0].directory, home)
+  }
+
+  func test_restore_roundTrip_preservesStructure() {
+    let s = store.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
+    s.tabs[0].splitActivePane(direction: .vertical)
+    s.addTab()
+    let snapshot = store.takeSnapshot()
+    let second = SessionStore()
+    second.restore(from: snapshot, config: RestoreConfig())
+    let beforeIDs = s.tabs.map { $0.id }
+    let afterIDs = second.sessions[0].tabs.map { $0.id }
+    XCTAssertEqual(beforeIDs, afterIDs)
+    XCTAssertEqual(second.sessions[0].tabs[0].panes.count, 2)
+  }
 }
