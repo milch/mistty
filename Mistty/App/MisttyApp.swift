@@ -5,6 +5,7 @@ import SwiftUI
 
 @main
 struct MisttyApp: App {
+  @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
   @State private var store = SessionStore()
   @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
@@ -17,6 +18,7 @@ struct MisttyApp: App {
     _ = GhosttyAppManager.shared
     Self.registerBundledFonts()
     DebugLog.shared.configure(enabled: config.debugLogging)
+    DebugLog.shared.log("restore", "MisttyApp.init")
   }
 
   private static func registerBundledFonts() {
