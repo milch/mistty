@@ -8,6 +8,32 @@ final class RestoreConfigTests: XCTestCase {
     XCTAssertNil(config.resolve(captured))
   }
 
+  // ssh is in `builtinAutoRestore` so it survives a restore without the
+  // user having to configure anything — ssh is a session primitive, not an
+  // opt-in convenience like nvim.
+  func test_resolve_sshAutoRestoresWithoutRuleWhenAllowlistEmpty() {
+    let config = RestoreConfig()
+    let captured = CapturedProcess(executable: "ssh", argv: ["ssh", "user@host"])
+    XCTAssertEqual(config.resolve(captured), "ssh user@host")
+  }
+
+  func test_resolve_sshAutoRestoresWithoutRuleWhenOtherRulesPresent() {
+    let config = RestoreConfig(commands: [.init(match: "nvim", strategy: nil)])
+    let captured = CapturedProcess(executable: "ssh", argv: ["ssh", "user@host"])
+    XCTAssertEqual(config.resolve(captured), "ssh user@host")
+  }
+
+  // Explicit user rule for ssh wins over the built-in replay — e.g. for
+  // users who want to reconnect with extra flags.
+  func test_resolve_sshUserRuleOverridesBuiltin() {
+    let config = RestoreConfig(commands: [
+      .init(match: "ssh", strategy: "ssh -v -o ServerAliveInterval=30"),
+    ])
+    let captured = CapturedProcess(executable: "ssh", argv: ["ssh", "user@host"])
+    XCTAssertEqual(
+      config.resolve(captured), "ssh -v -o ServerAliveInterval=30")
+  }
+
   func test_resolve_returnsStrategyWhenRuleHasOne() {
     let config = RestoreConfig(commands: [.init(match: "claude", strategy: "claude --resume")])
     let captured = CapturedProcess(executable: "claude", argv: ["claude", "session-1"])

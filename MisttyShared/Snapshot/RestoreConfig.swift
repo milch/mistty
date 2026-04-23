@@ -17,15 +17,27 @@ public struct RestoreConfig: Codable, Sendable, Equatable {
     self.commands = commands
   }
 
+  /// Executables that always restore via argv replay even without an
+  /// explicit allowlist entry. These are Mistty session primitives where
+  /// requiring the user to opt in would be worse UX than the tradeoff of
+  /// a surprise relaunch. Users can still override by adding their own
+  /// rule with a `strategy` (e.g. `strategy = "ssh -v"`).
+  static let builtinAutoRestore: Set<String> = ["ssh"]
+
   /// Resolve a captured foreground process to a command string. Returns `nil`
-  /// when no allowlist rule matches (caller should restore a bare shell).
+  /// when no allowlist rule matches and the executable isn't in the built-in
+  /// auto-restore set (caller should restore a bare shell).
   public func resolve(_ captured: CapturedProcess) -> String? {
-    guard let rule = commands.first(where: { $0.match == captured.executable })
-    else { return nil }
-    if let strategy = rule.strategy, !strategy.isEmpty {
-      return strategy
+    if let rule = commands.first(where: { $0.match == captured.executable }) {
+      if let strategy = rule.strategy, !strategy.isEmpty {
+        return strategy
+      }
+      return Self.shellJoin(captured.argv)
     }
-    return Self.shellJoin(captured.argv)
+    if Self.builtinAutoRestore.contains(captured.executable) {
+      return Self.shellJoin(captured.argv)
+    }
+    return nil
   }
 
   /// POSIX single-quote escape any argv element that contains shell
