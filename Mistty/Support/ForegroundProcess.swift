@@ -136,6 +136,15 @@ enum ForegroundProcessResolver {
   /// tricky bit is that the size is in BYTES, both for the first probe
   /// call (size = 0 returns required bytes) and the populated call
   /// (returns bytes actually written). Divide by stride to get pid count.
+  ///
+  /// Inherent POSIX TOCTOU: between the size-probe call and the
+  /// populated call, processes can fork or exit. If the set grows, the
+  /// second call truncates silently (newly-added pids missing); if it
+  /// shrinks, the buffer contains trailing zeros which the `filter` on
+  /// the caller side strips. We accept this — the state-restoration
+  /// path reads capture at save time, and missing a brand-new pid or
+  /// including a just-exited one is rare and self-healing (next save
+  /// tick picks up the new reality).
   private static func listPids(type: UInt32, info: UInt32) -> [pid_t] {
     let byteCount = proc_listpids(type, info, nil, 0)
     guard byteCount > 0 else { return [] }

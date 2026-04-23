@@ -214,6 +214,41 @@ final class SessionStoreSnapshotTests: XCTestCase {
       "pane.currentWorkingDirectory should carry the cd'd-into subfolder; surface view uses this as spawn dir")
   }
 
+  // When the snapshot has no live CWD (pane never emitted OSC 7 before
+  // quit — rare but possible for a short-lived pane), currentWorkingDirectory
+  // stays nil on the restored pane and the shell spawns in the initial
+  // directory via surfaceView's `currentWorkingDirectory ?? directory`
+  // fallback.
+  func test_restore_nilCurrentWorkingDirectoryLeavesCWDNil() {
+    let snapshot = WorkspaceSnapshot(
+      sessions: [
+        SessionSnapshot(
+          id: 1, name: "w",
+          directory: URL(fileURLWithPath: "/tmp"),
+          lastActivatedAt: Date(),
+          tabs: [
+            TabSnapshot(
+              id: 1,
+              layout: .leaf(pane: PaneSnapshot(
+                id: 1,
+                directory: URL(fileURLWithPath: "/tmp"),
+                currentWorkingDirectory: nil,
+                captured: nil
+              )),
+              activePaneID: 1
+            ),
+          ],
+          activeTabID: 1
+        ),
+      ],
+      activeSessionID: 1
+    )
+    store.restore(from: snapshot, config: RestoreConfig())
+    let pane = store.sessions[0].tabs[0].panes[0]
+    XCTAssertEqual(pane.directory, URL(fileURLWithPath: "/tmp"))
+    XCTAssertNil(pane.currentWorkingDirectory)
+  }
+
   func test_restore_missingDirectoryFallsBackToHome() {
     let missing = URL(fileURLWithPath: "/definitely/not/real/path-\(UUID().uuidString)")
     let snapshot = WorkspaceSnapshot(

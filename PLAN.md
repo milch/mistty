@@ -30,6 +30,7 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 - Popup, copy/window/search mode, zoomed-pane persistence — all ephemeral today; snapshot schema can absorb them without migration if a real need shows up.
 - Upstream the shell-PID accessor patch to ghostty.
 - **Dev / release bundle-ID split** — both builds use `com.mistty.app`, so AppKit's saved-state directory is shared. Running dev while release is open risks clobbering release's state on quit. Fix: give the dev bundle a distinct `CFBundleIdentifier` (e.g. `com.mistty.app.dev`) when built via `just bundle`. Blocker for safe dev↔release isolation of state restoration.
+- **Opt-out mechanism for builtin auto-restore** — `ssh` is in `RestoreConfig.builtinAutoRestore` so SSH sessions relaunch without requiring an allowlist entry. Users with unreachable hosts or one-shot SSH panes have no way to suppress the reconnect attempt short of also suppressing the session's existence. Consider a `strategy = false` or similar sentinel, or a per-executable `auto_restore = false` flag in the rule.
 
 ### Keyboard shortcut configuration
 
