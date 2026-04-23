@@ -95,4 +95,11 @@ final class WorkspaceSnapshotTests: XCTestCase {
     XCTAssertNil(workspace.unsupportedVersion)
     XCTAssertTrue(workspace.sessions.isEmpty)
   }
+
+  func test_workspaceSnapshot_zeroVersionRejected() throws {
+    let json = #"{"version": 0, "sessions": [], "activeSessionID": null}"#
+    let decoder = JSONDecoder()
+    let workspace = try decoder.decode(WorkspaceSnapshot.self, from: Data(json.utf8))
+    XCTAssertEqual(workspace.unsupportedVersion, 0)
+  }
 }
