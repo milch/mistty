@@ -46,4 +46,10 @@ final class RestoreConfigTests: XCTestCase {
     let captured = CapturedProcess(executable: "vim", argv: ["vim", "foo"])
     XCTAssertEqual(config.resolve(captured), "vim foo")
   }
+
+  func test_resolve_emptyArgvProducesEmptyString() {
+    let config = RestoreConfig(commands: [.init(match: "broken", strategy: nil)])
+    let captured = CapturedProcess(executable: "broken", argv: [])
+    XCTAssertEqual(config.resolve(captured), "")
+  }
 }

@@ -1,5 +1,3 @@
-import Foundation
-
 public struct RestoreCommandRule: Codable, Sendable, Equatable {
   /// Exact match against the foreground process's executable basename.
   public var match: String
@@ -32,7 +30,7 @@ public struct RestoreConfig: Codable, Sendable, Equatable {
 
   /// POSIX single-quote escape any argv element that contains shell
   /// metacharacters; join with single spaces.
-  static func shellJoin(_ argv: [String]) -> String {
+  private static func shellJoin(_ argv: [String]) -> String {
     argv.map { arg in
       if arg.allSatisfy(isSafeShellChar) { return arg }
       let escaped = arg.replacingOccurrences(of: "'", with: #"'\''"#)
@@ -48,7 +46,9 @@ public struct RestoreConfig: Codable, Sendable, Equatable {
 /// Captured at save time; stored in `PaneSnapshot.captured`. Strategy
 /// resolution happens at RESTORE time so config edits take effect.
 public struct CapturedProcess: Codable, Sendable, Equatable {
+  /// Basename only — e.g. "nvim", not "/usr/local/bin/nvim".
   public var executable: String
+  /// Full argument vector including argv[0].
   public var argv: [String]
 
   public init(executable: String, argv: [String]) {
