@@ -145,11 +145,12 @@ extension SessionStore {
       if let captured = paneSnap.captured,
          let command = config.resolve(captured) {
         pane.command = command
-        // Route through the user's login shell (TerminalSurfaceView wraps
-        // initial_input in `exec $command\n`) so the restored process picks
-        // up PATH, aliases, and env vars from rc files. Matches SSH
-        // restoration's behavior (see ContentView.splitActivePaneForSession).
+        // Route through the login shell so the restored command picks up
+        // PATH / aliases / env from rc files. Unlike SSH panes we do NOT
+        // prefix with `exec` — when the user quits (e.g. `:q` in nvim) we
+        // want the shell prompt to come back, not the pane to close.
         pane.useCommandField = false
+        pane.execInitialInput = false
       }
       panes[paneSnap.id] = pane
       return .leaf(pane)

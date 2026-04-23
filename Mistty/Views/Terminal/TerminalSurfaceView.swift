@@ -60,6 +60,7 @@ final class TerminalSurfaceView: NSView {
     workingDirectory: URL? = nil,
     command: String? = nil,
     initialInput: String? = nil,
+    execInitialInput: Bool = true,
     waitAfterCommand: Bool = false
   ) {
     // Use the shared launch-time parse so init doesn't re-read config.toml
@@ -108,8 +109,14 @@ final class TerminalSurfaceView: NSView {
     // instead of cfg.command. ghostty forces wait-after-command=true when
     // cfg.command is set, which shows "press any key to close". Using
     // initial_input runs the command in the shell naturally.
+    //
+    // `execInitialInput` controls whether we replace the shell with the
+    // command (`exec`, used for SSH where we want the pane to die when the
+    // connection drops) or run it as a regular shell child (state-restore,
+    // where the user expects a shell prompt when they quit nvim etc.).
     if let input = initialInput {
-      self.initialInputString = "exec \(input)\n"
+      self.initialInputString =
+        execInitialInput ? "exec \(input)\n" : "\(input)\n"
     }
 
     // Both C pointers from withCString are only valid inside the closure,

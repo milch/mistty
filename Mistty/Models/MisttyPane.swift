@@ -17,6 +17,14 @@ final class MisttyPane: Identifiable {
   /// runs it — used by SSH panes where the shell must stay alive after
   /// the command exits.
   var useCommandField: Bool = true
+
+  /// When `useCommandField == false`, controls whether the command is sent
+  /// to the login shell as `exec <cmd>` (replaces the shell — pane dies
+  /// when the command exits) or `<cmd>` (runs as a normal shell child —
+  /// pane survives with a shell prompt when the command exits). SSH panes
+  /// want `exec`; restored panes (e.g. nvim) want to fall through to a
+  /// shell so the user isn't kicked out of the pane on `:q`.
+  var execInitialInput: Bool = true
   /// When true, the pane stays open after its process exits and shows
   /// "press any key to close". When false (default, matching ghostty's own
   /// default), the pane closes as soon as the process exits — so typing
@@ -69,6 +77,7 @@ final class MisttyPane: Identifiable {
       workingDirectory: directory,
       command: useCommandField ? command : nil,
       initialInput: useCommandField ? nil : command,
+      execInitialInput: execInitialInput,
       waitAfterCommand: waitAfterCommand
     )
     view.pane = self
