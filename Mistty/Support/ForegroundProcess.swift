@@ -33,6 +33,15 @@ enum ForegroundProcessResolver {
     return current(via: probe)
   }
 
+  /// Basenames we treat as "user is at a plain shell prompt — nothing to
+  /// capture." When `tcgetpgrp` returns the spawned process's pid (common
+  /// when that process is the shell itself, OR when `cfg.command` execs
+  /// into something like ssh that keeps the same pgid), we describe the
+  /// pid and check whether it's one of these.
+  static let shellExecutables: Set<String> = [
+    "bash", "dash", "fish", "ksh", "nu", "sh", "tcsh", "zsh",
+  ]
+
   /// Pure dispatch logic; all I/O lives in the probe closures.
   static func current(via probe: ForegroundProcessProbe) -> ForegroundProcess? {
     // Primary: tcgetpgrp on the pty.
@@ -40,11 +49,13 @@ enum ForegroundProcessResolver {
     if fd >= 0 {
       let pgid = probe.tcgetpgrpOnPTY(fd)
       if pgid > 0 {
-        let shell = probe.shellPID()
-        if pgid != shell {
-          if let described = probe.describe(pgid) { return described }
-        } else {
-          // Shell is foreground — no user program running, explicit nil.
+        if let described = probe.describe(pgid) {
+          // Ignore plain shells — the user is just at a prompt, no
+          // captured foreground app to restore. Any non-shell process
+          // (e.g. ssh spawned via cfg.command, nvim, htop) is real.
+          if !shellExecutables.contains(described.executable) {
+            return described
+          }
           return nil
         }
       }

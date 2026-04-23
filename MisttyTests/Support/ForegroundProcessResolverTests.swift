@@ -23,15 +23,39 @@ final class ForegroundProcessResolverTests: XCTestCase {
     XCTAssertEqual(result?.argv, ["nvim", "foo"])
   }
 
+  // Plain shell at the prompt: tcgetpgrp describes to `zsh` → no capture.
   func test_primaryPath_returnsNilWhenShellIsForeground() {
+    let fake = FakeDescribe()
+    fake.byPID[1000] = .init(executable: "zsh", path: "/bin/zsh",
+                              argv: ["-zsh"], pid: 1000)
     let probe = ForegroundProcessProbe(
       ptyFD: { 5 },
       shellPID: { 1000 },
-      tcgetpgrpOnPTY: { _ in 1000 },  // shell pgroup == shell pid = no fg app
+      tcgetpgrpOnPTY: { _ in 1000 },
       deepestDescendant: { _ in nil },
-      describe: { _ in nil }
+      describe: fake.describe
     )
     XCTAssertNil(ForegroundProcessResolver.current(via: probe))
+  }
+
+  // SSH session spawned via cfg.command: ghostty does `sh -c 'ssh …'`
+  // which execs into ssh, so shellPID == tcgetpgrp == ssh's pid. The prior
+  // version of the resolver short-circuited to nil on pgid==shell, missing
+  // ssh entirely. This test pins the fix: describe and keep non-shell pids.
+  func test_primaryPath_capturesSSHEvenWhenPgidEqualsShellPID() {
+    let fake = FakeDescribe()
+    fake.byPID[42] = .init(executable: "ssh", path: "/usr/bin/ssh",
+                            argv: ["ssh", "user@host"], pid: 42)
+    let probe = ForegroundProcessProbe(
+      ptyFD: { 5 },
+      shellPID: { 42 },
+      tcgetpgrpOnPTY: { _ in 42 },
+      deepestDescendant: { _ in nil },
+      describe: fake.describe
+    )
+    let result = ForegroundProcessResolver.current(via: probe)
+    XCTAssertEqual(result?.executable, "ssh")
+    XCTAssertEqual(result?.argv, ["ssh", "user@host"])
   }
 
   func test_fallbackPath_walksDescendantsWhenPTYUnavailable() {
