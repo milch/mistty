@@ -314,10 +314,9 @@ struct MisttyConfig: Sendable, Equatable {
         guard let t = entry.table,
               let match = t["match"]?.string, !match.isEmpty
         else { return nil }
-        let strategy = t["strategy"]?.string
         return RestoreCommandRule(
           match: match,
-          strategy: (strategy?.isEmpty == true) ? nil : strategy
+          strategy: t["strategy"]?.string
         )
       }
     }
