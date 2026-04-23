@@ -7,7 +7,9 @@ final class ForegroundProcessResolverTests: XCTestCase {
     func describe(pid: pid_t) -> ForegroundProcess? { byPID[pid] }
   }
 
-  func test_primaryPath_returnsPgroupLeaderWhenNotShell() {
+  // Simple foreground app: the pgroup contains just nvim (fish did setpgid
+  // when launching it as the foreground job).
+  func test_pgroupPath_returnsLoneNonShellInForegroundPgroup() {
     let fake = FakeDescribe()
     fake.byPID[4242] = .init(executable: "nvim", path: "/usr/bin/nvim",
                              argv: ["nvim", "foo"], pid: 4242)
@@ -15,6 +17,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       ptyFD: { 5 },
       shellPID: { 1000 },
       tcgetpgrpOnPTY: { _ in 4242 },
+      pidsInPgroup: { pgid in pgid == 4242 ? [4242] : [] },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -23,8 +26,9 @@ final class ForegroundProcessResolverTests: XCTestCase {
     XCTAssertEqual(result?.argv, ["nvim", "foo"])
   }
 
-  // Plain shell at the prompt: tcgetpgrp describes to `zsh` → no capture.
-  func test_primaryPath_returnsNilWhenShellIsForeground() {
+  // Idle prompt: tcgetpgrp returns the shell's own pid, pgroup = [shell],
+  // filter removes it, return nil.
+  func test_pgroupPath_returnsNilWhenOnlyShellInForegroundPgroup() {
     let fake = FakeDescribe()
     fake.byPID[1000] = .init(executable: "zsh", path: "/bin/zsh",
                               argv: ["-zsh"], pid: 1000)
@@ -32,39 +36,19 @@ final class ForegroundProcessResolverTests: XCTestCase {
       ptyFD: { 5 },
       shellPID: { 1000 },
       tcgetpgrpOnPTY: { _ in 1000 },
+      pidsInPgroup: { pgid in pgid == 1000 ? [1000] : [] },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     XCTAssertNil(ForegroundProcessResolver.current(via: probe))
   }
 
-  // SSH session spawned via cfg.command: ghostty does `sh -c 'ssh …'`
-  // which execs into ssh, so shellPID == tcgetpgrp == ssh's pid. The prior
-  // version of the resolver short-circuited to nil on pgid==shell, missing
-  // ssh entirely. This test pins the fix: describe and keep non-shell pids.
-  func test_primaryPath_capturesSSHEvenWhenPgidEqualsShellPID() {
-    let fake = FakeDescribe()
-    fake.byPID[42] = .init(executable: "ssh", path: "/usr/bin/ssh",
-                            argv: ["ssh", "user@host"], pid: 42)
-    let probe = ForegroundProcessProbe(
-      ptyFD: { 5 },
-      shellPID: { 42 },
-      tcgetpgrpOnPTY: { _ in 42 },
-      deepestDescendant: { _ in nil },
-      describe: fake.describe
-    )
-    let result = ForegroundProcessResolver.current(via: probe)
-    XCTAssertEqual(result?.executable, "ssh")
-    XCTAssertEqual(result?.argv, ["ssh", "user@host"])
-  }
-
-  // Auto-launched SSH via Session Manager goes through
-  // `/usr/bin/login -flp $USER /bin/bash --noprofile --norc -c "exec -l ssh …"`.
-  // Empirically login forks rather than exec-chaining, so shellPID stays
-  // pointed at login (with executable "login") while ssh runs as a
-  // descendant in the same process group. The resolver must descend
-  // through login to find the real app.
-  func test_primaryPath_descendsThroughLoginToFindSSH() {
+  // Session-Manager auto-launched ssh: ghostty spawns
+  // `/usr/bin/login -flp $USER /bin/bash --noprofile --norc -c "exec -l ssh …"`,
+  // login forks bash which execs into ssh, all in login's pgroup. The
+  // foreground pgroup on the tty is login's pid (inherited), but the
+  // actual app the user cares about is ssh. Filter out login → ssh wins.
+  func test_pgroupPath_skipsLoginWrapperToFindSSH() {
     let fake = FakeDescribe()
     fake.byPID[81416] = .init(executable: "login", path: "/usr/bin/login",
                               argv: ["login"], pid: 81416)
@@ -72,9 +56,10 @@ final class ForegroundProcessResolverTests: XCTestCase {
                               argv: ["ssh", "isengard"], pid: 81418)
     let probe = ForegroundProcessProbe(
       ptyFD: { 27 },
-      shellPID: { 81416 },           // ghostty tracks login
-      tcgetpgrpOnPTY: { _ in 81416 }, // foreground pgroup == login's pid
-      deepestDescendant: { _ in 81418 }, // ssh is the real child
+      shellPID: { 81416 },
+      tcgetpgrpOnPTY: { _ in 81416 },
+      pidsInPgroup: { pgid in pgid == 81416 ? [81416, 81418] : [] },
+      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
@@ -82,14 +67,43 @@ final class ForegroundProcessResolverTests: XCTestCase {
     XCTAssertEqual(result?.argv, ["ssh", "isengard"])
   }
 
+  // Regression for the dark-notify bug: fish spawns dark-notify in the
+  // background (gets its own pgroup) and nvim in the foreground (different
+  // pgroup). tcgetpgrp returns nvim's pgroup, pidsInPgroup returns just
+  // nvim — dark-notify isn't in the foreground pgroup and doesn't poison
+  // the result. The OLD descendant-walk resolver picked dark-notify
+  // arbitrarily; this test pins the fix.
+  func test_pgroupPath_ignoresBackgroundedSiblings() {
+    let fake = FakeDescribe()
+    // dark-notify runs as a background job — different pgroup.
+    fake.byPID[5000] = .init(executable: "dark-notify", path: "/opt/homebrew/bin/dark-notify",
+                              argv: ["/opt/homebrew/bin/dark-notify"], pid: 5000)
+    // nvim is the foreground job.
+    fake.byPID[6000] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
+                              argv: ["nvim"], pid: 6000)
+    let probe = ForegroundProcessProbe(
+      ptyFD: { 7 },
+      shellPID: { 2000 },
+      tcgetpgrpOnPTY: { _ in 6000 },             // nvim owns the tty
+      pidsInPgroup: { pgid in pgid == 6000 ? [6000] : [] },
+      deepestDescendant: { _ in 5000 },          // would pick dark-notify — unused
+      describe: fake.describe
+    )
+    let result = ForegroundProcessResolver.current(via: probe)
+    XCTAssertEqual(result?.executable, "nvim")
+  }
+
+  // PTY fd unavailable (e.g. ghostty patch missing) → fall back to
+  // descendant walk.
   func test_fallbackPath_walksDescendantsWhenPTYUnavailable() {
     let fake = FakeDescribe()
     fake.byPID[7] = .init(executable: "htop", path: "/usr/bin/htop",
                           argv: ["htop"], pid: 7)
     let probe = ForegroundProcessProbe(
-      ptyFD: { -1 },                      // no pty fd
+      ptyFD: { -1 },
       shellPID: { 2 },
       tcgetpgrpOnPTY: { _ in -1 },
+      pidsInPgroup: { _ in [] },
       deepestDescendant: { _ in 7 },
       describe: fake.describe
     )
@@ -102,6 +116,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       ptyFD: { -1 },
       shellPID: { 2 },
       tcgetpgrpOnPTY: { _ in -1 },
+      pidsInPgroup: { _ in [] },
       deepestDescendant: { _ in nil },
       describe: { _ in nil }
     )
@@ -113,6 +128,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       ptyFD: { -1 },
       shellPID: { -1 },
       tcgetpgrpOnPTY: { _ in -1 },
+      pidsInPgroup: { _ in [] },
       deepestDescendant: { _ in nil },
       describe: { _ in nil }
     )
@@ -126,18 +142,12 @@ final class ForegroundProcessResolverTests: XCTestCase {
   }
 
   func test_stripLoginShellDash_leavesGenuineFlagsAlone() {
-    // A real flag like `-l` is NOT argv[0] — it'd appear at argv[1+].
-    // argv[0] with a `-` prefix but suffix that doesn't match executable
-    // (e.g. argv[0] = "-bash", executable = "sh") is still treated as
-    // login-shell marker (only matched when the suffix == basename).
     let result = ForegroundProcessResolver.stripLoginShellDash(
       ["nvim", "-u", "init.lua"], executable: "nvim")
     XCTAssertEqual(result, ["nvim", "-u", "init.lua"])
   }
 
   func test_stripLoginShellDash_preservesNonMatchingDashPrefix() {
-    // If the suffix after `-` doesn't match executable, it's not the
-    // login-shell convention and we leave it alone.
     let result = ForegroundProcessResolver.stripLoginShellDash(
       ["-weirdname", "arg"], executable: "ssh")
     XCTAssertEqual(result, ["-weirdname", "arg"])

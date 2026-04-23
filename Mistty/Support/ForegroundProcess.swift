@@ -9,11 +9,12 @@ struct ForegroundProcess: Equatable {
 }
 
 /// Injectable probe so tests can drive the resolver without a real pane.
-/// Every closure returns `-1` / `nil` for the "unavailable" case.
+/// Every closure returns `-1` / `nil` / `[]` for the "unavailable" case.
 struct ForegroundProcessProbe {
   var ptyFD: () -> Int32
   var shellPID: () -> pid_t
   var tcgetpgrpOnPTY: (Int32) -> pid_t
+  var pidsInPgroup: (pid_t) -> [pid_t]
   var deepestDescendant: (pid_t) -> pid_t?
   var describe: (pid_t) -> ForegroundProcess?
 }
@@ -27,6 +28,7 @@ enum ForegroundProcessResolver {
       ptyFD: { pane.ptyFD },
       shellPID: { pane.shellPID },
       tcgetpgrpOnPTY: { fd in tcgetpgrp(fd) },
+      pidsInPgroup: Self.pidsInPgroup(_:),
       deepestDescendant: Self.deepestLiveDescendant(of:),
       describe: Self.describe(pid:)
     )
@@ -46,32 +48,56 @@ enum ForegroundProcessResolver {
   ]
 
   /// Pure dispatch logic; all I/O lives in the probe closures.
+  ///
+  /// Strategy: ask the tty which *process group* has the foreground
+  /// (`tcgetpgrp`), enumerate all pids in that pgroup
+  /// (`proc_listpids(PROC_PGRP_ONLY,…)`), filter out shells and wrapper
+  /// processes, and return the remaining non-shell. This correctly
+  /// distinguishes foreground from backgrounded siblings (e.g. a fish
+  /// shell with both `nvim` in the foreground and `dark-notify` in the
+  /// background — only nvim's pgroup owns the tty) AND unwraps ghostty's
+  /// macOS login-shell spawn (`login → [bash →] ssh` inherit login's
+  /// pgid; filtering `login` out leaves ssh).
+  ///
+  /// Fallback paths handle the `ptyFD = -1` case (ghostty patch missing)
+  /// via a descendant walk — less precise but better than nothing.
   static func current(via probe: ForegroundProcessProbe) -> ForegroundProcess? {
-    // First: walk descendants of the spawned process. This catches both
-    // "user typed `ssh host` at zsh" (descends zsh → ssh) and
-    // "cfg.command = 'ssh host' went through login/bash/ssh" (descends
-    // login → bash → ssh, or whatever subset macOS actually forks).
-    let shell = probe.shellPID()
-    if shell > 0, let deepest = probe.deepestDescendant(shell), deepest != shell,
-       let described = probe.describe(deepest),
-       !shellExecutables.contains(described.executable)
-    {
-      return described
-    }
-    // Second: tcgetpgrp on the pty, for cases where exec-chains (rather
-    // than fork-chains) leave the spawned process's own pid as the
-    // foreground app — e.g. a user ran `ssh host` bare in a pane spawned
-    // without a cfg.command.
     let fd = probe.ptyFD()
     if fd >= 0 {
       let pgid = probe.tcgetpgrpOnPTY(fd)
-      if pgid > 0, let described = probe.describe(pgid),
-         !shellExecutables.contains(described.executable)
-      {
-        return described
+      if pgid > 0 {
+        let pids = probe.pidsInPgroup(pgid)
+        // Prefer pids whose basename isn't a shell/wrapper. If multiple
+        // such pids exist (unlikely in practice), the one closest to the
+        // pgroup leader wins — proc_listpids returns pgroup members
+        // ordered by the kernel; we take the last one because the leaf
+        // process (e.g. ssh exec'd over bash) tends to come after its
+        // parent in that listing.
+        var candidate: ForegroundProcess? = nil
+        for pid in pids {
+          guard let described = probe.describe(pid) else { continue }
+          if !shellExecutables.contains(described.executable) {
+            candidate = described
+          }
+        }
+        if let candidate { return candidate }
+        // All pids in the foreground pgroup are shells/wrappers — user
+        // is at a plain prompt. Explicit nil, don't fall through.
+        if !pids.isEmpty { return nil }
+        // Empty pgroup listing (shouldn't happen in practice). Fall
+        // through to the descendant walk as a last resort.
       }
     }
-    return nil
+    // Fallback: descendant walk from ghostty's tracked pid. Used when
+    // the PTY fd is unavailable (patch missing) OR the pgroup lookup
+    // came back empty. Not as precise — picks arbitrarily within the
+    // deepest level — but still more useful than giving up.
+    let shell = probe.shellPID()
+    guard shell > 0, let deepest = probe.deepestDescendant(shell), deepest != shell,
+          let described = probe.describe(deepest),
+          !shellExecutables.contains(described.executable)
+    else { return nil }
+    return described
   }
 
   // MARK: - Real-syscall helpers
@@ -97,15 +123,26 @@ enum ForegroundProcessResolver {
   }
 
   private static func childrenOf(_ parent: pid_t) -> [pid_t] {
-    // proc_listpids(type, typeinfo, buffer, buffersize-in-bytes). Both the
-    // first probe and the second populated call return *bytes* written, not
-    // pid count. We need to convert to pid_t elements.
-    let byteCount = proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), nil, 0)
+    listPids(type: UInt32(PROC_PPID_ONLY), info: UInt32(parent))
+  }
+
+  /// All pids that belong to the given process group. Used by the
+  /// foreground-detection primary path.
+  static func pidsInPgroup(_ pgid: pid_t) -> [pid_t] {
+    listPids(type: UInt32(PROC_PGRP_ONLY), info: UInt32(pgid))
+  }
+
+  /// Shared helper around `proc_listpids(type, info, buf, bufsize)` — the
+  /// tricky bit is that the size is in BYTES, both for the first probe
+  /// call (size = 0 returns required bytes) and the populated call
+  /// (returns bytes actually written). Divide by stride to get pid count.
+  private static func listPids(type: UInt32, info: UInt32) -> [pid_t] {
+    let byteCount = proc_listpids(type, info, nil, 0)
     guard byteCount > 0 else { return [] }
     let pidCapacity = Int(byteCount) / MemoryLayout<pid_t>.stride
     var buf = [pid_t](repeating: 0, count: pidCapacity)
     let actualBytes = buf.withUnsafeMutableBufferPointer { ptr in
-      proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), ptr.baseAddress, byteCount)
+      proc_listpids(type, info, ptr.baseAddress, byteCount)
     }
     guard actualBytes > 0 else { return [] }
     let n = Int(actualBytes) / MemoryLayout<pid_t>.stride
