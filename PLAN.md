@@ -20,10 +20,19 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ### Save layouts
 
-- There should be a way for layouts for a given session to be saved to file and loaded back again, i.e. if you have 2 tabs in a session and each of the tabs has 2 panes, reloading it will restore this
-  - Just use standard macOS state restoration for now. Something more complex can come later.
-- Configurable allowlist of processes that should be relaunched when restoring a layout, e.g. nvim, claude, ssh
-  - Some sort of strategy configuration, e.g. `claude = "claude --resume"`
+Design: `docs/superpowers/specs/2026-04-22-state-restoration-design.md`
+
+v1 scope: auto-save workspace on quit via AppKit state restoration, auto-restore on launch. Structure only (sessions/tabs/panes/layouts/CWDs). Configurable allowlist of processes to relaunch (e.g. `nvim`, `claude` → `claude --resume`, `ssh`). Two libghostty patches (expose shell PID, expose PTY master fd) so we can resolve the foreground process via `tcgetpgrp`.
+
+v2+ followups (intentionally out of v1):
+
+- Named / user-saved layouts (`mistty-cli layout save <name>` / `load <name>`). Additive on top of the v1 snapshot schema.
+- Scrollback preservation — needs a libghostty screen-buffer write API that doesn't exist today. Terminal.app-style parity would require a sizable upstream patch.
+- Pipeline capture — replay `git log | less` as a pipeline instead of just the leader.
+- `match_regex` / `match_any` allowlist matchers if the flat-basename match turns out to be limiting.
+- Window frame / position persistence — unlocked once multi-window is fixed and we switch to per-window encoding.
+- Popup, copy/window/search mode, zoomed-pane persistence — all ephemeral today; snapshot schema can absorb them without migration if a real need shows up.
+- Upstream the shell-PID accessor patch to ghostty.
 
 ### Keyboard shortcut configuration
 
