@@ -546,4 +546,22 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       reply(self.encode(responses), nil)
     }
   }
+
+  // MARK: - Debug
+
+  func getStateSnapshot(reply: @escaping (Data?, Error?) -> Void) {
+    let reply = Reply(handler: reply)
+    Task { @MainActor in
+      let snapshot = self.store.takeSnapshot()
+      do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(snapshot)
+        reply(data, nil)
+      } catch {
+        reply(nil, error)
+      }
+    }
+  }
 }

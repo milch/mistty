@@ -47,4 +47,8 @@ public protocol MisttyServiceProtocol {
     func closePopup(popupId: Int, reply: @escaping (Data?, Error?) -> Void)
     func togglePopup(sessionId: Int, name: String, reply: @escaping (Data?, Error?) -> Void)
     func listPopups(sessionId: Int, reply: @escaping (Data?, Error?) -> Void)
+
+    // MARK: - Debug
+
+    func getStateSnapshot(reply: @escaping (Data?, Error?) -> Void)
 }
