@@ -18,13 +18,9 @@ Furthermore, it is fully keyboard driven (any function MUST be accessible via ke
 
 ## TODO
 
-### Save layouts
+### State restoration v2+ followups
 
-Design: `docs/superpowers/specs/2026-04-22-state-restoration-design.md`
-
-v1 scope: auto-save workspace on quit via AppKit state restoration, auto-restore on launch. Structure only (sessions/tabs/panes/layouts/CWDs). Configurable allowlist of processes to relaunch (e.g. `nvim`, `claude` → `claude --resume`, `ssh`). Two libghostty patches (expose shell PID, expose PTY master fd) so we can resolve the foreground process via `tcgetpgrp`.
-
-v2+ followups (intentionally out of v1):
+v1 is shipped (see `## Implemented` below). Outstanding work:
 
 - Named / user-saved layouts (`mistty-cli layout save <name>` / `load <name>`). Additive on top of the v1 snapshot schema.
 - Scrollback preservation — needs a libghostty screen-buffer write API that doesn't exist today. Terminal.app-style parity would require a sizable upstream patch.
@@ -33,6 +29,7 @@ v2+ followups (intentionally out of v1):
 - Window frame / position persistence — unlocked once multi-window is fixed and we switch to per-window encoding.
 - Popup, copy/window/search mode, zoomed-pane persistence — all ephemeral today; snapshot schema can absorb them without migration if a real need shows up.
 - Upstream the shell-PID accessor patch to ghostty.
+- **Dev / release bundle-ID split** — both builds use `com.mistty.app`, so AppKit's saved-state directory is shared. Running dev while release is open risks clobbering release's state on quit. Fix: give the dev bundle a distinct `CFBundleIdentifier` (e.g. `com.mistty.app.dev`) when built via `just bundle`. Blocker for safe dev↔release isolation of state restoration.
 
 ### Keyboard shortcut configuration
 
@@ -231,6 +228,20 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - `theme` is emitted before other passthrough keys so user overrides win over the theme's defaults; remaining keys follow alphabetical order
 - Top-level `font_size`, `font_family`, `cursor_style` in `config.toml` now flow through to ghostty when they differ from Mistty defaults (previously dead settings)
 - `[ui].content_padding_*` and `[ui].pane_border_*` still take precedence over anything under `[ghostty]`
+
+### State restoration (v1)
+
+Spec: `docs/superpowers/specs/2026-04-22-state-restoration-design.md`; plan: `docs/superpowers/plans/2026-04-22-state-restoration.md`.
+
+- Auto-save workspace on quit (and on AppKit's periodic checkpoints) via `NSApplicationDelegate`'s `application(_:willEncodeRestorableState:)`; auto-restore on launch via `didDecodeRestorableState` before the SwiftUI window materializes (verified via spike). `applicationSupportsSecureRestorableState → true`.
+- Structure preserved: sessions/tabs/panes/layouts/CWDs, split ratios, custom session/tab names, `lastActivatedAt`, active session/tab/pane markers. Pane IDs preserved verbatim across restore; ID counters advance past max seen ID.
+- Allowlist-driven process relaunch via `[[restore.command]]` in `config.toml`. `match` on basename; optional `strategy` string replaces argv, absent/empty replays captured argv POSIX-shell-quoted. Examples in `docs/config-example.toml` cover nvim/vim/claude/ssh/less/htop.
+- Foreground process detection via `tcgetpgrp(pty_fd)` on the pane's PTY (primary) with a descendants-of-shell-PID walk as fallback. Both paths feed `proc_pidpath` + `KERN_PROCARGS2 sysctl` to read the executable and full argv. Two libghostty patches add `ghostty_surface_command_pid` and `ghostty_surface_pty_fd` exports.
+- `StateRestorationObserver` uses `withObservationTracking` to call `NSApp.invalidateRestorableState()` on any snapshot-relevant mutation (session/tab/pane add/remove, reorder, rename, activePane change, CWD/OSC-7 change, split ratio change). AppKit coalesces and serializes.
+- `WorkspaceSnapshot` schema versioned (`version = 1`); unknown versions bail to empty state with a log line. DTOs live in `MisttyShared/Snapshot/`.
+- Missing-directory fallback: pane CWDs that no longer exist at restore time (user deleted the dir) are replaced with `$HOME` so the shell doesn't die immediately.
+- Hold Option on Quit clears saved state; System Settings → "Close windows when quitting an app" is honored natively (AppKit handles both).
+- `mistty-cli debug state` dumps the current `WorkspaceSnapshot` as pretty-printed JSON via a new `getStateSnapshot` IPC RPC.
 
 ### Bug fixes
 
