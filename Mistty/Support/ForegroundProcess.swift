@@ -15,6 +15,7 @@ struct ForegroundProcessProbe {
   var shellPID: () -> pid_t
   var tcgetpgrpOnPTY: (Int32) -> pid_t
   var pidsInPgroup: (pid_t) -> [pid_t]
+  var childrenOf: (pid_t) -> [pid_t]
   var deepestDescendant: (pid_t) -> pid_t?
   var describe: (pid_t) -> ForegroundProcess?
 }
@@ -29,6 +30,7 @@ enum ForegroundProcessResolver {
       shellPID: { pane.shellPID },
       tcgetpgrpOnPTY: { fd in tcgetpgrp(fd) },
       pidsInPgroup: Self.pidsInPgroup(_:),
+      childrenOf: Self.childrenOf(_:),
       deepestDescendant: Self.deepestLiveDescendant(of:),
       describe: Self.describe(pid:)
     )
@@ -67,12 +69,22 @@ enum ForegroundProcessResolver {
       let pgid = probe.tcgetpgrpOnPTY(fd)
       if pgid > 0 {
         let pids = probe.pidsInPgroup(pgid)
-        // Prefer pids whose basename isn't a shell/wrapper. If multiple
-        // such pids exist (unlikely in practice), the one closest to the
-        // pgroup leader wins — proc_listpids returns pgroup members
-        // ordered by the kernel; we take the last one because the leaf
-        // process (e.g. ssh exec'd over bash) tends to come after its
-        // parent in that listing.
+        // Preferred: the pgroup leader (pid == pgid). When a shell forks a
+        // command it typically `setpgid(child, child)`s the child, making
+        // the command itself the pgroup leader. That's the process the
+        // user ran — even when it later spawns helpers (nvim's LSP
+        // servers, plugin async jobs) that share the pgroup. Pinning on
+        // pgid avoids mis-capture when the kernel's arbitrary ordering of
+        // pgroup members happens to place a helper after the leader.
+        if pids.contains(pgid), let described = probe.describe(pgid),
+           !shellExecutables.contains(described.executable) {
+          return descendIntoSameExecutable(from: described, probe: probe)
+        }
+        // Fallback: the pgroup leader is a shell/wrapper (e.g. ghostty's
+        // `login → exec-into-bash → exec-into-ssh` chain leaves `login` as
+        // leader). Scan the remaining pgroup members for a non-shell.
+        // Kernel ordering usually places leaf processes after parents, so
+        // the last non-shell tends to be the one the user cares about.
         var candidate: ForegroundProcess? = nil
         for pid in pids {
           guard let described = probe.describe(pid) else { continue }
@@ -80,7 +92,7 @@ enum ForegroundProcessResolver {
             candidate = described
           }
         }
-        if let candidate { return candidate }
+        if let candidate { return descendIntoSameExecutable(from: candidate, probe: probe) }
         // All pids in the foreground pgroup are shells/wrappers — user
         // is at a plain prompt. Explicit nil, don't fall through.
         if !pids.isEmpty { return nil }
@@ -98,6 +110,30 @@ enum ForegroundProcessResolver {
           !shellExecutables.contains(described.executable)
     else { return nil }
     return described
+  }
+
+  /// Follow a chain of same-executable children from `start`, returning the
+  /// innermost. Handles programs that fork themselves (notably Neovim 0.12+,
+  /// which forks into a TUI parent + a server child — both named `nvim`). The
+  /// pgroup leader / tty owner is the TUI parent, but `getpid()` called from
+  /// inside nvim's Lua runtime returns the server child. Capturing the leaf
+  /// aligns Mistty's captured PID with what the user's autocmds see, which
+  /// makes `{{pid}}` substitution actually line up with the session files the
+  /// user wrote. A no-op for processes that don't self-fork.
+  static func descendIntoSameExecutable(
+    from start: ForegroundProcess, probe: ForegroundProcessProbe
+  ) -> ForegroundProcess {
+    var current = start
+    // Bounded in case of some pathological cycle or very deep chain —
+    // real-world TUI/server splits are depth 1.
+    for _ in 0..<8 {
+      let children = probe.childrenOf(current.pid)
+      guard let sameNamed = children.lazy.compactMap(probe.describe)
+        .first(where: { $0.executable == current.executable })
+      else { break }
+      current = sameNamed
+    }
+    return current
   }
 
   // MARK: - Real-syscall helpers
@@ -122,7 +158,7 @@ enum ForegroundProcessResolver {
     return deepest
   }
 
-  private static func childrenOf(_ parent: pid_t) -> [pid_t] {
+  static func childrenOf(_ parent: pid_t) -> [pid_t] {
     listPids(type: UInt32(PROC_PPID_ONLY), info: UInt32(parent))
   }
 
