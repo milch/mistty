@@ -22,6 +22,30 @@ final class WorkspaceSnapshotTests: XCTestCase {
     XCTAssertEqual(try roundTrip(pane), pane)
   }
 
+  // End-to-end: a pane snapshot carrying a `CapturedProcess` with `pid`
+  // should survive JSON round-trip, and a `{{pid}}`-using strategy should
+  // resolve against the round-tripped value to the expected command string.
+  // Pins the full capture → serialize → decode → resolve pipeline so a
+  // future Codable change that silently strips `pid` is caught here.
+  func test_paneSnapshot_roundTripsPidAndResolvesStrategy() throws {
+    let original = PaneSnapshot(
+      id: 7,
+      directory: URL(fileURLWithPath: "/tmp"),
+      currentWorkingDirectory: URL(fileURLWithPath: "/tmp/work"),
+      captured: CapturedProcess(executable: "nvim", argv: ["nvim"], pid: 4242)
+    )
+    let restored = try roundTrip(original)
+    XCTAssertEqual(restored.captured?.pid, 4242)
+
+    let config = RestoreConfig(commands: [
+      .init(match: "nvim", strategy: "nvim -S {{pid}}.vim",
+            env: ["NVIM_RESTORE_FROM_PID": "{{pid}}"]),
+    ])
+    XCTAssertEqual(
+      config.resolve(restored.captured!),
+      "env NVIM_RESTORE_FROM_PID=4242 nvim -S 4242.vim")
+  }
+
   func test_layoutLeaf_roundTrip() throws {
     let leaf = LayoutNodeSnapshot.leaf(pane: PaneSnapshot(id: 1))
     XCTAssertEqual(try roundTrip(leaf), leaf)

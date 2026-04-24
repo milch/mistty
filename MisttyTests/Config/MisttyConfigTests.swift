@@ -230,6 +230,23 @@ final class MisttyConfigTests: XCTestCase {
     ])
   }
 
+  // Users can write scalar non-string values in TOML env tables; we coerce
+  // them rather than silently dropping. Matches the principle-of-least-
+  // astonishment for a config field that's meant to be "set these env vars."
+  func test_parse_restoreCommand_coercesScalarEnvValues() throws {
+    let toml = """
+    [[restore.command]]
+    match = "app"
+    env = { PORT = 8080, RATE = 0.5, DEBUG = true, NAME = "explicit" }
+    """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.restore.commands, [
+      .init(match: "app", strategy: nil, env: [
+        "PORT": "8080", "RATE": "0.5", "DEBUG": "true", "NAME": "explicit",
+      ]),
+    ])
+  }
+
   func test_save_restoreCommand_withEnv_roundTrip() throws {
     var config = MisttyConfig()
     config.restore = RestoreConfig(commands: [

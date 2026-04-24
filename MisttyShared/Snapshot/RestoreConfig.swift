@@ -6,6 +6,12 @@ public struct RestoreCommandRule: Codable, Sendable, Equatable {
   /// Environment variables to set when running the restored command.
   /// Values support `{{pid}}` substitution. Emitted as an `env K=V …` prefix
   /// so it works across shells. Empty by default.
+  ///
+  /// Limitation: `env` expects its trailing argument to be an exec'able
+  /// command, not a shell expression. If your `strategy` contains shell
+  /// operators like `&&`, `;`, `|`, or redirections, the prepended `env`
+  /// only applies to the leftmost command. Wrap such strategies in
+  /// `sh -c '…'` yourself if you need that.
   public var env: [String: String]
 
   public init(match: String, strategy: String? = nil, env: [String: String] = [:]) {
@@ -69,15 +75,9 @@ public struct RestoreConfig: Codable, Sendable, Equatable {
     guard !env.isEmpty else { return base }
     let pairs = env.keys.sorted().map { key -> String in
       let value = substitute(env[key] ?? "", captured: captured)
-      return "\(key)=\(shellQuote(value))"
+      return "\(key)=\(posixSingleQuote(value))"
     }
     return "env \(pairs.joined(separator: " ")) \(base)"
-  }
-
-  private static func shellQuote(_ s: String) -> String {
-    if !s.isEmpty, s.allSatisfy(isSafeShellChar) { return s }
-    let escaped = s.replacingOccurrences(of: "'", with: #"'\''"#)
-    return "'\(escaped)'"
   }
 
   /// Replace `{{pid}}` in a user-supplied strategy with the captured PID from
@@ -94,11 +94,18 @@ public struct RestoreConfig: Codable, Sendable, Equatable {
   /// POSIX single-quote escape any argv element that contains shell
   /// metacharacters; join with single spaces.
   private static func shellJoin(_ argv: [String]) -> String {
-    argv.map { arg in
-      if arg.allSatisfy(isSafeShellChar) { return arg }
-      let escaped = arg.replacingOccurrences(of: "'", with: #"'\''"#)
-      return "'\(escaped)'"
-    }.joined(separator: " ")
+    argv.map(posixSingleQuote(_:)).joined(separator: " ")
+  }
+
+  /// POSIX single-quote a string when it contains anything outside the
+  /// shell-safe set. Empty strings quote to `''` so they survive as a
+  /// distinct empty argument. Assumes no embedded NUL (kernel rejects those
+  /// on exec anyway); UTF-8 bytes pass through unchanged since POSIX
+  /// single-quoting is byte-literal.
+  static func posixSingleQuote(_ s: String) -> String {
+    if !s.isEmpty, s.allSatisfy(isSafeShellChar) { return s }
+    let escaped = s.replacingOccurrences(of: "'", with: #"'\''"#)
+    return "'\(escaped)'"
   }
 
   private static func isSafeShellChar(_ c: Character) -> Bool {

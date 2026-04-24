@@ -16,6 +16,11 @@ struct ForegroundProcessProbe {
   var tcgetpgrpOnPTY: (Int32) -> pid_t
   var pidsInPgroup: (pid_t) -> [pid_t]
   var childrenOf: (pid_t) -> [pid_t]
+  /// pgid of `pid`. Used by `descendIntoSameExecutable` to stop walking the
+  /// same-executable child chain when a child sits in a different process
+  /// group (e.g. an outer nvim's `:terminal` spawns an inner nvim with its
+  /// own pgid). Returns -1 on failure.
+  var pgidOf: (pid_t) -> pid_t
   var deepestDescendant: (pid_t) -> pid_t?
   var describe: (pid_t) -> ForegroundProcess?
 }
@@ -31,6 +36,7 @@ enum ForegroundProcessResolver {
       tcgetpgrpOnPTY: { fd in tcgetpgrp(fd) },
       pidsInPgroup: Self.pidsInPgroup(_:),
       childrenOf: Self.childrenOf(_:),
+      pgidOf: { pid in getpgid(pid) },
       deepestDescendant: Self.deepestLiveDescendant(of:),
       describe: Self.describe(pid:)
     )
@@ -78,7 +84,7 @@ enum ForegroundProcessResolver {
         // pgroup members happens to place a helper after the leader.
         if pids.contains(pgid), let described = probe.describe(pgid),
            !shellExecutables.contains(described.executable) {
-          return descendIntoSameExecutable(from: described, probe: probe)
+          return descendIntoSameExecutable(from: described, pgid: pgid, probe: probe)
         }
         // Fallback: the pgroup leader is a shell/wrapper (e.g. ghostty's
         // `login → exec-into-bash → exec-into-ssh` chain leaves `login` as
@@ -92,7 +98,7 @@ enum ForegroundProcessResolver {
             candidate = described
           }
         }
-        if let candidate { return descendIntoSameExecutable(from: candidate, probe: probe) }
+        if let candidate { return descendIntoSameExecutable(from: candidate, pgid: pgid, probe: probe) }
         // All pids in the foreground pgroup are shells/wrappers — user
         // is at a plain prompt. Explicit nil, don't fall through.
         if !pids.isEmpty { return nil }
@@ -120,15 +126,22 @@ enum ForegroundProcessResolver {
   /// aligns Mistty's captured PID with what the user's autocmds see, which
   /// makes `{{pid}}` substitution actually line up with the session files the
   /// user wrote. A no-op for processes that don't self-fork.
+  ///
+  /// Stops when the next same-named child is in a different process group —
+  /// that distinguishes the intended "server child inherits TUI's pgid" case
+  /// from a nested scenario like outer-nvim opening `:terminal` which spawns
+  /// another nvim with its own pgid. Nested ones shouldn't win.
   static func descendIntoSameExecutable(
-    from start: ForegroundProcess, probe: ForegroundProcessProbe
+    from start: ForegroundProcess, pgid: pid_t, probe: ForegroundProcessProbe
   ) -> ForegroundProcess {
     var current = start
-    // Bounded in case of some pathological cycle or very deep chain —
-    // real-world TUI/server splits are depth 1.
-    for _ in 0..<8 {
+    // Real-world self-fork chains are depth 1 (TUI → server). A small bound
+    // keeps us safe against a runaway same-named chain.
+    for _ in 0..<4 {
       let children = probe.childrenOf(current.pid)
-      guard let sameNamed = children.lazy.compactMap(probe.describe)
+      guard let sameNamed = children.lazy
+        .filter({ probe.pgidOf($0) == pgid })
+        .compactMap(probe.describe)
         .first(where: { $0.executable == current.executable })
       else { break }
       current = sameNamed

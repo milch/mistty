@@ -19,6 +19,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 4242 },
       pidsInPgroup: { pgid in pgid == 4242 ? [4242] : [] },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -39,6 +40,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 1000 },
       pidsInPgroup: { pgid in pgid == 1000 ? [1000] : [] },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -62,6 +64,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 81416 },
       pidsInPgroup: { pgid in pgid == 81416 ? [81416, 81418] : [] },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -94,6 +97,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
         pgid == 18102 ? [18102, 18101] : []
       },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -122,6 +126,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 6000 },             // nvim owns the tty
       pidsInPgroup: { pgid in pgid == 6000 ? [6000] : [] },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in 5000 },          // would pick dark-notify — unused
       describe: fake.describe
     )
@@ -141,6 +146,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in -1 },
       pidsInPgroup: { _ in [] },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in 7 },
       describe: fake.describe
     )
@@ -155,6 +161,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in -1 },
       pidsInPgroup: { _ in [] },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: { _ in nil }
     )
@@ -168,6 +175,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in -1 },
       pidsInPgroup: { _ in [] },
       childrenOf: { _ in [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: { _ in nil }
     )
@@ -202,12 +210,119 @@ final class ForegroundProcessResolverTests: XCTestCase {
         if parent == 23804 { return [23805] }  // dark-notify, different exe
         return []
       },
+      pgidOf: { pid in
+        // Server child inherits TUI's pgid.
+        if pid == 23803 || pid == 23804 { return 23803 }
+        return pid
+      },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
     XCTAssertEqual(result?.pid, 23804, "should descend from TUI (23803) to server (23804)")
     XCTAssertEqual(result?.executable, "nvim")
+  }
+
+  // Regression for the nested-nvim pgid-guard: outer nvim opens `:terminal`,
+  // a shell inside opens another nvim. The inner nvim is a same-named
+  // descendant of the outer, but in a different process group (the inner
+  // shell setpgid's its foreground job). Descent must stop at the outer
+  // server and NOT keep walking into the inner nvim — the outer is still
+  // the pane's foreground process. Without the pgid-guard we'd capture the
+  // inner nvim's server PID and type the wrong session file on restore.
+  func test_pgroupPath_pgidGuardStopsDescentAtNestedNvim() {
+    let fake = FakeDescribe()
+    // Outer nvim TUI + server share pgid=100.
+    fake.byPID[100] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
+                             argv: ["nvim"], pid: 100)
+    fake.byPID[101] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
+                             argv: ["nvim"], pid: 101)
+    // Inner nvim from `:terminal` sits in its own pgroup=200.
+    fake.byPID[200] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
+                             argv: ["nvim"], pid: 200)
+    fake.byPID[201] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
+                             argv: ["nvim"], pid: 201)
+    let probe = ForegroundProcessProbe(
+      ptyFD: { 7 },
+      shellPID: { 50 },
+      tcgetpgrpOnPTY: { _ in 100 },
+      pidsInPgroup: { pgid in pgid == 100 ? [100, 101] : [] },
+      childrenOf: { parent in
+        if parent == 100 { return [101] }
+        if parent == 101 { return [200] }  // inner nvim, different pgroup
+        if parent == 200 { return [201] }
+        return []
+      },
+      pgidOf: { pid in
+        if pid == 100 || pid == 101 { return 100 }
+        if pid == 200 || pid == 201 { return 200 }
+        return pid
+      },
+      deepestDescendant: { _ in nil },
+      describe: fake.describe
+    )
+    let result = ForegroundProcessResolver.current(via: probe)
+    XCTAssertEqual(result?.pid, 101, "should stop at outer server, not descend into inner nvim's pgroup")
+  }
+
+  // Wrapper-as-pgroup-leader (e.g. `nice nvim foo`, `/usr/bin/time nvim`,
+  // `hyperfine nvim`, `stdbuf -oL nvim`). The shell setpgid's the wrapper;
+  // the wrapper exec's or spawns the wrapped command. We capture the
+  // wrapper — the user ran `nice nvim`, they probably want `nice nvim`
+  // back on restore. This pins the pgid-leader preference intentionally;
+  // the prior behaviour would have picked whichever non-shell the kernel
+  // listed last.
+  func test_pgroupPath_capturesWrapperWhenWrapperIsPgroupLeader() {
+    let fake = FakeDescribe()
+    fake.byPID[500] = .init(executable: "nice", path: "/usr/bin/nice",
+                             argv: ["nice", "nvim", "foo"], pid: 500)
+    fake.byPID[501] = .init(executable: "nvim", path: "/usr/bin/nvim",
+                             argv: ["nvim", "foo"], pid: 501)
+    let probe = ForegroundProcessProbe(
+      ptyFD: { 4 },
+      shellPID: { 400 },
+      tcgetpgrpOnPTY: { _ in 500 },
+      pidsInPgroup: { pgid in pgid == 500 ? [500, 501] : [] },
+      childrenOf: { parent in parent == 500 ? [501] : [] },
+      pgidOf: { $0 == 501 ? 500 : $0 },
+      deepestDescendant: { _ in nil },
+      describe: fake.describe
+    )
+    let result = ForegroundProcessResolver.current(via: probe)
+    XCTAssertEqual(result?.pid, 500)
+    XCTAssertEqual(result?.executable, "nice")
+  }
+
+  // Fallback path (leader is a filtered shell, last-non-shell scan picks
+  // the real process): descent must still apply in case the chosen
+  // candidate forks itself. In practice ssh and friends don't self-fork,
+  // so descent is a no-op — this test pins that the fallback path doesn't
+  // regress.
+  func test_pgroupPath_fallbackDoesNotMisbehaveWhenDescentIsNoOp() {
+    let fake = FakeDescribe()
+    fake.byPID[700] = .init(executable: "login", path: "/usr/bin/login",
+                             argv: ["login"], pid: 700)
+    fake.byPID[702] = .init(executable: "ssh", path: "/usr/bin/ssh",
+                             argv: ["ssh", "host"], pid: 702)
+    let probe = ForegroundProcessProbe(
+      ptyFD: { 3 },
+      shellPID: { 700 },
+      tcgetpgrpOnPTY: { _ in 700 },
+      pidsInPgroup: { pgid in pgid == 700 ? [700, 702] : [] },
+      // ssh has no same-named children.
+      childrenOf: { parent in parent == 702 ? [999] : [] },
+      pgidOf: { $0 == 702 ? 700 : $0 },
+      deepestDescendant: { _ in nil },
+      describe: { pid in
+        if pid == 999 {
+          return .init(executable: "sshd", path: "/usr/sbin/sshd", argv: ["sshd"], pid: 999)
+        }
+        return fake.byPID[pid]
+      }
+    )
+    let result = ForegroundProcessResolver.current(via: probe)
+    XCTAssertEqual(result?.pid, 702)
+    XCTAssertEqual(result?.executable, "ssh")
   }
 
   // Descend-into-same-executable must stop when the child has a different
@@ -226,6 +341,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 9000 },
       pidsInPgroup: { pgid in pgid == 9000 ? [9000] : [] },
       childrenOf: { parent in parent == 9000 ? [9001] : [] },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )

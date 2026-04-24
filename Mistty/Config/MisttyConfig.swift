@@ -314,8 +314,14 @@ struct MisttyConfig: Sendable, Equatable {
         guard let t = entry.table,
               let match = t["match"]?.string, !match.isEmpty
         else { return nil }
+        // Coerce non-string scalar values so users can write
+        // `env = { PORT = 8080, DEBUG = true }` without surprise-dropping
+        // them. Tables/arrays are skipped (env values are always scalars).
         let env: [String: String] = t["env"]?.table?.reduce(into: [:]) { acc, pair in
           if let v = pair.1.string { acc[pair.0] = v }
+          else if let v = pair.1.int { acc[pair.0] = String(v) }
+          else if let v = pair.1.double { acc[pair.0] = String(v) }
+          else if let v = pair.1.bool { acc[pair.0] = v ? "true" : "false" }
         } ?? [:]
         return RestoreCommandRule(
           match: match,

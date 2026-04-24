@@ -165,6 +165,20 @@ final class RestoreConfigTests: XCTestCase {
       "env NVIM_RESTORE_FROM_PID=777 nvim foo.txt")
   }
 
+  // `env K=V cmd` doesn't compose with shell operators in `strategy` — the
+  // shell parses `env K=V foo && bar` as `(env K=V foo) && (bar)`, so K
+  // only reaches foo. That's documented on `RestoreCommandRule.env`; this
+  // test pins the current behavior so a future change that silently wraps
+  // in `sh -c` (changing the visible command in the terminal) doesn't slip
+  // through unnoticed.
+  func test_resolve_doesNotWrapStrategyWithShellOperators() {
+    let config = RestoreConfig(commands: [
+      .init(match: "app", strategy: "foo && bar", env: ["K": "V"]),
+    ])
+    let captured = CapturedProcess(executable: "app", argv: ["app"], pid: 1)
+    XCTAssertEqual(config.resolve(captured), "env K=V foo && bar")
+  }
+
   // Rules saved before the `env` field existed should decode with env = [:].
   func test_restoreCommandRule_decodesLegacyConfigWithoutEnv() throws {
     let legacyJSON = #"""
