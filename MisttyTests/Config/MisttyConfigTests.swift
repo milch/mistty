@@ -215,4 +215,32 @@ final class MisttyConfigTests: XCTestCase {
     let roundTripped = try MisttyConfig.loadThrowing(from: tmp)
     XCTAssertEqual(roundTripped.restore, config.restore)
   }
+
+  func test_parse_restoreCommand_withEnv() throws {
+    let toml = """
+    [[restore.command]]
+    match = "nvim"
+    strategy = "nvim"
+    env = { NVIM_RESTORE_FROM_PID = "{{pid}}", FOO = "bar baz" }
+    """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.restore.commands, [
+      .init(match: "nvim", strategy: "nvim",
+            env: ["NVIM_RESTORE_FROM_PID": "{{pid}}", "FOO": "bar baz"]),
+    ])
+  }
+
+  func test_save_restoreCommand_withEnv_roundTrip() throws {
+    var config = MisttyConfig()
+    config.restore = RestoreConfig(commands: [
+      .init(match: "nvim", strategy: "nvim",
+            env: ["NVIM_RESTORE_FROM_PID": "{{pid}}", "FOO": "bar baz"]),
+    ])
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("mistty-restore-env-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try config.save(to: tmp)
+    let roundTripped = try MisttyConfig.loadThrowing(from: tmp)
+    XCTAssertEqual(roundTripped.restore, config.restore)
+  }
 }

@@ -314,9 +314,13 @@ struct MisttyConfig: Sendable, Equatable {
         guard let t = entry.table,
               let match = t["match"]?.string, !match.isEmpty
         else { return nil }
+        let env: [String: String] = t["env"]?.table?.reduce(into: [:]) { acc, pair in
+          if let v = pair.1.string { acc[pair.0] = v }
+        } ?? [:]
         return RestoreCommandRule(
           match: match,
-          strategy: t["strategy"]?.string
+          strategy: t["strategy"]?.string,
+          env: env
         )
       }
     }
@@ -377,6 +381,16 @@ struct MisttyConfig: Sendable, Equatable {
     value
       .replacingOccurrences(of: "\\", with: "\\\\")
       .replacingOccurrences(of: "\"", with: "\\\"")
+  }
+
+  /// Emit a key as a TOML bare key when it matches `[A-Za-z0-9_-]+`; quote
+  /// it otherwise. Env var names are bare-safe in practice, but non-POSIX
+  /// keys with dots/spaces would need quoting.
+  private func tomlKey(_ key: String) -> String {
+    let isBare = !key.isEmpty && key.allSatisfy {
+      $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-"
+    }
+    return isBare ? key : "\"\(tomlEscape(key))\""
   }
 
   /// Emit a passthrough value using its recorded TOML kind so the file
@@ -512,6 +526,12 @@ struct MisttyConfig: Sendable, Equatable {
         lines.append("match = \"\(tomlEscape(rule.match))\"")
         if let strategy = rule.strategy, !strategy.isEmpty {
           lines.append("strategy = \"\(tomlEscape(strategy))\"")
+        }
+        if !rule.env.isEmpty {
+          let pairs = rule.env.keys.sorted().map { key in
+            "\(tomlKey(key)) = \"\(tomlEscape(rule.env[key] ?? ""))\""
+          }
+          lines.append("env = { \(pairs.joined(separator: ", ")) }")
         }
       }
     }

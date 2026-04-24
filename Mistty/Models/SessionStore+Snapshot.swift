@@ -185,7 +185,7 @@ extension SessionStore {
     switch node {
     case .leaf(let pane):
       let captured = ForegroundProcessResolver.current(for: pane).map {
-        CapturedProcess(executable: $0.executable, argv: $0.argv)
+        CapturedProcess(executable: $0.executable, argv: $0.argv, pid: $0.pid)
       }
       return .leaf(pane: PaneSnapshot(
         id: pane.id,
