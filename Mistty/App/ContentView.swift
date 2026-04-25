@@ -94,6 +94,7 @@ struct ContentView: View {
       }
       .onChange(of: store.activeSession?.activeTab?.id) { _, _ in
         store.activeSession?.activeTab?.hasBell = false
+        updateDockBadge()
         // Window mode is ephemeral (tmux-style prefix). When the user switches
         // away to a different session/tab, clear it from the tab we're leaving
         // so it doesn't appear "stuck" on return — and drop the global
@@ -426,6 +427,9 @@ struct ContentView: View {
         store.closeSession(session)
       }
     }
+    // A closed tab may have carried a background bell — recompute so the
+    // dock badge doesn't linger above the remaining tab count.
+    updateDockBadge()
   }
 
   // MARK: - Notification Handlers
@@ -514,6 +518,7 @@ struct ContentView: View {
     if session.tabs.isEmpty {
       store.closeSession(session)
     }
+    updateDockBadge()
   }
 
   private func handleSetTitle(_ notification: Notification) {
@@ -559,6 +564,25 @@ struct ContentView: View {
         }
       }
     }
+    updateDockBadge()
+    // Bounce the dock icon once when the bell rings while Mistty is in
+    // the background. .informationalRequest bounces once and stops; the
+    // call is a no-op when the app is already frontmost so the explicit
+    // isActive guard is just for intent.
+    if !NSApp.isActive {
+      NSApp.requestUserAttention(.informationalRequest)
+    }
+  }
+
+  /// Set the Dock icon badge to the number of background tabs with an active
+  /// bell. Called on ring and on tab-switch (which clears `hasBell` for the
+  /// newly-active tab). No-ops when `NSApp` isn't yet available (tests).
+  private func updateDockBadge() {
+    let count = store.sessions
+      .flatMap(\.tabs)
+      .filter(\.hasBell)
+      .count
+    NSApp.dockTile.badgeLabel = count > 0 ? String(count) : nil
   }
 
   private func handleCloseSurface(_ notification: Notification) {
