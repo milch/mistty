@@ -7,6 +7,7 @@ struct WindowModeHints: View {
 
   private let normalHints: [(key: String, label: String)] = [
     ("←↑↓→", "swap"),
+    ("hjkl", "focus"),
     ("⌘+arrows", "resize"),
     ("z", "zoom"),
     ("b", "break to tab"),

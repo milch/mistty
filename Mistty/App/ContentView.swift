@@ -679,6 +679,18 @@ struct ContentView: View {
       case 125:  // Down arrow
         swapActivePane(.down)
         return nil
+      case 4:  // h — focus left (no swap)
+        focusAdjacentPane(.left)
+        return nil
+      case 38:  // j — focus down (no swap)
+        focusAdjacentPane(.down)
+        return nil
+      case 40:  // k — focus up (no swap)
+        focusAdjacentPane(.up)
+        return nil
+      case 37:  // l — focus right (no swap)
+        focusAdjacentPane(.right)
+        return nil
       case 6:  // z — zoom toggle; exit window mode once zoom is committed
         toggleZoom()
         store.activeSession?.activeTab?.windowModeState = .inactive
@@ -762,6 +774,14 @@ struct ContentView: View {
       let current = tab.activePane
     else { return }
     tab.layout.swapPane(current, direction: direction)
+  }
+
+  private func focusAdjacentPane(_ direction: NavigationDirection) {
+    guard let tab = store.activeSession?.activeTab,
+      let current = tab.activePane,
+      let target = tab.layout.adjacentPane(from: current, direction: direction)
+    else { return }
+    tab.focusPane(target)
   }
 
   private func rotateActivePane() {
