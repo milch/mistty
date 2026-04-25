@@ -18,6 +18,7 @@ struct ContentView: View {
   @State private var ctrlNavMonitor: Any?
   @State private var closeMonitor: Any?
   @State private var altShortcutMonitor: Any?
+  @State private var windowModeShortcutMonitor: Any?
 
   var body: some View {
     contentWithNotifications
@@ -281,6 +282,9 @@ struct ContentView: View {
       if altShortcutMonitor == nil {
         installAltShortcutMonitor()
       }
+      if windowModeShortcutMonitor == nil {
+        installWindowModeShortcutMonitor()
+      }
     }
     .onDisappear {
       DebugLog.shared.log(
@@ -301,6 +305,7 @@ struct ContentView: View {
       removeCtrlNavMonitor()
       removeCloseMonitor()
       removeAltShortcutMonitor()
+      removeWindowModeShortcutMonitor()
       store.activeSession?.activeTab?.windowModeState = .inactive
       if store.activeSession?.activeTab?.isCopyModeActive == true {
         exitCopyMode()
@@ -1203,6 +1208,38 @@ struct ContentView: View {
     if let monitor = closeMonitor {
       NSEvent.removeMonitor(monitor)
       closeMonitor = nil
+    }
+  }
+
+  /// Cmd+X overlaps the system Cut command. Whenever any TextField is first
+  /// responder (sidebar rename, session-manager search, Settings fields),
+  /// SwiftUI disables the "View > Window Mode" menu item and routes Cmd+X to
+  /// Cut — so the shortcut appears "lost" (no effect, indicator disappears
+  /// from the menu). Mirror the Cmd+W pattern: an app-level local monitor
+  /// intercepts Cmd+X before SwiftUI's menu routing runs. Text responders
+  /// fall through so Cut still works inside text fields.
+  private func installWindowModeShortcutMonitor() {
+    windowModeShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+      [store] event in
+      let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+      guard flags == .command,
+        event.charactersIgnoringModifiers?.lowercased() == "x"
+      else { return event }
+      guard store.isTerminalWindowKey() else { return event }
+      // Any text-editing responder (TextField field editor, NSTextView,
+      // search fields) should keep Cmd+X as Cut.
+      if let responder = NSApp.keyWindow?.firstResponder, responder is NSText {
+        return event
+      }
+      NotificationCenter.default.post(name: .misttyWindowMode, object: nil)
+      return nil
+    }
+  }
+
+  private func removeWindowModeShortcutMonitor() {
+    if let monitor = windowModeShortcutMonitor {
+      NSEvent.removeMonitor(monitor)
+      windowModeShortcutMonitor = nil
     }
   }
 
