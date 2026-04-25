@@ -587,17 +587,15 @@ struct ContentView: View {
 
   private func handleCloseSurface(_ notification: Notification) {
     guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
-    // Check if this is a popup pane
+    // Check if this is a popup pane. Always fully close — the `close_on_exit`
+    // flag only controls whether ghostty keeps the pane open to show "press
+    // any key to close" after the process exits. Once the surface actually
+    // closes (process exit OR the user dismisses the wait prompt), the pane
+    // is dead and reactivating the popup must spawn a fresh one; otherwise
+    // the stale "press any key" output sticks around.
     for session in store.sessions {
       if let popup = session.popups.first(where: { $0.pane.id == paneID }) {
-        if popup.definition.closeOnExit {
-          session.closePopup(popup)
-        } else {
-          popup.isVisible = false
-          if session.activePopup?.id == popup.id {
-            session.activePopup = nil
-          }
-        }
+        session.closePopup(popup)
         returnFocusToActivePane()
         return
       }
