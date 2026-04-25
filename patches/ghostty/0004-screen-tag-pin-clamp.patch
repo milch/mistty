@@ -1,0 +1,23 @@
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 0d5a4f8da..0000000 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1335,9 +1335,16 @@ pub const CAPI = struct {
+                 ),
+             };
+
+-            // Clamp our point to the screen bounds.
++            // Clamp our point to the screen bounds. The max y depends on the
++            // tag: `active` and `viewport` are bounded by the visible
++            // viewport height, while `screen` and `history` can address
++            // scrollback and so are bounded by `total_rows`.
++            const max_y: usize = switch (self.tag) {
++                .active, .viewport => screen.pages.rows,
++                .screen, .history => screen.pages.total_rows,
++            };
+             const clamped_x = @min(self.x, screen.pages.cols -| 1);
+-            const clamped_y = @min(self.y, screen.pages.rows -| 1);
++            const clamped_y = @min(self.y, max_y -| 1);
+
+             return switch (self.coord_tag) {
+                 // Exact coordinates require a specific pin.
