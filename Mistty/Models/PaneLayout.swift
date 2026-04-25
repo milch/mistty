@@ -149,6 +149,49 @@ struct PaneLayout {
   /// and convert `cells * cellSize` into a ratio delta. Positive `cells`
   /// matches `resizeSplit(containing:delta:along:)` sign semantics — divider
   /// moves right/down.
+  /// Resize the split whose divider sits between two specific panes. Used by
+  /// drag-to-resize where the divider's identity is unambiguous — we know
+  /// exactly which split the user grabbed. Walks the tree to find the
+  /// lowest ancestor that puts `aRep` and `bRep` on opposite sides, and
+  /// bumps that split's ratio by `delta`. Differs from the `containing:`
+  /// variant which reaches for the outermost matching-direction ancestor;
+  /// for drag we need the exact split.
+  mutating func resizeSplit(
+    between aRep: MisttyPane, and bRep: MisttyPane, delta: CGFloat
+  ) {
+    root = Self.adjustRatioBetween(root, a: aRep.id, b: bRep.id, delta: delta)
+  }
+
+  private static func adjustRatioBetween(
+    _ node: PaneLayoutNode, a: Int, b: Int, delta: CGFloat
+  ) -> PaneLayoutNode {
+    switch node {
+    case .leaf, .empty:
+      return node
+    case .split(let dir, let childA, let childB, let ratio):
+      let aInA = collectLeaves(childA).contains { $0.id == a }
+      let aInB = collectLeaves(childB).contains { $0.id == a }
+      let bInA = collectLeaves(childA).contains { $0.id == b }
+      let bInB = collectLeaves(childB).contains { $0.id == b }
+
+      // a and b on opposite sides of this split — this is the divider.
+      if (aInA && bInB) || (aInB && bInA) {
+        return .split(dir, childA, childB, max(0.1, min(0.9, ratio + delta)))
+      }
+
+      // Otherwise recurse into whichever side contains both.
+      if aInA && bInA {
+        return .split(
+          dir, adjustRatioBetween(childA, a: a, b: b, delta: delta), childB, ratio)
+      }
+      if aInB && bInB {
+        return .split(
+          dir, childA, adjustRatioBetween(childB, a: a, b: b, delta: delta), ratio)
+      }
+      return node
+    }
+  }
+
   mutating func resizeSplit(
     containing pane: MisttyPane,
     cells: Int,

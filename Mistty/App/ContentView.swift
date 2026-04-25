@@ -235,7 +235,10 @@ struct ContentView: View {
                   borderColor: config.ui.paneBorderColor,
                   borderWidth: CGFloat(config.ui.paneBorderWidth),
                   onClosePane: { pane in closePane(pane) },
-                  onSelectPane: { pane in tab.activePane = pane }
+                  onSelectPane: { pane in tab.activePane = pane },
+                  onResizeBetween: { aRep, bRep, delta in
+                    tab.layout.resizeSplit(between: aRep, and: bRep, delta: delta)
+                  }
                 )
               }
               if tab.windowModeState != .inactive {
