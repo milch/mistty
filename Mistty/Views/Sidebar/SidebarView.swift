@@ -55,6 +55,9 @@ struct SessionRowView: View {
   @Bindable var store: SessionStore
   var tabBarVisible: Bool = false
   @State private var isExpanded = true
+  @State private var isEditing = false
+  @State private var editText = ""
+  @FocusState private var editFocused: Bool
 
   var isActive: Bool { store.activeSession?.id == session.id }
 
@@ -76,8 +79,30 @@ struct SessionRowView: View {
           .font(.custom(ProcessIcon.fontName, size: 12))
           .foregroundStyle(.secondary)
           .frame(width: 14, alignment: .center)
-        Text(session.sidebarLabel)
+        if isEditing {
+          TextField(
+            "Session name", text: $editText,
+            onCommit: {
+              session.customName = editText.isEmpty ? nil : editText
+              finishEditing()
+            }
+          )
+          .textFieldStyle(.plain)
           .fontWeight(isActive ? .semibold : .regular)
+          .focused($editFocused)
+          .onAppear { editFocused = true }
+          .onExitCommand { finishEditing() }
+          .onChange(of: editFocused) { _, focused in
+            if !focused && isEditing {
+              session.customName = editText.isEmpty ? nil : editText
+              finishEditing()
+            }
+          }
+        } else {
+          Text(session.sidebarLabel)
+            .fontWeight(isActive ? .semibold : .regular)
+            .onTapGesture(count: 2) { beginEditing() }
+        }
         Spacer()
       }
       .padding(.leading, 8)
@@ -91,9 +116,31 @@ struct SessionRowView: View {
         }
       }
       .contentShape(Rectangle())
-      .onTapGesture { store.activeSession = session }
+      .onTapGesture {
+        if isEditing { return }
+        store.activeSession = session
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyRenameSession)) { _ in
+        // Only the active session opens its inline editor on the shortcut.
+        guard isActive else { return }
+        beginEditing()
+      }
     }
     .animation(.easeInOut(duration: 0.15), value: isActive)
+  }
+
+  private func beginEditing() {
+    editText = session.customName ?? session.sidebarLabel
+    isEditing = true
+  }
+
+  private func finishEditing() {
+    isEditing = false
+    editFocused = false
+    // Hand first responder back to the terminal so subsequent keystrokes
+    // don't stay trapped in the detached NSTextField — same reason the
+    // tab-rename path does this.
+    store.activeSession?.activeTab?.activePane?.focusKeyboardInput()
   }
 }
 
