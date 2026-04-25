@@ -328,23 +328,33 @@ struct ContentView: View {
       let popup = session.activePopup,
       popup.isVisible
     {
-      GeometryReader { geometry in
-        PopupOverlayView(
-          popup: popup,
-          onDismiss: {
+      // Full-screen backdrop sits at this level (above the popup
+      // chrome's frame) so its rectangle never has visible corners
+      // adjacent to the popup. Previously the backdrop lived inside
+      // PopupOverlayView and was sized to the popup frame; the user
+      // saw the backdrop's sharp 90° corners around the rounded
+      // chrome and read those as "sharp corners on the popup".
+      ZStack {
+        Color.black.opacity(0.4)
+          .ignoresSafeArea()
+          .onTapGesture {
             session.hideActivePopup()
             returnFocusToActivePane()
-          },
-          onClose: {
-            session.closePopup(popup)
-            returnFocusToActivePane()
           }
-        )
-        .frame(
-          width: geometry.size.width * popup.definition.width,
-          height: geometry.size.height * popup.definition.height
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { geometry in
+          PopupOverlayView(
+            popup: popup,
+            onClose: {
+              session.closePopup(popup)
+              returnFocusToActivePane()
+            }
+          )
+          .frame(
+            width: geometry.size.width * popup.definition.width,
+            height: geometry.size.height * popup.definition.height
+          )
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
       }
     }
   }

@@ -305,6 +305,40 @@ final class ChromePolishSnapshotTests: XCTestCase {
     )
   }
 
+  // MARK: - Popup overlay
+  //
+  // Regression guard for: backdrop nested inside `PopupOverlayView`.
+  // When the backdrop lived inside the popup view it inherited the popup
+  // chrome's frame (~80% of the window), so its sharp 90° corners were
+  // visible adjacent to the rounded chrome — looked like the popup itself
+  // had black/sharp corners. The backdrop must sit at the same level as
+  // the popup chrome (in `ContentView.popupOverlay`) so it covers the
+  // whole window. This snapshot will diff loudly if anyone moves the
+  // backdrop back inside the popup view.
+  func test_contentView_popupActive() {
+    UserDefaults.standard.set(true, forKey: "sidebarVisible")
+
+    let store = SessionStore()
+    let session = store.createSession(
+      name: "mistty",
+      directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
+    session.activeTab?.activePane?.processTitle = "nvim"
+    session.activeTab?.title = "nvim — mistty"
+    store.activeSession = session
+
+    session.openPopup(definition: PopupDefinition(
+      name: "Quick Command", command: "echo hi"))
+
+    let view = ContentView(store: store, config: .default)
+      .frame(width: 1200, height: 800)
+
+    assertSnapshot(
+      of: host(view, size: CGSize(width: 1200, height: 800)),
+      as: .image(size: CGSize(width: 1200, height: 800)),
+      named: "content-view-popup-active"
+    )
+  }
+
   func test_contentView_sidebarClosed_multipleTabs() {
     UserDefaults.standard.set(false, forKey: "sidebarVisible")
 
