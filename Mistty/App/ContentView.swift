@@ -267,12 +267,22 @@ struct ContentView: View {
         }
       }
     }
-    .onAppear {
-      DispatchQueue.main.async {
-        if let window = NSApplication.shared.keyWindow {
-          _ = store.registerWindow(window)
-        }
+    .background(
+      // viewDidMoveToWindow fires synchronously as the tracking NSView is
+      // mounted into the window's content hierarchy, giving us the
+      // *actual* host window for this ContentView — not whatever
+      // `NSApplication.shared.keyWindow` happens to return. That matters
+      // during state restoration (windows exist before they become key)
+      // and when multiple terminal windows coexist, both of which could
+      // leave the host window unregistered so `isTerminalWindowKey()`
+      // returned false and the Cmd-W fallback called
+      // `NSApp.keyWindow?.performClose(nil)` — closing the whole window.
+      WindowAccessor { window in
+        guard let window else { return }
+        _ = store.registerWindow(window)
       }
+    )
+    .onAppear {
       if ctrlNavMonitor == nil {
         installCtrlNavMonitor()
       }
