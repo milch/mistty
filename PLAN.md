@@ -53,11 +53,14 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 ### Misc & Bugs
 
-- Sometimes when you press cmd-w instead of closing the pane it closes the whole window. Diagnostic logging is wired (enable via Settings → Debug) but repro is still needed.
-- OSC777/OSC9/OSC99 notifications support
+Larger:
+
 - Multiple windows are broken
-- Drag to resize panes is not implemented
-- In window mode you should also be able to change focus of the panes (e.g. so that you can quickly swap and move panes into the layout you want without having to engage/disengage window mode)
+- OSC777/OSC9/OSC99 notifications support
+- Zen mode (similar to zoomed - except that it pulls out the pane similar to a popup, full height with default 120 character width (configurable), background is dimmed)
+
+## Future
+
 - OSC for state restoration? TUI communicates with term how to get it to resume from where it left. Could be something as simple as `$PROG file.txt` or `nvim -U session.vim` or something more complex.
 
 ## Implemented
@@ -145,6 +148,15 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 - ? support (reverse search) — `?` key reassigned from help overlay to reverse search
 - Cross-line word motion wrapping into scrollback
 - Handle Ctrl-D/U and other paging shortcuts
+
+#### Phase 4: per-pane state, viewport jumps, scroll-drift fix
+
+Spec: `docs/superpowers/specs/2026-04-25-copy-mode-yank-and-config-reload-design.md`. Plan: `docs/superpowers/plans/2026-04-25-copy-mode-yank-and-config-reload.md`.
+
+- Per-pane copy-mode state: `CopyModeState` lives on `MisttyPane` (was on `MisttyTab`). Each pane keeps its own scroll position / cursor / selection across focus switches. The overlay only renders on the focused pane; other panes with stored state stay scrolled to their saved position with no chrome until refocused. `MisttyTab.copyModeState` is now a passthrough getter/setter onto the active pane so existing call sites keep working
+- Ctrl-h/j/k/l switches focus while copy mode stays active on the source pane. The copy-mode keyDown monitor passes those four keys through to `ctrlNavMonitor` (other Ctrl-* keys — d/u/f/b paging, Ctrl-v block mode — keep being handled by copy mode); resuming copy mode is just `Ctrl-h` back. Monitor moved into ContentView's `.onAppear` set so it stays installed for the view's lifetime; enter/exit no longer install or remove it
+- `gg` / `G` now scroll to the top of scrollback / live edge respectively (was: cursor-only within the visible viewport). New `H` / `M` / `L` jump cursor to viewport top / middle / last row without scrolling, with count support (3H = third from top, 3L = third from bottom). New `CopyModeAction.scrollToTop` / `.scrollToBottom` — `ContentView` translates them into `scrollViewport` calls using the live scrollbar offset/total
+- Scroll-drift fix: `scrollViewport` adjusts the anchor by the *actual* offset change post-clamp, not the requested delta. Phantom scrolls past the top of scrollback or the live edge no longer drift the anchor away from its true screen position (combined with the libghostty pin-clamp patch in `### Bug fixes`, this is what made cross-viewport yank produce correct content — see the entry there for the full root cause)
 
 ### Copy mode — yank hints (Phase 3)
 
@@ -248,9 +260,26 @@ Spec: `docs/superpowers/specs/2026-04-22-state-restoration-design.md`; plan: `do
 - Hold Option on Quit clears saved state; System Settings → "Close windows when quitting an app" is honored natively (AppKit handles both).
 - `mistty-cli debug state` dumps the current `WorkspaceSnapshot` as pretty-printed JSON via a new `getStateSnapshot` IPC RPC.
 
+### Config reload
+
+Spec: `docs/superpowers/specs/2026-04-25-copy-mode-yank-and-config-reload-design.md`. Plan: `docs/superpowers/plans/2026-04-25-copy-mode-yank-and-config-reload.md`.
+
+- `MisttyConfig.current` is a mutable `static var` swapped by `MisttyConfig.reload(from:)` (default `~/.config/mistty/config.toml`). On parse error throws and leaves `current` unchanged (also stashing the error in `lastParseError` so callers can surface it); on success posts `Notification.Name.misttyConfigDidReload` and returns the new value. Replaces the previous one-shot `loadedAtLaunch` static let
+- Triggers all funnel into `MisttyConfig.reload()`: `View → Reload Config` menu item (no default keyboard shortcut), `mistty-cli config reload` (new IPC RPC + ArgumentParser subcommand, with `ensureReachable()` parity), and `SettingsView.save()` which now debounces 400ms via a `@State pendingSave: Task<Void, Never>?` so per-keystroke `.onChange` save calls coalesce into a single reload
+- `GhosttyAppManager.reloadConfig()` builds a fresh `ghostty_config_t` (load `~/.config/mistty/ghostty.conf`, layer the resolved Mistty-managed lines via a temp file, finalize) and pushes it through `ghostty_app_update_config(app, newCfg)` — ghostty propagates the new config to every surface, so font / scrollback / palette / padding / theme update live with no surface recreation. Old configs are retired into a list and freed at app shutdown to dodge in-flight surface message races. `buildGhosttyConfig(from:)` is the shared helper that init also uses, so the bootstrap path and the reload path can't drift
+- Reactive consumers: `MisttyApp` switches its config from `let` to `@State` and refreshes on `.misttyConfigDidReload`, also re-applying `applyTitleBarStyleToWindows()` and `DebugLog.shared.configure(enabled:)` so window chrome and debug-logging follow live edits. `SettingsView` shows parse errors on an inline red banner (replacing the silent `try?` swallow) and listens for external reloads to refresh its `@State`. `ZoxideService` clears its `CachedExecutable` on reload so a `zoxide_path` change takes effect on the next session-manager open
+- Out of scope (deferred): filesystem watcher for auto-reload, per-key "needs restart" diff/warning UI, reloading the per-surface initial command (commands are spawned at creation; not a reload concern)
+
 ### Bug fixes
 
-- Sidebar: active tab gets a leading accent bar (clipped to the rounded corner) and tinted background; active session keeps the bold label and accent-tinted process icon
+- Cmd-W sometimes closed the whole terminal window instead of the pane: the `onAppear` registration fell back to `NSApplication.shared.keyWindow` behind a `DispatchQueue.main.async`, so during AppKit state restoration (windows exist before they're key) or when multiple terminal windows coexisted, the host window wasn't tracked. The menu-item fallback then saw `isTerminalWindowKey() == false` and called `NSApp.keyWindow?.performClose(nil)` on the actual terminal window. New `WindowAccessor` (`viewDidMoveToWindow`-backed NSViewRepresentable) binds registration to the _real_ host window, synchronously, with no race
+- Window Mode shortcut "disappears" from the menu bar: SwiftUI disables the `Cmd+X` menu shortcut whenever a text responder (sidebar rename TextField, Settings search, any focused `NSText`) enables the system Cut command, so the shortcut silently becomes Cut and the "⌘X" indicator moves to Edit → Cut. New app-level `windowModeShortcutMonitor` (mirrors the `Cmd+W` monitor pattern) intercepts `Cmd+X` before SwiftUI's menu routing whenever the terminal window is key, then passes through only when the first responder is `NSText` so text fields still cut normally
+- Popup rounded-corner clipping: `.clipShape(RoundedRectangle)` on a `VStack` containing the ghostty-backed `TerminalSurfaceView` (CAMetalLayer) didn't propagate the mask through the Metal layer tree, so the corner areas showed the terminal's opaque background instead of transparency. `.compositingGroup()` before `.clipShape` forces SwiftUI to render the subtree into an offscreen bitmap first so the clip applies to the composed result
+- Popup `close_on_exit = false` showed stale "press any key to close" on reactivation: the surface-close callback only set `isVisible = false`, leaving the dead pane cached in `session.popups`. The next toggle reused it. Now we always `session.closePopup(popup)` on surface close — the `close_on_exit` flag only decides whether ghostty lingers on "press any key", not whether Mistty keeps the dead pane around
+- Window Mode focus-without-swap: `hjkl` now focuses the adjacent pane in window mode (arrow keys still swap). Lets the user chain focus → swap → resize without leaving the mode. Hints row updated
+- Rename sessions: double-click a session row in the sidebar, or hit `Cmd+Opt+R` from the menu to enter inline edit. Mirrors the tab-rename pattern (extracted `beginEditing`/`finishEditing`, focus handed back to the active pane on commit)
+- Bells show on the Dock icon: `updateDockBadge()` sets `NSApp.dockTile.badgeLabel` to the count of background tabs with `hasBell`; fires on bell ring, tab-switch (which clears the ringing tab's bell), and tab/pane close (so closing a bell-tab drops the badge)
+- Drag to resize panes: thin split borders now host a `SplitDivider` whose visible line keeps its `borderWidth` layout footprint (HStack/VStack lays out panes unchanged) while an `.overlay` with a 6pt frame extends the hit area over the adjacent panes' edges — mirrors ghostty's own `SplitView.Divider` (1pt visible + 6pt invisible) but uses SwiftUI's overlay-beyond-parent trick instead of absolute `.position()`. Captures a `DragGesture` and reports incremental ratio deltas to `PaneLayout.resizeSplit(between:and:delta:)` — a new API that walks to the exact split whose divider was grabbed (keyboard-resize's `containing:along:` variant grabs the outermost matching-direction ancestor, which is wrong for drag). Cursor flips to the standard resize cursor on hover
 - Zoomed-pane indicator: SF Symbol next to the tab title in both sidebar and tab bar when `tab.zoomedPane != nil`
 - Search ranking: running sessions get a 1.5× score boost so an open session outranks a comparable directory/SSH match; subtitle (path/hostname) matches penalized 0.6× so a clean displayName hit beats a scattered match across a long path
 - Session manager sort: running sessions pinned to the top in LRU order via a new `MisttySession.lastActivatedAt` updated by `SessionStore.activeSession.didSet`
@@ -277,3 +306,4 @@ Spec: `docs/superpowers/specs/2026-04-22-state-restoration-design.md`; plan: `do
 - Window mode stuck after session/tab switch: window mode's global keyDown monitor is installed once and reads `store.activeSession?.activeTab`, so pressing `esc` on _any other tab_ removed the monitor while the original tab's `windowModeState` still read `.normal` — toast kept showing, arrows/esc did nothing, only `cmd-x` could toggle out. Fixed by adding a `previousActiveTab` tracker: whenever the active tab id changes, clear window mode on the tab we're leaving and drop the monitor if the new active tab isn't in window mode. Matches tmux-prefix ephemeral semantics — switching away cancels the mode cleanly
 - Window mode stay-vs-exit audit: zoom (z) and break-to-tab (b) exit (both commit a terminal state change — zoom is a view state, break moves the pane away). Resize (cmd+arrow), swap (arrow), rotate (r), and standard layouts (1–5) all _stay_ in window mode since users typically chain them with follow-up adjustments. Layouts used to exit but have been changed to match — applying `.tiled` then nudging one pane with cmd+arrow now works without a second cmd-x
 - Dev/release CLI socket split: both builds bound to `~/Library/Application Support/Mistty/mistty.sock` and `unlink`'d it on startup, so launching one app killed the other's CLI. Fix is two-part: (1) `MisttyIPC.serverSocketPath` walks up the executable path to the enclosing `.app` and suffixes `-dev` when inside `Mistty-dev.app`, so release and dev bind distinct sockets; (2) `TerminalSurfaceView` sets `MISTTY_SOCKET=<server path>` via ghostty's `env_vars` on every spawned shell, and `MisttyIPC.socketPath` (CLI-side) prefers that env var. That way a single `mistty-cli` on `$PATH` always talks back to the specific instance whose pane invoked it, no matter which app was installed last. The listener stays on `serverSocketPath` explicitly so `MISTTY_SOCKET` leaked in from an external shell can't make the dev app bind the release socket
+- Multi-screen copy-mode yank (libghostty patch + Mistty fix): two stacked bugs that both showed up only once a selection extended into scrollback. (a) `Selection.pin` in `vendor/ghostty/src/apprt/embedded.zig` clamped y to `screen.pages.rows -| 1` (viewport height) regardless of point tag, so any `GHOSTTY_POINT_SCREEN` selection that addressed scrollback collapsed both endpoints to the same row near the top of the visible viewport — `read_text` came back with one row instead of the requested range. New `patches/ghostty/0004-screen-tag-pin-clamp.patch` makes the y-clamp tag-aware (`screen.pages.total_rows` for `.screen`/`.history`, `screen.pages.rows` for `.active`/`.viewport`). (b) Mistty-side, the `.visual` (character-wise) yank case in `ContentView.swift` skipped the lexicographic min/max that `.visualLine` and `.visualBlock` already did, so reverse selections (cursor before anchor) sent ghostty inverted `top_left`/`bottom_right`. New `CopyModeYank.normalize(anchor:cursor:)` helper plus 4 unit tests. Together with the scroll-drift fix in copy-mode Phase 4, cross-viewport yank now produces the exact intended range with no off-by-one drift
