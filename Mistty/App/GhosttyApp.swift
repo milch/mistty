@@ -193,6 +193,11 @@ final class GhosttyAppManager {
   nonisolated(unsafe) private(set) var app: ghostty_app_t?
   nonisolated(unsafe) private var config: ghostty_config_t?
 
+  /// Configs from prior reloads. We don't free these synchronously after
+  /// `ghostty_app_update_config` because surface message processing may
+  /// still hold references. Freed in `deinit`.
+  nonisolated(unsafe) private var retiredConfigs: [ghostty_config_t] = []
+
   /// Retains the KVO subscription that pushes macOS appearance changes to
   /// ghostty. Without this, ghostty never learns the system is dark/light —
   /// our `window-theme = system` default has nothing to resolve against, so
@@ -207,38 +212,10 @@ final class GhosttyAppManager {
       return
     }
 
-    // 2. Create and load config
-    guard let cfg = ghostty_config_new() else {
-      print("[GhosttyAppManager] ghostty_config_new failed")
-      return
-    }
-
-    // Load Mistty's own ghostty config (always separate from Ghostty.app config)
-    let misttyConfigPath = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".config/mistty/ghostty.conf").path
-    if FileManager.default.fileExists(atPath: misttyConfigPath) {
-      misttyConfigPath.withCString { path in
-        ghostty_config_load_file(cfg, path)
-      }
-    }
-
-    // Apply Mistty-managed ghostty settings (top-level font/cursor, the
-    // [ghostty] passthrough table, and [ui] padding) by writing a temp
-    // ghostty config file and loading it after the user's file, so these
-    // keys override whatever was in ~/.config/mistty/ghostty.conf.
-    // Read the single shared parse result. If parsing failed, surface it via
-    // an NSAlert so the user knows why Mistty launched with defaults.
+    // 2. Build initial config
     let misttyConfig = MisttyConfig.current
-    let parseError = MisttyConfig.lastParseError
-    if let parseError {
+    if let parseError = MisttyConfig.lastParseError {
       let message = describeTOMLParseError(parseError)
-      // Wait for `didFinishLaunchingNotification` so the app is active when
-      // the alert runs; otherwise it shows up behind other windows / without
-      // focus during bootstrap.
-      //
-      // Use the async notification sequence so the continuation body stays on
-      // the main actor and we don't have to fight `@Sendable` closure
-      // isolation rules of `addObserver(forName:object:queue:using:)`.
       Task { @MainActor in
         let notifications = NotificationCenter.default.notifications(
           named: NSApplication.didFinishLaunchingNotification
@@ -257,30 +234,10 @@ final class GhosttyAppManager {
       }
     }
 
-    let ghosttyLines = misttyConfig.ghosttyConfigLines
-    if ghosttyLines.isEmpty {
-      print(
-        "[mistty] no Mistty-managed ghostty keys — using ghostty defaults + ~/.config/mistty/ghostty.conf"
-      )
-    } else {
-      print("[mistty] resolved ghostty config:")
-      for line in ghosttyLines { print("  \(line)") }
-
-      let tempURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier).conf")
-      let contents = ghosttyLines.joined(separator: "\n") + "\n"
-      if (try? contents.write(to: tempURL, atomically: true, encoding: .utf8)) != nil {
-        tempURL.path.withCString { path in
-          ghostty_config_load_file(cfg, path)
-        }
-      }
-    }
-
-    ghostty_config_finalize(cfg)
+    guard let cfg = buildGhosttyConfig(from: misttyConfig) else { return }
     self.config = cfg
     sharedGhosttyConfig = cfg
 
-    // Log any config diagnostics
     let diagCount = ghostty_config_diagnostics_count(cfg)
     for i in 0..<diagCount {
       let diag = ghostty_config_get_diagnostic(cfg, i)
@@ -322,15 +279,86 @@ final class GhosttyAppManager {
           : GHOSTTY_COLOR_SCHEME_LIGHT
       ghostty_app_set_color_scheme(app, scheme)
     }
+
+    // Re-push the ghostty config when MisttyConfig.reload() runs.
+    NotificationCenter.default.addObserver(
+      forName: .misttyConfigDidReload,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.reloadConfig()
+      }
+    }
   }
 
   deinit {
     if let app { ghostty_app_free(app) }
     if let config { ghostty_config_free(config) }
+    for cfg in retiredConfigs { ghostty_config_free(cfg) }
   }
 
   func tick() {
     guard let app else { return }
     ghostty_app_tick(app)
+  }
+
+  /// Build a fresh `ghostty_config_t` from the current `MisttyConfig`,
+  /// loading `~/.config/mistty/ghostty.conf` first and then applying our
+  /// resolved overrides via a temp file. Caller is responsible for the
+  /// returned config's lifetime — pass to `ghostty_app_update_config` and
+  /// retain until the next reload (or app shutdown).
+  private func buildGhosttyConfig(from misttyConfig: MisttyConfig) -> ghostty_config_t? {
+    guard let cfg = ghostty_config_new() else {
+      print("[GhosttyAppManager] ghostty_config_new failed")
+      return nil
+    }
+
+    let misttyConfigPath = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".config/mistty/ghostty.conf").path
+    if FileManager.default.fileExists(atPath: misttyConfigPath) {
+      misttyConfigPath.withCString { path in
+        ghostty_config_load_file(cfg, path)
+      }
+    }
+
+    let ghosttyLines = misttyConfig.ghosttyConfigLines
+    if !ghosttyLines.isEmpty {
+      let tempURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+          "mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString).conf")
+      let contents = ghosttyLines.joined(separator: "\n") + "\n"
+      if (try? contents.write(to: tempURL, atomically: true, encoding: .utf8)) != nil {
+        tempURL.path.withCString { path in
+          ghostty_config_load_file(cfg, path)
+        }
+      }
+    }
+
+    ghostty_config_finalize(cfg)
+    return cfg
+  }
+
+  /// Re-parse the user's `~/.config/mistty/ghostty.conf` + the resolved
+  /// passthrough lines and push the new config to ghostty. The previous
+  /// `ghostty_config_t` is retired and freed on app shutdown.
+  func reloadConfig() {
+    guard let app = self.app else { return }
+    guard let newCfg = buildGhosttyConfig(from: MisttyConfig.current) else { return }
+
+    if let old = self.config {
+      retiredConfigs.append(old)
+    }
+    self.config = newCfg
+    sharedGhosttyConfig = newCfg
+    ghostty_app_update_config(app, newCfg)
+
+    let diagCount = ghostty_config_diagnostics_count(newCfg)
+    for i in 0..<diagCount {
+      let diag = ghostty_config_get_diagnostic(newCfg, i)
+      if let msg = diag.message {
+        print("[GhosttyAppManager] reload diagnostic: \(String(cString: msg))")
+      }
+    }
   }
 }
