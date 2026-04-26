@@ -154,7 +154,7 @@ install-release: bundle-release
 [private]
 _atomic-install src dst:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -exuo pipefail
     DST="{{dst}}"
     SRC="{{src}}"
     NEW="${DST}.new"
@@ -162,7 +162,7 @@ _atomic-install src dst:
     rm -rf "$NEW"
     cp -R "$SRC" "$NEW"
 
-    if pgrep -fq "$DST/Contents/MacOS/" 2>/dev/null; then
+    if pgrep -afq "$DST/Contents/MacOS/" 2>/dev/null; then
       # The helper has to survive the calling shell's death — when
       # `just install-release` is invoked from inside the running
       # Mistty, AppKit's quit teardown kills our process group along
@@ -175,7 +175,7 @@ _atomic-install src dst:
     #!/bin/bash
     exec >> /tmp/mistty-install.log 2>&1
     echo "[\$(date)] helper started; waiting for $DST to exit"
-    while pgrep -fq "$DST/Contents/MacOS/" 2>/dev/null; do
+    while pgrep -afq "$DST/Contents/MacOS/" 2>/dev/null; do
       sleep 0.1
     done
     sleep 0.5
@@ -239,7 +239,7 @@ run worktree="":
     # will swap + relaunch — racing with `open` here would either launch
     # the old bundle or fight the helper. Sample state BEFORE install so
     # we know which branch took.
-    pgrep -fq "$APP/Contents/MacOS/" 2>/dev/null && was_running=1 || was_running=0
+    pgrep -afq "$APP/Contents/MacOS/" 2>/dev/null && was_running=1 || was_running=0
     if [ -z "{{worktree}}" ]; then
       just install
     else
@@ -257,9 +257,9 @@ run worktree="":
 # Run the app (release). Optionally from a worktree at .worktrees/<name>.
 run-release worktree="":
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -exuo pipefail
     APP=/Applications/Mistty.app
-    pgrep -fq "$APP/Contents/MacOS/" 2>/dev/null && was_running=1 || was_running=0
+    pgrep -afq "$APP/Contents/MacOS/" 2>/dev/null && was_running=1 || was_running=0
     if [ -z "{{worktree}}" ]; then
       just install-release
     else
