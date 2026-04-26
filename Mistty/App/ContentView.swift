@@ -919,10 +919,24 @@ struct ContentView: View {
     // Update scrollbar offset synchronously — the async callback will
     // eventually arrive, but we need correct offset immediately for
     // subsequent search coordinate conversion.
-    let newOffset = Int64(pane.surfaceView.scrollbarState.offset) + Int64(delta)
-    pane.surfaceView.scrollbarState.offset = UInt64(max(0, newOffset))
+    let oldOffset = pane.surfaceView.scrollbarState.offset
+    let total = pane.surfaceView.scrollbarState.total
+    let len = pane.surfaceView.scrollbarState.len
+    // Clamp the same way ghostty does internally: offset can't go below 0
+    // (top of scrollback) or above total-len (live area pinned to bottom).
+    let maxOffset = total > len ? total - len : 0
+    let target = Int64(oldOffset) + Int64(delta)
+    let clampedOffset = UInt64(max(0, min(Int64(maxOffset), target)))
+    pane.surfaceView.scrollbarState.offset = clampedOffset
+    // Adjust the anchor by the *actual* offset change, not the requested
+    // delta. Otherwise scrolls that ghostty refused to honor (because we
+    // hit the top or bottom of the scrollable area) silently drift the
+    // anchor away from its true screen position; on yank, the runaway
+    // anchor either passes ghostty's tag-aware pin clamp (selecting too
+    // much) or undershoots (selecting too little).
+    let actualDelta = Int(clampedOffset) - Int(oldOffset)
     if let anchor = state.anchor {
-      state.anchor = (row: anchor.row - delta, col: anchor.col)
+      state.anchor = (row: anchor.row - actualDelta, col: anchor.col)
     }
     state.scrollGeneration &+= 1
   }
