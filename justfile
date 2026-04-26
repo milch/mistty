@@ -43,6 +43,31 @@ icon:
     iconutil -c icns "$ICONSET_DEV" -o "$OUT_DEV"
     echo "Icons: $OUT + $OUT_DEV"
 
+# Set Info.plist's version to a literal X.Y.Z and commit. Does NOT
+# create a git tag — use this when reconciling plist drift against
+# tags that already exist (e.g. `just set-version 0.8.2` after the
+# repo's been tagged that way for a while). For a normal release
+# bump, use `just bump [major|minor|patch]` instead.
+set-version version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! [[ "{{version}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "error: version must be in MAJOR.MINOR.PATCH form (got '{{version}}')" >&2
+      exit 1
+    fi
+    PLIST="Mistty/Resources/Info.plist"
+    dirty=$(git status --porcelain | awk -v keep="$PLIST" '$2 != keep')
+    if [ -n "$dirty" ]; then
+      echo "error: working tree has uncommitted changes outside of $PLIST:" >&2
+      echo "$dirty" >&2
+      exit 1
+    fi
+    plutil -replace CFBundleShortVersionString -string "{{version}}" "$PLIST"
+    plutil -replace CFBundleVersion -string "{{version}}" "$PLIST"
+    git add "$PLIST"
+    git commit -m "release: sync Info.plist to v{{version}}"
+    echo "Set Info.plist to {{version}} (no tag created)"
+
 # Bump the version in Mistty/Resources/Info.plist (both
 # CFBundleShortVersionString and CFBundleVersion), commit the change, and
 # create an annotated git tag `v<new>`. Refuses to run if the working tree
