@@ -16,6 +16,7 @@ struct ConfigCommand: ParsableCommand {
 
     func run() throws {
       let client = IPCClient()
+      try client.ensureReachable()
       _ = try client.call("reloadConfig")
     }
   }

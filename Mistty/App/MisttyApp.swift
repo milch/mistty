@@ -64,6 +64,7 @@ struct MisttyApp: App {
         .onReceive(NotificationCenter.default.publisher(for: .misttyConfigDidReload)) { _ in
           config = MisttyConfig.current
           applyTitleBarStyleToWindows()
+          DebugLog.shared.configure(enabled: config.debugLogging)
         }
         .onReceive(NotificationCenter.default.publisher(for: .misttyReloadConfig)) { _ in
           do {
