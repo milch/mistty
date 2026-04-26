@@ -985,6 +985,15 @@ struct ContentView: View {
         return event
       }
 
+      // Let Ctrl-h/j/k/l reach the pane-nav monitor so the user can switch
+      // focus while copy mode stays parked on this pane (it resumes when
+      // they navigate back). All other Ctrl-* keys (d/u/f/b paging, Ctrl-v
+      // visual block, etc.) keep being handled here.
+      let onlyCtrl = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control
+      if onlyCtrl, !state.isSearching, ["h", "j", "k", "l"].contains(Character(keyStr.lowercased())) {
+        return event
+      }
+
       let lineReader: (Int) -> String? = { row in
         self.readTerminalLine(row: row)
       }
