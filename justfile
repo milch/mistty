@@ -56,7 +56,10 @@ set-version version:
       exit 1
     fi
     PLIST="Mistty/Resources/Info.plist"
-    dirty=$(git status --porcelain | awk -v keep="$PLIST" '$2 != keep')
+    # Block on tracked-file changes only — ignore untracked (`??`) and
+    # submodule status (either pointer-moved or internally dirty;
+    # unrelated to the version bump).
+    dirty=$(git status --porcelain --ignore-submodules | awk -v keep="$PLIST" '$1 != "??" && $2 != keep')
     if [ -n "$dirty" ]; then
       echo "error: working tree has uncommitted changes outside of $PLIST:" >&2
       echo "$dirty" >&2
@@ -83,7 +86,10 @@ bump component:
     PLIST="Mistty/Resources/Info.plist"
     # Refuse to run with unrelated uncommitted changes — otherwise the
     # release commit would sweep them in.
-    dirty=$(git status --porcelain | awk -v keep="$PLIST" '$2 != keep')
+    # Block on tracked-file changes only — ignore untracked (`??`) and
+    # submodule status (either pointer-moved or internally dirty;
+    # unrelated to the version bump).
+    dirty=$(git status --porcelain --ignore-submodules | awk -v keep="$PLIST" '$1 != "??" && $2 != keep')
     if [ -n "$dirty" ]; then
       echo "error: working tree has uncommitted changes outside of $PLIST:" >&2
       echo "$dirty" >&2
