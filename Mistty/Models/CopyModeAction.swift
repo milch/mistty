@@ -120,6 +120,11 @@ enum CopyModeAction: Equatable {
   case confirmSearch
   case cancelSearch
   case scroll(deltaRows: Int)
+  /// Scroll to the top of scrollback (offset = 0). Cursor placement is the
+  /// caller's responsibility — `CopyModeState` sets it before emitting.
+  case scrollToTop
+  /// Scroll to the live edge (offset = total - len).
+  case scrollToBottom
   case needsContinuation
   case searchNext
   case searchPrev

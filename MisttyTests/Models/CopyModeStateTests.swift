@@ -56,16 +56,72 @@ final class CopyModeStateTests: XCTestCase {
     XCTAssertEqual(state.cursorCol, 79)
   }
 
-  func test_gGoesToTop_GGoesToBottom() {
+  func test_gg_emitsScrollToTop_andParksCursorAtTop() {
     var state = makeState(cursorRow: 10)
     _ = state.handleKey(key: "g", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
-    _ = state.handleKey(key: "g", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    let actions = state.handleKey(
+      key: "g", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
     XCTAssertEqual(state.cursorRow, 0)
     XCTAssertEqual(state.cursorCol, 0)
+    XCTAssertTrue(actions.contains(.scrollToTop))
+  }
 
-    _ = state.handleKey(key: "G", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+  func test_G_noCount_emitsScrollToBottom_andParksCursorAtBottom() {
+    var state = makeState(cursorRow: 10)
+    let actions = state.handleKey(
+      key: "G", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
     XCTAssertEqual(state.cursorRow, 23)
     XCTAssertEqual(state.cursorCol, 0)
+    XCTAssertTrue(actions.contains(.scrollToBottom))
+  }
+
+  func test_G_withCount_jumpsViewportRow_noScroll() {
+    var state = makeState(cursorRow: 10)
+    _ = state.handleKey(key: "5", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    let actions = state.handleKey(
+      key: "G", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertEqual(state.cursorRow, 4)
+    XCTAssertFalse(actions.contains(.scrollToTop))
+    XCTAssertFalse(actions.contains(.scrollToBottom))
+  }
+
+  func test_H_movesToViewportTop_noScroll() {
+    var state = makeState(cursorRow: 10)
+    let actions = state.handleKey(
+      key: "H", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertEqual(state.cursorRow, 0)
+    XCTAssertEqual(state.cursorCol, 0)
+    XCTAssertFalse(actions.contains(.scrollToTop))
+  }
+
+  func test_H_withCount_offsetsFromTop() {
+    var state = makeState(cursorRow: 10)
+    _ = state.handleKey(key: "3", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    _ = state.handleKey(key: "H", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertEqual(state.cursorRow, 2)  // 3rd row from top, 0-indexed
+  }
+
+  func test_M_movesToViewportMiddle() {
+    var state = makeState(cursorRow: 5)
+    _ = state.handleKey(key: "M", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertEqual(state.cursorRow, 12)  // 24 / 2
+    XCTAssertEqual(state.cursorCol, 0)
+  }
+
+  func test_L_movesToViewportLast_noScroll() {
+    var state = makeState(cursorRow: 5)
+    let actions = state.handleKey(
+      key: "L", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertEqual(state.cursorRow, 23)
+    XCTAssertEqual(state.cursorCol, 0)
+    XCTAssertFalse(actions.contains(.scrollToBottom))
+  }
+
+  func test_L_withCount_offsetsFromBottom() {
+    var state = makeState(cursorRow: 5)
+    _ = state.handleKey(key: "3", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    _ = state.handleKey(key: "L", keyCode: 0, modifiers: [], lineReader: emptyLineReader)
+    XCTAssertEqual(state.cursorRow, 21)  // rows-3 = 24-3
   }
 
   // MARK: - Escape behavior (tmux-style)

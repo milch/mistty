@@ -1019,6 +1019,28 @@ struct ContentView: View {
           if state.isHinting, let source = state.hint?.source {
             populateHintMatches(&state, source: source)
           }
+        case .scrollToTop:
+          if let pane = store.activeSession?.activeTab?.activePane {
+            let offset = Int(pane.surfaceView.scrollbarState.offset)
+            if offset > 0 {
+              scrollViewport(&state, delta: -offset)
+            }
+          }
+          if state.isHinting, let source = state.hint?.source {
+            populateHintMatches(&state, source: source)
+          }
+        case .scrollToBottom:
+          if let pane = store.activeSession?.activeTab?.activePane {
+            let sb = pane.surfaceView.scrollbarState
+            let maxOffset = sb.total > sb.len ? sb.total - sb.len : 0
+            let delta = Int(Int64(maxOffset) - Int64(sb.offset))
+            if delta != 0 {
+              scrollViewport(&state, delta: delta)
+            }
+          }
+          if state.isHinting, let source = state.hint?.source {
+            populateHintMatches(&state, source: source)
+          }
         case .enterHintMode(let action, let source):
           let cfg = MisttyConfig.load()
           state.applyHintEntry(

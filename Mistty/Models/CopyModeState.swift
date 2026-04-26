@@ -268,13 +268,29 @@ struct CopyModeState {
       if hadExplicitCount {
         cursorRow = min(max(count - 1, 0), rows - 1)
         cursorCol = 0
+        return motionActions()
       } else {
-        moveToBottom()
+        cursorRow = rows - 1
+        cursorCol = 0
+        return [.scrollToBottom] + motionActions()
       }
-      return motionActions()
     case "g":
       pendingG = true
       return []
+
+    // Vim viewport-relative motions: H/M/L stay within the visible viewport.
+    case "H":
+      cursorRow = min(max(count - 1, 0), rows - 1)
+      cursorCol = 0
+      return motionActions()
+    case "M":
+      cursorRow = max(0, rows / 2)
+      cursorCol = 0
+      return motionActions()
+    case "L":
+      cursorRow = max(0, rows - count)
+      cursorCol = 0
+      return motionActions()
 
     // Visual modes
     case "v":
@@ -376,8 +392,9 @@ struct CopyModeState {
     desiredCol = nil
     switch key {
     case "g":
-      moveToTop()
-      return motionActions()
+      cursorRow = 0
+      cursorCol = 0
+      return [.scrollToTop] + motionActions()
     case "e":
       let count = pendingCount ?? 1
       pendingCount = nil

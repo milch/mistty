@@ -7,7 +7,8 @@ struct CopyModeHelpOverlay: View {
     ("W/B/E", "WORD motions"),
     ("ge/gE", "end of prev word/WORD"),
     ("0/$", "line start/end"),
-    ("g/G", "top/bottom"),
+    ("gg/G", "scrollback top/bottom"),
+    ("H/M/L", "viewport top/mid/last"),
     ("[count]", "repeat motion"),
   ]
 
