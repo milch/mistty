@@ -547,6 +547,24 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
     }
   }
 
+  // MARK: - Config
+
+  func reloadConfig(reply: @escaping (Data?, Error?) -> Void) {
+    let reply = Reply(handler: reply)
+    Task { @MainActor in
+      do {
+        try MisttyConfig.reload()
+        reply(Data("{}".utf8), nil)
+      } catch {
+        reply(
+          nil,
+          MisttyIPC.error(
+            .operationFailed,
+            "Could not reload config: \(describeTOMLParseError(error))"))
+      }
+    }
+  }
+
   // MARK: - Debug
 
   func getStateSnapshot(reply: @escaping (Data?, Error?) -> Void) {

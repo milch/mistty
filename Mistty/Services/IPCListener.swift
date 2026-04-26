@@ -305,6 +305,10 @@ final class IPCListener {
     case "getStateSnapshot":
       service.getStateSnapshot(reply: reply)
 
+    // Config
+    case "reloadConfig":
+      service.reloadConfig(reply: reply)
+
     default:
       reply(nil, MisttyIPC.error(.operationFailed, "Unknown method: \(method)"))
     }

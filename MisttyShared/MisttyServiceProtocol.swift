@@ -51,4 +51,8 @@ public protocol MisttyServiceProtocol {
     // MARK: - Debug
 
     func getStateSnapshot(reply: @escaping (Data?, Error?) -> Void)
+
+    // MARK: - Config
+
+    func reloadConfig(reply: @escaping (Data?, Error?) -> Void)
 }

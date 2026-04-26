@@ -6,8 +6,19 @@ struct ConfigCommand: ParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "config",
     abstract: "Inspect Mistty's ghostty configuration",
-    subcommands: [Show.self]
+    subcommands: [Show.self, Reload.self]
   )
+
+  struct Reload: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "Tell the running Mistty instance to re-read ~/.config/mistty/config.toml."
+    )
+
+    func run() throws {
+      let client = IPCClient()
+      _ = try client.call("reloadConfig")
+    }
+  }
 
   struct Show: ParsableCommand {
     static let configuration = CommandConfiguration(
