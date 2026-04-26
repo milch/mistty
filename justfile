@@ -154,7 +154,7 @@ install-release: bundle-release
 [private]
 _atomic-install src dst:
     #!/usr/bin/env bash
-    set -exuo pipefail
+    set -euo pipefail
     DST="{{dst}}"
     SRC="{{src}}"
     NEW="${DST}.new"
@@ -198,7 +198,7 @@ _atomic-install src dst:
         open STDIN, "<", "/dev/null";
         open STDOUT, ">>", "/tmp/mistty-install.log";
         open STDERR, ">&", \*STDOUT;
-        exec $ARGV[0];
+        exec "/bin/bash", $ARGV[0];
       ' "$HELPER"
       osascript -e "tell application \"$DST\" to quit" 2>/dev/null || true
       echo "$DST running — quitting; helper will swap and relaunch (log: /tmp/mistty-install.log)."
@@ -257,7 +257,7 @@ run worktree="":
 # Run the app (release). Optionally from a worktree at .worktrees/<name>.
 run-release worktree="":
     #!/usr/bin/env bash
-    set -exuo pipefail
+    set -euo pipefail
     APP=/Applications/Mistty.app
     pgrep -afq "$APP/Contents/MacOS/" 2>/dev/null && was_running=1 || was_running=0
     if [ -z "{{worktree}}" ]; then
