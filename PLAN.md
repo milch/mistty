@@ -29,7 +29,6 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 - Window frame / position persistence — unlocked once multi-window is fixed and we switch to per-window encoding.
 - Popup, copy/window/search mode, zoomed-pane persistence — all ephemeral today; snapshot schema can absorb them without migration if a real need shows up.
 - Upstream the shell-PID accessor patch to ghostty.
-- **Dev / release bundle-ID split** — both builds use `com.mistty.app`, so AppKit's saved-state directory is shared. Running dev while release is open risks clobbering release's state on quit. Fix: give the dev bundle a distinct `CFBundleIdentifier` (e.g. `com.mistty.app.dev`) when built via `just bundle`. Blocker for safe dev↔release isolation of state restoration.
 - **Opt-out mechanism for builtin auto-restore** — `ssh` is in `RestoreConfig.builtinAutoRestore` so SSH sessions relaunch without requiring an allowlist entry. Users with unreachable hosts or one-shot SSH panes have no way to suppress the reconnect attempt short of also suppressing the session's existence. Consider a `strategy = false` or similar sentinel, or a per-executable `auto_restore = false` flag in the rule.
 
 ### Keyboard shortcut configuration
@@ -218,6 +217,8 @@ Spec: `docs/superpowers/specs/2026-04-25-copy-mode-yank-and-config-reload-design
 - `just setup-worktree` recipe: initializes `vendor/ghostty` submodule and symlinks the prebuilt `GhosttyKit.xcframework` from the main checkout so `git worktree add` dirs build immediately
 - `just run [<worktree>]` wraps install + open, optionally from a `.worktrees/<name>` directory for quick manual verification of a branch
 - `AGENTS.md` at repo root: agent-facing doc covering build/test commands, worktree flow, and project-specific conventions
+- Atomic install (`just install` / `install-release`): the previous flow did `osascript quit + rm + cp` synchronously, which crashed Mistty when invoked from a pane inside the very app being upgraded — the AppleEvent quit killed the script's host shell mid-cp, leaving the bundle rm'd while the OS was still tearing down its binary. New flow stages the new bundle at `${dst}.new` while the live app is still mounted, then forks a detached helper (subshell + `nohup` + redirected stdio) that polls until the running binary exits, atomically `rm` + `mv`s the staging bundle into place, and `open`s it. Both install recipes route through a shared `_atomic-install` private recipe
+- Distinct dev / release bundle IDs: `just bundle` runs `plutil -replace CFBundleIdentifier -string com.mistty.app.dev` on the dev `.app`'s `Info.plist` after copying it from the shared template. Release keeps `com.mistty.app`. Side-effects: AppKit's saved-state directory (`~/Library/Saved Application State/<bundleID>.savedState/`) and `NSUserDefaults` storage are now per-build, so running dev no longer clobbers release's restored state on quit. Cosmetics (Dock icon variant, AppleScript-by-path targeting, IPC socket suffix) were already split — only the bundle ID was shared
 
 ### Native macOS UI
 

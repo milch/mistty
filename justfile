@@ -63,6 +63,12 @@ bundle: build
     cp .build/debug/MisttyCLI "$APP/Contents/MacOS/mistty-cli"
     cp Mistty/Resources/Fonts/SymbolsNerdFontMono-Regular.ttf "$APP/Contents/Resources/"
     cp Mistty/Resources/Info.plist "$APP/Contents/"
+    # Override the bundle identifier so dev and release don't share
+    # AppKit's saved-state directory (~/Library/Saved Application
+    # State/<bundleID>.savedState/) or NSUserDefaults storage. Without
+    # this, running dev while release's state is on disk silently
+    # clobbers it on dev's quit.
+    plutil -replace CFBundleIdentifier -string com.mistty.app.dev "$APP/Contents/Info.plist"
     # Prefer the dev-variant icon so the Dock/Finder distinguishes dev from
     # release at a glance. Falls back to the base icon if the dev variant
     # hasn't been generated yet (first-time build before `just icon`).
