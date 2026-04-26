@@ -211,6 +211,12 @@ _link-cli target name="mistty-cli":
 run worktree="":
     #!/usr/bin/env bash
     set -euo pipefail
+    APP=/Applications/Mistty-dev.app
+    # If Mistty-dev is already running, install detaches a helper that
+    # will swap + relaunch — racing with `open` here would either launch
+    # the old bundle or fight the helper. Sample state BEFORE install so
+    # we know which branch took.
+    pgrep -fq "$APP/Contents/MacOS/" 2>/dev/null && was_running=1 || was_running=0
     if [ -z "{{worktree}}" ]; then
       just install
     else
@@ -221,12 +227,16 @@ run worktree="":
       fi
       (cd "$DIR" && just install)
     fi
-    open /Applications/Mistty-dev.app
+    if [ "$was_running" -eq 0 ]; then
+      open "$APP"
+    fi
 
 # Run the app (release). Optionally from a worktree at .worktrees/<name>.
 run-release worktree="":
     #!/usr/bin/env bash
     set -euo pipefail
+    APP=/Applications/Mistty.app
+    pgrep -fq "$APP/Contents/MacOS/" 2>/dev/null && was_running=1 || was_running=0
     if [ -z "{{worktree}}" ]; then
       just install-release
     else
@@ -237,7 +247,9 @@ run-release worktree="":
       fi
       (cd "$DIR" && just install-release)
     fi
-    open /Applications/Mistty.app
+    if [ "$was_running" -eq 0 ]; then
+      open "$APP"
+    fi
 
 # Run tests
 test:
