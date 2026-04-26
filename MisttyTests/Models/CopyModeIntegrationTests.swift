@@ -222,5 +222,18 @@ final class CopyModeIntegrationTests: XCTestCase {
     )
     XCTAssertEqual(top.row, 1)
     XCTAssertEqual(bottom.row, 99)
+    XCTAssertEqual(top.col, 0)
+    XCTAssertEqual(bottom.col, 0)
+  }
+
+  func test_visualYankNormalizes_whenAnchorEqualsCursor() {
+    let (top, bottom) = CopyModeYank.normalize(
+      anchor: (row: 3, col: 7),
+      cursor: (row: 3, col: 7)
+    )
+    XCTAssertEqual(top.row, 3)
+    XCTAssertEqual(top.col, 7)
+    XCTAssertEqual(bottom.row, 3)
+    XCTAssertEqual(bottom.col, 7)
   }
 }
