@@ -50,7 +50,19 @@ let package = Package(
                 "MisttyShared",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
-            path: "MisttyCLI"
+            path: "MisttyCLI",
+            linkerSettings: [
+                // Embed Mistty's Info.plist into the mach-o `__TEXT,__info_plist`
+                // section so `mistty-cli version` can report a version number
+                // even when the binary is invoked from outside the .app (e.g.
+                // a bare copy on $PATH, or `.build/debug/MisttyCLI`).
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Mistty/Resources/Info.plist",
+                ]),
+            ]
         ),
         .testTarget(
             name: "MisttyTests",
