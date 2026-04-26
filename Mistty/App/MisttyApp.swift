@@ -1,6 +1,7 @@
 import CoreText
 import Foundation
 import GhosttyKit
+import MisttyShared
 import SwiftUI
 
 @main
@@ -12,7 +13,7 @@ struct MisttyApp: App {
   // Shared parse — see `MisttyConfig.current`. Reading the same cache
   // GhosttyAppManager uses keeps SwiftUI state and libghostty in lockstep and
   // avoids parsing the TOML twice at bootstrap.
-  private let config: MisttyConfig = MisttyConfig.current
+  @State private var config: MisttyConfig = MisttyConfig.current
 
   init() {
     // Opt in to AppKit state restoration by default. Without this, macOS 14+
@@ -60,6 +61,24 @@ struct MisttyApp: App {
           }
           applyTitleBarStyleToWindows()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .misttyConfigDidReload)) { _ in
+          config = MisttyConfig.current
+          applyTitleBarStyleToWindows()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .misttyReloadConfig)) { _ in
+          do {
+            try MisttyConfig.reload()
+          } catch {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Mistty could not reload config.toml"
+            alert.informativeText =
+              "\(describeTOMLParseError(error))\n\nFile: \(MisttyConfig.configURL.path)"
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+          }
+        }
     }
     .windowStyle(.hiddenTitleBar)
     .commands {
@@ -77,6 +96,10 @@ struct MisttyApp: App {
           NotificationCenter.default.post(name: .misttyToggleTabBar, object: nil)
         }
         .keyboardShortcut("b", modifiers: [.command, .shift])
+
+        Button("Reload Config") {
+          NotificationCenter.default.post(name: .misttyReloadConfig, object: nil)
+        }
 
         Button("New Tab") {
           NotificationCenter.default.post(name: .misttyNewTab, object: nil)
@@ -355,4 +378,7 @@ extension Notification.Name {
   static let misttyMoveSessionUp = Notification.Name("misttyMoveSessionUp")
   static let misttyMoveSessionDown = Notification.Name("misttyMoveSessionDown")
   static let misttyScrollChanged = Notification.Name("misttyScrollChanged")
+  /// Triggered by the View → Reload Config menu item. Handled at the
+  /// WindowGroup root in `body`, which calls `MisttyConfig.reload()`.
+  static let misttyReloadConfig = Notification.Name("misttyReloadConfig")
 }
