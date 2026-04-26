@@ -19,7 +19,19 @@ struct ZoxideService: Sendable {
   /// Cached absolute path to `zoxide`, resolved on first use.
   private static let cachedExecutable = CachedExecutable()
 
+  /// Registered once (lazily, on first `recentDirectories()` call) so that a
+  /// config reload clears the cached probe result.
+  nonisolated(unsafe) private static let _configObserver: Any =
+    NotificationCenter.default.addObserver(
+    forName: .misttyConfigDidReload,
+    object: nil,
+    queue: nil
+  ) { _ in
+    Task { await cachedExecutable.clear() }
+  }
+
   static func recentDirectories() async -> [URL] {
+    _ = _configObserver  // ensure the observer is registered
     guard let executable = await cachedExecutable.resolve() else { return [] }
 
     let process = Process()
@@ -50,6 +62,10 @@ struct ZoxideService: Sendable {
   /// the user's shell init files and picks up custom install locations.
   private actor CachedExecutable {
     private var resolved: String??
+
+    func clear() {
+      resolved = nil
+    }
 
     func resolve() -> String? {
       if let resolved { return resolved }
