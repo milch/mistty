@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
   @State private var config = MisttyConfig.load()
   @State private var saveError: String?
+  @State private var pendingSave: Task<Void, Never>?
 
   /// Bind a `Stepper`/`TextField`/`Picker` to an optional scalar on the
   /// config, falling back to the shown default. Writes `nil` when the edited
@@ -250,13 +251,22 @@ struct SettingsView: View {
     }
   }
 
+  /// Debounced. Each call cancels any in-flight save and schedules a new one
+  /// after a short delay. TextField `.onChange` handlers fire on every
+  /// keystroke; without the delay each keystroke would trigger a full
+  /// `MisttyConfig.reload()` + libghostty config rebuild.
   private func saveConfig() {
-    do {
-      try config.save()
-      try MisttyConfig.reload()
-      saveError = nil
-    } catch {
-      saveError = describeTOMLParseError(error)
+    pendingSave?.cancel()
+    pendingSave = Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(400))
+      if Task.isCancelled { return }
+      do {
+        try config.save()
+        try MisttyConfig.reload()
+        saveError = nil
+      } catch {
+        saveError = describeTOMLParseError(error)
+      }
     }
   }
 }
