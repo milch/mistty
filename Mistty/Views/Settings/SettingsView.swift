@@ -1,7 +1,9 @@
+import MisttyShared
 import SwiftUI
 
 struct SettingsView: View {
   @State private var config = MisttyConfig.load()
+  @State private var saveError: String?
 
   /// Bind a `Stepper`/`TextField`/`Picker` to an optional scalar on the
   /// config, falling back to the shown default. Writes `nil` when the edited
@@ -21,6 +23,13 @@ struct SettingsView: View {
 
   var body: some View {
     Form {
+      if let saveError {
+        Text("Could not save / reload: \(saveError)")
+          .foregroundStyle(.red)
+          .font(.callout)
+          .padding(.vertical, 4)
+      }
+
       Section("Font") {
         TextField(
           "Font Family",
@@ -211,6 +220,10 @@ struct SettingsView: View {
       saveConfig()
       DebugLog.shared.configure(enabled: new)
     }
+    .onReceive(NotificationCenter.default.publisher(for: .misttyConfigDidReload)) { _ in
+      config = MisttyConfig.current
+      saveError = nil
+    }
   }
 
   @ViewBuilder
@@ -238,6 +251,12 @@ struct SettingsView: View {
   }
 
   private func saveConfig() {
-    try? config.save()
+    do {
+      try config.save()
+      try MisttyConfig.reload()
+      saveError = nil
+    } catch {
+      saveError = describeTOMLParseError(error)
+    }
   }
 }
