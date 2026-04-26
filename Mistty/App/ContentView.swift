@@ -217,7 +217,7 @@ struct ContentView: View {
                   isActive: true,
                   isWindowModeActive: tab.isWindowModeActive,
                   isZoomed: true,
-                  copyModeState: (zoomedPane.id == tab.activePane?.id) ? tab.copyModeState : nil,
+                  copyModeState: (zoomedPane.id == tab.copyModePaneID) ? tab.copyModeState : nil,
                   windowModeState: tab.windowModeState,
                   joinPickTabNames: joinPickTabNames,
                   paneCount: tab.panes.count,
@@ -230,7 +230,7 @@ struct ContentView: View {
                   activePane: tab.activePane,
                   isWindowModeActive: tab.isWindowModeActive,
                   copyModeState: tab.copyModeState,
-                  copyModePaneID: tab.activePane?.id,
+                  copyModePaneID: tab.copyModePaneID,
                   windowModeState: tab.windowModeState,
                   joinPickTabNames: joinPickTabNames,
                   paneCount: tab.panes.count,
@@ -435,7 +435,13 @@ struct ContentView: View {
   }
 
   private func closePaneInTab(_ pane: MisttyPane, tab: MisttyTab, session: MisttySession) {
+    let wasCopyModePane = tab.copyModePaneID == pane.id
     tab.closePane(pane)
+    if wasCopyModePane {
+      // tab.closePane already cleared the copy-mode state on the tab; the
+      // global keyDown monitor still needs to be torn down here.
+      removeCopyModeMonitor()
+    }
     if tab.panes.isEmpty {
       session.closeTab(tab)
       if session.tabs.isEmpty {
@@ -882,8 +888,17 @@ struct ContentView: View {
 
   // MARK: - Copy Mode
 
+  /// Resolves the pane that owns the active copy-mode session. Use this
+  /// instead of `tab.activePane` inside copy-mode helpers so the user can
+  /// switch focus (Ctrl-hjkl) without losing copy mode's state.
+  private var copyModePane: MisttyPane? {
+    store.activeSession?.activeTab?.copyModePane
+  }
+
   private func enterCopyMode() {
-    guard let tab = store.activeSession?.activeTab else { return }
+    guard let tab = store.activeSession?.activeTab,
+      let activePane = tab.activePane
+    else { return }
     if tab.isWindowModeActive {
       tab.windowModeState = .inactive
       removeWindowModeMonitor()
@@ -894,25 +909,25 @@ struct ContentView: View {
     var cols = 80
     var cursorRow: Int?
     var cursorCol: Int?
-    if let surfaceView = tab.activePane?.surfaceView {
-      if let surface = surfaceView.surface {
-        let size = ghostty_surface_size(surface)
-        rows = Int(size.rows)
-        cols = Int(size.columns)
-      }
-      if let pos = surfaceView.cursorPosition() {
-        cursorRow = pos.row
-        cursorCol = pos.col
-      }
+    let surfaceView = activePane.surfaceView
+    if let surface = surfaceView.surface {
+      let size = ghostty_surface_size(surface)
+      rows = Int(size.rows)
+      cols = Int(size.columns)
+    }
+    if let pos = surfaceView.cursorPosition() {
+      cursorRow = pos.row
+      cursorCol = pos.col
     }
 
+    tab.copyModePaneID = activePane.id
     tab.copyModeState = CopyModeState(
       rows: rows, cols: cols, cursorRow: cursorRow, cursorCol: cursorCol)
     installCopyModeMonitor()
   }
 
   private func scrollViewport(_ state: inout CopyModeState, delta: Int) {
-    guard let pane = store.activeSession?.activeTab?.activePane,
+    guard let pane = copyModePane,
           let surface = pane.surfaceView.surface else { return }
     let actionStr = "scroll_page_lines:\(delta)"
     _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
@@ -942,19 +957,31 @@ struct ContentView: View {
   }
 
   private func exitCopyMode() {
-    // Scroll back to bottom (active area) when leaving copy mode
-    if let pane = store.activeSession?.activeTab?.activePane,
-       let surface = pane.surfaceView.surface {
+    // Scroll back to bottom (active area) on the copy-mode pane (which may
+    // not be the currently focused pane if the user navigated away with
+    // Ctrl-hjkl during copy mode).
+    if let pane = copyModePane, let surface = pane.surfaceView.surface {
       let actionStr = "scroll_to_bottom"
       _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
     }
-    store.activeSession?.activeTab?.copyModeState = nil
+    if let tab = store.activeSession?.activeTab {
+      tab.copyModeState = nil
+      tab.copyModePaneID = nil
+    }
     removeCopyModeMonitor()
   }
 
   private func installCopyModeMonitor() {
     copyModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-      guard var state = store.activeSession?.activeTab?.copyModeState else { return event }
+      guard let tab = store.activeSession?.activeTab,
+        var state = tab.copyModeState
+      else { return event }
+
+      // Pass through to the focused pane when the user has navigated away
+      // from the copy-mode pane (Ctrl-hjkl). The copy-mode overlay still
+      // renders on the original pane; key handling resumes when they
+      // navigate back.
+      guard tab.activePane?.id == tab.copyModePaneID else { return event }
 
       // Pass through system shortcuts (Cmd+*) when not searching
       if event.modifierFlags.contains(.command) && !state.isSearching {
@@ -1020,7 +1047,7 @@ struct ContentView: View {
             populateHintMatches(&state, source: source)
           }
         case .scrollToTop:
-          if let pane = store.activeSession?.activeTab?.activePane {
+          if let pane = copyModePane {
             let offset = Int(pane.surfaceView.scrollbarState.offset)
             if offset > 0 {
               scrollViewport(&state, delta: -offset)
@@ -1030,7 +1057,7 @@ struct ContentView: View {
             populateHintMatches(&state, source: source)
           }
         case .scrollToBottom:
-          if let pane = store.activeSession?.activeTab?.activePane {
+          if let pane = copyModePane {
             let sb = pane.surfaceView.scrollbarState
             let maxOffset = sb.total > sb.len ? sb.total - sb.len : 0
             let delta = Int(Int64(maxOffset) - Int64(sb.offset))
@@ -1117,10 +1144,12 @@ struct ContentView: View {
       default: return event
       }
 
-      // Don't intercept if session manager, window mode, or copy mode is active
+      // Don't intercept if session manager or window mode is active.
+      // Copy mode INTENTIONALLY allows pane navigation: the copy-mode state
+      // stays bound to its original pane (see `tab.copyModePaneID`), so the
+      // user can scroll back, focus elsewhere to do work, then return.
       guard !showingSessionManager,
-        store.activeSession?.activeTab?.isWindowModeActive != true,
-        store.activeSession?.activeTab?.isCopyModeActive != true
+        store.activeSession?.activeTab?.isWindowModeActive != true
       else { return event }
 
       guard let tab = store.activeSession?.activeTab,
@@ -1291,7 +1320,7 @@ struct ContentView: View {
 
   private func performSearch(_ state: inout CopyModeState, direction: SearchDirection) {
     guard !state.searchQuery.isEmpty,
-      let pane = store.activeSession?.activeTab?.activePane,
+      let pane = copyModePane,
       let surface = pane.surfaceView.surface
     else { return }
 
@@ -1375,7 +1404,7 @@ struct ContentView: View {
 
   private func countSearchMatches(_ state: inout CopyModeState) {
     guard !state.searchQuery.isEmpty,
-      let pane = store.activeSession?.activeTab?.activePane
+      let pane = copyModePane
     else { return }
 
     let scrollbar = pane.surfaceView.scrollbarState
@@ -1407,7 +1436,7 @@ struct ContentView: View {
   }
 
   private func readTerminalLine(row: Int) -> String? {
-    guard let pane = store.activeSession?.activeTab?.activePane,
+    guard let pane = copyModePane,
       let surface = pane.surfaceView.surface
     else { return nil }
 
@@ -1434,7 +1463,7 @@ struct ContentView: View {
   /// Read a line by screen row, preferring VIEWPORT reading when the row is visible.
   /// This ensures consistency with the highlight overlay (which uses VIEWPORT).
   private func readLineByScreenRow(_ screenRow: Int) -> String? {
-    guard let pane = store.activeSession?.activeTab?.activePane else { return nil }
+    guard let pane = copyModePane else { return nil }
     let scrollbar = pane.surfaceView.scrollbarState
     let viewportRow = screenRow - Int(scrollbar.offset)
     if viewportRow >= 0 && viewportRow < Int(scrollbar.len) {
@@ -1444,7 +1473,7 @@ struct ContentView: View {
   }
 
   private func readScreenLine(row: Int) -> String? {
-    guard let pane = store.activeSession?.activeTab?.activePane,
+    guard let pane = copyModePane,
       let surface = pane.surfaceView.surface
     else { return nil }
 
@@ -1484,7 +1513,7 @@ struct ContentView: View {
 
   private func yankSelection() {
     guard let tab = store.activeSession?.activeTab,
-      let pane = tab.activePane,
+      let pane = tab.copyModePane,
       let state = tab.copyModeState,
       let anchor = state.anchor,
       let surface = pane.surfaceView.surface
