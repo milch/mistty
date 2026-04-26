@@ -5,8 +5,6 @@ struct PaneLayoutView: View {
   let node: PaneLayoutNode
   let activePane: MisttyPane?
   var isWindowModeActive: Bool = false
-  var copyModeState: CopyModeState?
-  var copyModePaneID: Int?
   var windowModeState: MisttyTab.WindowModeState = .inactive
   var joinPickTabNames: [String] = []
   var paneCount: Int = 1
@@ -29,7 +27,11 @@ struct PaneLayoutView: View {
         pane: pane,
         isActive: activePane?.id == pane.id,
         isWindowModeActive: isWindowModeActive,
-        copyModeState: (pane.id == copyModePaneID) ? copyModeState : nil,
+        // Each pane keeps its own copyModeState across focus switches, but
+        // only the focused pane shows the overlay — other panes that have a
+        // stored state stay scrolled to their saved position with no UI
+        // chrome until refocused.
+        copyModeState: (pane.id == activePane?.id) ? pane.copyModeState : nil,
         windowModeState: windowModeState,
         joinPickTabNames: joinPickTabNames,
         paneCount: paneCount,
@@ -103,7 +105,6 @@ struct PaneLayoutView: View {
   private func child(_ node: PaneLayoutNode) -> some View {
     PaneLayoutView(
       node: node, activePane: activePane, isWindowModeActive: isWindowModeActive,
-      copyModeState: copyModeState, copyModePaneID: copyModePaneID,
       windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
       paneCount: paneCount,
       borderColor: borderColor, borderWidth: borderWidth,

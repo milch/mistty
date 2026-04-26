@@ -37,6 +37,14 @@ final class MisttyPane: Identifiable {
 
   var processTitle: String?
 
+  /// Per-pane copy-mode state. Lives on the pane so each pane can keep its
+  /// own scroll position / cursor / selection across focus switches: while
+  /// you're focused on a different pane, this pane's overlay is hidden but
+  /// state stays put. Coming back via Ctrl-hjkl resumes copy mode where it
+  /// left off.
+  var copyModeState: CopyModeState?
+  var isCopyModeActive: Bool { copyModeState != nil }
+
   /// Process ID of the shell (or the command passed via `cfg.command`) that
   /// libghostty spawned for this pane. `-1` when the surface hasn't started
   /// yet, has exited, or libghostty wasn't built with the shell-PID patch.

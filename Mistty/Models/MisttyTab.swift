@@ -21,15 +21,13 @@ final class MisttyTab: Identifiable {
 
   var windowModeState: WindowModeState = .inactive
   var isWindowModeActive: Bool { windowModeState != .inactive }
-  var copyModeState: CopyModeState?
-  var isCopyModeActive: Bool { copyModeState != nil }
-  /// Pane that owns the active copy-mode session. Set on entry, cleared on
-  /// exit. Lets the user switch focus (Ctrl-hjkl) to other panes without
-  /// dropping copy mode — the overlay and key handler stay attached to this
-  /// pane until exited or until the pane closes.
-  var copyModePaneID: Int?
-  var copyModePane: MisttyPane? {
-    copyModePaneID.flatMap { id in panes.first(where: { $0.id == id }) }
+
+  /// Convenience: is the *focused* pane in copy mode? Each pane keeps its
+  /// own `copyModeState`; this just asks the active one.
+  var isCopyModeActive: Bool { activePane?.isCopyModeActive ?? false }
+  var copyModeState: CopyModeState? {
+    get { activePane?.copyModeState }
+    set { activePane?.copyModeState = newValue }
   }
   var zoomedPane: MisttyPane?
   var layout: PaneLayout
@@ -88,10 +86,6 @@ final class MisttyTab: Identifiable {
 
   func closePane(_ pane: MisttyPane) {
     let wasActive = activePane?.id == pane.id
-    if copyModePaneID == pane.id {
-      copyModeState = nil
-      copyModePaneID = nil
-    }
     layout.remove(pane: pane)
     panes = layout.leaves
     if wasActive {

@@ -217,7 +217,7 @@ struct ContentView: View {
                   isActive: true,
                   isWindowModeActive: tab.isWindowModeActive,
                   isZoomed: true,
-                  copyModeState: (zoomedPane.id == tab.copyModePaneID) ? tab.copyModeState : nil,
+                  copyModeState: (zoomedPane.id == tab.activePane?.id) ? zoomedPane.copyModeState : nil,
                   windowModeState: tab.windowModeState,
                   joinPickTabNames: joinPickTabNames,
                   paneCount: tab.panes.count,
@@ -229,8 +229,6 @@ struct ContentView: View {
                   node: tab.layout.root,
                   activePane: tab.activePane,
                   isWindowModeActive: tab.isWindowModeActive,
-                  copyModeState: tab.copyModeState,
-                  copyModePaneID: tab.copyModePaneID,
                   windowModeState: tab.windowModeState,
                   joinPickTabNames: joinPickTabNames,
                   paneCount: tab.panes.count,
@@ -294,6 +292,9 @@ struct ContentView: View {
       }
       if windowModeShortcutMonitor == nil {
         installWindowModeShortcutMonitor()
+      }
+      if copyModeMonitor == nil {
+        installCopyModeMonitor()
       }
     }
     .onDisappear {
@@ -435,13 +436,7 @@ struct ContentView: View {
   }
 
   private func closePaneInTab(_ pane: MisttyPane, tab: MisttyTab, session: MisttySession) {
-    let wasCopyModePane = tab.copyModePaneID == pane.id
     tab.closePane(pane)
-    if wasCopyModePane {
-      // tab.closePane already cleared the copy-mode state on the tab; the
-      // global keyDown monitor still needs to be torn down here.
-      removeCopyModeMonitor()
-    }
     if tab.panes.isEmpty {
       session.closeTab(tab)
       if session.tabs.isEmpty {
@@ -888,11 +883,13 @@ struct ContentView: View {
 
   // MARK: - Copy Mode
 
-  /// Resolves the pane that owns the active copy-mode session. Use this
-  /// instead of `tab.activePane` inside copy-mode helpers so the user can
-  /// switch focus (Ctrl-hjkl) without losing copy mode's state.
+  /// Resolves the pane whose copy-mode session is currently driving keys.
+  /// That's always the focused pane: each pane carries its own
+  /// `copyModeState`, but only the active pane's state shows the overlay
+  /// and consumes keystrokes.
   private var copyModePane: MisttyPane? {
-    store.activeSession?.activeTab?.copyModePane
+    let active = store.activeSession?.activeTab?.activePane
+    return active?.isCopyModeActive == true ? active : nil
   }
 
   private func enterCopyMode() {
@@ -920,10 +917,8 @@ struct ContentView: View {
       cursorCol = pos.col
     }
 
-    tab.copyModePaneID = activePane.id
-    tab.copyModeState = CopyModeState(
+    activePane.copyModeState = CopyModeState(
       rows: rows, cols: cols, cursorRow: cursorRow, cursorCol: cursorCol)
-    installCopyModeMonitor()
   }
 
   private func scrollViewport(_ state: inout CopyModeState, delta: Int) {
@@ -957,31 +952,28 @@ struct ContentView: View {
   }
 
   private func exitCopyMode() {
-    // Scroll back to bottom (active area) on the copy-mode pane (which may
-    // not be the currently focused pane if the user navigated away with
-    // Ctrl-hjkl during copy mode).
-    if let pane = copyModePane, let surface = pane.surfaceView.surface {
+    // Scroll back to the live area on the focused pane (the only pane whose
+    // copy mode is "active" right now). Other panes that have stored copy
+    // mode state keep their scroll position until the user navigates back
+    // to them and exits there too.
+    let active = store.activeSession?.activeTab?.activePane
+    if let surface = active?.surfaceView.surface {
       let actionStr = "scroll_to_bottom"
       _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
     }
-    if let tab = store.activeSession?.activeTab {
-      tab.copyModeState = nil
-      tab.copyModePaneID = nil
-    }
-    removeCopyModeMonitor()
+    active?.copyModeState = nil
   }
 
   private func installCopyModeMonitor() {
     copyModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      // The monitor stays installed for ContentView's lifetime; it only
+      // consumes keys when the focused pane is in copy mode. Other panes —
+      // including ones with their own stored copy-mode state that the user
+      // navigated away from — see keys pass through to the terminal.
       guard let tab = store.activeSession?.activeTab,
-        var state = tab.copyModeState
+        let active = tab.activePane,
+        var state = active.copyModeState
       else { return event }
-
-      // Pass through to the focused pane when the user has navigated away
-      // from the copy-mode pane (Ctrl-hjkl). The copy-mode overlay still
-      // renders on the original pane; key handling resumes when they
-      // navigate back.
-      guard tab.activePane?.id == tab.copyModePaneID else { return event }
 
       // Pass through system shortcuts (Cmd+*) when not searching
       if event.modifierFlags.contains(.command) && !state.isSearching {
@@ -1145,9 +1137,10 @@ struct ContentView: View {
       }
 
       // Don't intercept if session manager or window mode is active.
-      // Copy mode INTENTIONALLY allows pane navigation: the copy-mode state
-      // stays bound to its original pane (see `tab.copyModePaneID`), so the
-      // user can scroll back, focus elsewhere to do work, then return.
+      // Copy mode INTENTIONALLY allows pane navigation: each pane carries
+      // its own copy-mode state, so the user can scroll back in pane A,
+      // focus elsewhere to do work, then come back to pane A and pick up
+      // where they left off.
       guard !showingSessionManager,
         store.activeSession?.activeTab?.isWindowModeActive != true
       else { return event }
@@ -1512,9 +1505,8 @@ struct ContentView: View {
   }
 
   private func yankSelection() {
-    guard let tab = store.activeSession?.activeTab,
-      let pane = tab.copyModePane,
-      let state = tab.copyModeState,
+    guard let pane = store.activeSession?.activeTab?.activePane,
+      let state = pane.copyModeState,
       let anchor = state.anchor,
       let surface = pane.surfaceView.surface
     else { return }
