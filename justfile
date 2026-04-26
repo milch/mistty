@@ -67,6 +67,13 @@ set-version version:
     fi
     plutil -replace CFBundleShortVersionString -string "{{version}}" "$PLIST"
     plutil -replace CFBundleVersion -string "{{version}}" "$PLIST"
+    # SwiftPM doesn't watch `-Xlinker -sectcreate` source files for
+    # changes, so deleting the linked binaries forces a relink on the
+    # next build — without this, the embedded `__TEXT,__info_plist`
+    # section in `.build/{debug,release}/{Mistty,MisttyCLI}` keeps
+    # the *old* version even after this commit lands.
+    rm -f .build/debug/Mistty .build/debug/MisttyCLI
+    rm -f .build/release/Mistty .build/release/MisttyCLI
     git add "$PLIST"
     git commit -m "release: sync Info.plist to v{{version}}"
     echo "Set Info.plist to {{version}} (no tag created)"
@@ -113,6 +120,11 @@ bump component:
     fi
     plutil -replace CFBundleShortVersionString -string "$new" "$PLIST"
     plutil -replace CFBundleVersion -string "$new" "$PLIST"
+    # See `set-version` for why this rm is necessary — SwiftPM doesn't
+    # track `-Xlinker -sectcreate` inputs, so without it the embedded
+    # plist in the linked binaries stays at the old version.
+    rm -f .build/debug/Mistty .build/debug/MisttyCLI
+    rm -f .build/release/Mistty .build/release/MisttyCLI
     git add "$PLIST"
     git commit -m "release: v$new"
     git tag -a "v$new" -m "v$new"

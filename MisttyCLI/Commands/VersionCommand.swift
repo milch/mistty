@@ -18,6 +18,10 @@ struct VersionCommand: ParsableCommand {
             let data = try client.call("getVersion")
             let response = try JSONDecoder().decode(VersionResponse.self, from: data)
             print("Mistty.app: \(response.version) (\(response.bundleIdentifier))")
+        } catch IPCClientError.remoteError(let msg) where msg.contains("Unknown method") {
+            // Server pre-dates the getVersion RPC. Distinguish from "not
+            // running at all" because reinstall is the actionable fix.
+            print("Mistty.app: running but pre-dates `getVersion` — reinstall to refresh")
         } catch {
             print("Mistty.app: unavailable (\(error.localizedDescription))")
         }
