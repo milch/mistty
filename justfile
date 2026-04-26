@@ -163,22 +163,45 @@ _atomic-install src dst:
     cp -R "$SRC" "$NEW"
 
     if pgrep -fq "$DST/Contents/MacOS/" 2>/dev/null; then
-      # `( ... & )` runs in a subshell so the helper detaches from this
-      # script's job control; nohup + redirected stdio keeps it alive
-      # when its grandparent shell dies along with the running app.
-      (
-        nohup bash -c "
-          while pgrep -fq \"$DST/Contents/MacOS/\" 2>/dev/null; do
-            sleep 0.1
-          done
-          sleep 0.5
-          rm -rf \"$DST\"
-          mv \"$NEW\" \"$DST\"
-          open \"$DST\"
-        " </dev/null >/dev/null 2>&1 &
-      )
+      # The helper has to survive the calling shell's death — when
+      # `just install-release` is invoked from inside the running
+      # Mistty, AppKit's quit teardown kills our process group along
+      # with the host shell. macOS doesn't ship `setsid`, so we use
+      # Perl's standard double-fork + setsid daemonize to put the
+      # helper in its own session. Logs land in /tmp/mistty-install.log
+      # for postmortem if anything goes wrong.
+      HELPER=$(mktemp -t mistty-install)
+      cat > "$HELPER" <<HELPER_EOF
+    #!/bin/bash
+    exec >> /tmp/mistty-install.log 2>&1
+    echo "[\$(date)] helper started; waiting for $DST to exit"
+    while pgrep -fq "$DST/Contents/MacOS/" 2>/dev/null; do
+      sleep 0.1
+    done
+    sleep 0.5
+    echo "[\$(date)] swapping bundles"
+    rm -rf "$DST.old"
+    [ -d "$DST" ] && mv "$DST" "$DST.old"
+    mv "$NEW" "$DST"
+    rm -rf "$DST.old"
+    echo "[\$(date)] launching $DST"
+    open "$DST"
+    echo "[\$(date)] done"
+    rm -f "$HELPER"
+    HELPER_EOF
+      chmod +x "$HELPER"
+      /usr/bin/perl -e '
+        use POSIX;
+        exit if fork();
+        POSIX::setsid();
+        exit if fork();
+        open STDIN, "<", "/dev/null";
+        open STDOUT, ">>", "/tmp/mistty-install.log";
+        open STDERR, ">&", \*STDOUT;
+        exec $ARGV[0];
+      ' "$HELPER"
       osascript -e "tell application \"$DST\" to quit" 2>/dev/null || true
-      echo "$DST running — quitting; detached helper will swap and relaunch."
+      echo "$DST running — quitting; helper will swap and relaunch (log: /tmp/mistty-install.log)."
     else
       rm -rf "$DST"
       mv "$NEW" "$DST"
