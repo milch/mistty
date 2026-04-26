@@ -367,6 +367,12 @@ struct MisttyConfig: Sendable, Equatable {
 
   /// Mutable cache of the parsed config. Initialized on first read; swapped
   /// by `reload()`. All consumers should read this (or call `load()`).
+  ///
+  /// Threading: writes go through `reload()`, which is always invoked from
+  /// the main thread (menu action, Settings save, or IPC dispatch to
+  /// `@MainActor`). Reads are unrestricted because `MisttyConfig` is a
+  /// value type — readers see either the old or new snapshot, never a
+  /// torn one.
   nonisolated(unsafe) static var current: MisttyConfig = {
     do {
       return try loadThrowing()
@@ -389,11 +395,16 @@ struct MisttyConfig: Sendable, Equatable {
   /// parse error throws (and leaves `current` unchanged).
   @discardableResult
   static func reload(from url: URL = configURL) throws -> MisttyConfig {
-    let new = try loadThrowing(from: url)
-    current = new
-    lastParseError = nil
-    NotificationCenter.default.post(name: .misttyConfigDidReload, object: nil)
-    return new
+    do {
+      let new = try loadThrowing(from: url)
+      current = new
+      lastParseError = nil
+      NotificationCenter.default.post(name: .misttyConfigDidReload, object: nil)
+      return new
+    } catch {
+      lastParseError = error
+      throw error
+    }
   }
 
   /// Escape a string for safe TOML serialization.

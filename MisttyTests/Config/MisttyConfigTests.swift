@@ -292,5 +292,6 @@ final class MisttyConfigTests: XCTestCase {
 
     XCTAssertThrowsError(try MisttyConfig.reload(from: url))
     XCTAssertEqual(MisttyConfig.current.fontSize, 42)
+    XCTAssertNotNil(MisttyConfig.lastParseError)
   }
 }
