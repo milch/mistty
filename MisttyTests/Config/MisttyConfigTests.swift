@@ -260,4 +260,37 @@ final class MisttyConfigTests: XCTestCase {
     let roundTripped = try MisttyConfig.loadThrowing(from: tmp)
     XCTAssertEqual(roundTripped.restore, config.restore)
   }
+
+  func test_reload_swapsCurrent_onSuccess() throws {
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mistty-reload-\(UUID().uuidString).toml")
+    try "font_size = 16\n".write(to: url, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let original = MisttyConfig.current
+    defer { MisttyConfig.current = original }
+
+    let observer = expectation(forNotification: .misttyConfigDidReload, object: nil)
+    let result = try MisttyConfig.reload(from: url)
+    wait(for: [observer], timeout: 1.0)
+
+    XCTAssertEqual(result.fontSize, 16)
+    XCTAssertEqual(MisttyConfig.current.fontSize, 16)
+  }
+
+  func test_reload_keepsCurrent_onParseError() {
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mistty-reload-bad-\(UUID().uuidString).toml")
+    try? "this is = not [valid toml\n".write(to: url, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    var snapshot = MisttyConfig()
+    snapshot.fontSize = 42
+    let original = MisttyConfig.current
+    defer { MisttyConfig.current = original }
+    MisttyConfig.current = snapshot
+
+    XCTAssertThrowsError(try MisttyConfig.reload(from: url))
+    XCTAssertEqual(MisttyConfig.current.fontSize, 42)
+  }
 }

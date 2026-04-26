@@ -9,10 +9,10 @@ struct MisttyApp: App {
   @State private var store = SessionStore()
   @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
-  // Shared parse — see `MisttyConfig.loadedAtLaunch`. Reading the same cache
+  // Shared parse — see `MisttyConfig.current`. Reading the same cache
   // GhosttyAppManager uses keeps SwiftUI state and libghostty in lockstep and
   // avoids parsing the TOML twice at bootstrap.
-  private let config: MisttyConfig = MisttyConfig.loadedAtLaunch.config
+  private let config: MisttyConfig = MisttyConfig.current
 
   init() {
     // Opt in to AppKit state restoration by default. Without this, macOS 14+

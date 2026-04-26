@@ -62,7 +62,7 @@ struct ZoxideService: Sendable {
       let fm = FileManager.default
       // Config override wins — skip probing entirely if the user pointed us
       // at a specific binary.
-      if let override = MisttyConfig.loadedAtLaunch.config.zoxidePath,
+      if let override = MisttyConfig.current.zoxidePath,
         fm.isExecutableFile(atPath: override)
       {
         return override

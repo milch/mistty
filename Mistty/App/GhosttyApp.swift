@@ -228,7 +228,8 @@ final class GhosttyAppManager {
     // keys override whatever was in ~/.config/mistty/ghostty.conf.
     // Read the single shared parse result. If parsing failed, surface it via
     // an NSAlert so the user knows why Mistty launched with defaults.
-    let (misttyConfig, parseError) = MisttyConfig.loadedAtLaunch
+    let misttyConfig = MisttyConfig.current
+    let parseError = MisttyConfig.lastParseError
     if let parseError {
       let message = describeTOMLParseError(parseError)
       // Wait for `didFinishLaunchingNotification` so the app is active when

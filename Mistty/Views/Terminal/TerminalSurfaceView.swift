@@ -65,7 +65,7 @@ final class TerminalSurfaceView: NSView {
   ) {
     // Use the shared launch-time parse so init doesn't re-read config.toml
     // per pane and stays consistent with the lines sent to libghostty.
-    let ui = MisttyConfig.loadedAtLaunch.config.ui
+    let ui = MisttyConfig.current.ui
     self.configuredPaddingX = CGFloat(ui.contentPaddingX?.first ?? Int(Self.ghosttyDefaultPadding))
     self.configuredPaddingY = CGFloat(ui.contentPaddingY?.first ?? Int(Self.ghosttyDefaultPadding))
     self.configuredPaddingBalance = ui.contentPaddingBalance ?? false
@@ -626,7 +626,7 @@ final class TerminalSurfaceView: NSView {
     var y = event.scrollingDeltaY
     let precision = event.hasPreciseScrollingDeltas
     if precision {
-      let mult = MisttyConfig.loadedAtLaunch.config.scrollMultiplier
+      let mult = MisttyConfig.current.scrollMultiplier
       x *= mult
       y *= mult
     }

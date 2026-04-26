@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DebugLog.shared.log("restore", "unsupported version \(bad); starting empty")
         return
       }
-      let config = MisttyConfig.loadedAtLaunch.config.restore
+      let config = MisttyConfig.current.restore
       store.restore(from: snapshot, config: config)
       DebugLog.shared.log(
         "restore",

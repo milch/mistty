@@ -365,22 +365,36 @@ struct MisttyConfig: Sendable, Equatable {
     return try parse(contents)
   }
 
-  /// Convenience for callers that don't care about the parse error. Falls
-  /// back to defaults; prefer `loadThrowing` when you want to show the user
-  /// what went wrong.
-  static func load() -> MisttyConfig {
-    loadedAtLaunch.config
-  }
-
-  /// Single source of truth for the parse of `config.toml` at app launch.
-  /// Static `let` runs exactly once, so we avoid multiple disk reads and
-  /// multiple swallows of the same parse error. Consumers that need a fresh
-  /// read after the user edits the file on disk — currently only
-  /// `SettingsView` — should call `loadThrowing(from:)` directly.
-  static let loadedAtLaunch: (config: MisttyConfig, parseError: Error?) = {
-    do { return (try loadThrowing(), nil) }
-    catch { return (.default, error) }
+  /// Mutable cache of the parsed config. Initialized on first read; swapped
+  /// by `reload()`. All consumers should read this (or call `load()`).
+  nonisolated(unsafe) static var current: MisttyConfig = {
+    do {
+      return try loadThrowing()
+    } catch {
+      lastParseError = error
+      return .default
+    }
   }()
+
+  /// Most-recent parse error, set by the `current` initializer or by a
+  /// failed `reload()` (in which case `current` is left unchanged).
+  nonisolated(unsafe) static var lastParseError: Error? = nil
+
+  /// Convenience accessor for code that doesn't care about the parse error
+  /// surface. Returns `current`.
+  static func load() -> MisttyConfig { current }
+
+  /// Re-parse the config file from disk and atomically swap `current`. On
+  /// success posts `.misttyConfigDidReload` and returns the new value. On
+  /// parse error throws (and leaves `current` unchanged).
+  @discardableResult
+  static func reload(from url: URL = configURL) throws -> MisttyConfig {
+    let new = try loadThrowing(from: url)
+    current = new
+    lastParseError = nil
+    NotificationCenter.default.post(name: .misttyConfigDidReload, object: nil)
+    return new
+  }
 
   /// Escape a string for safe TOML serialization.
   private func tomlEscape(_ value: String) -> String {
@@ -543,4 +557,10 @@ struct MisttyConfig: Sendable, Equatable {
     }
     try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
   }
+}
+
+extension Notification.Name {
+  /// Posted by `MisttyConfig.reload()` after `current` has been swapped.
+  /// Listeners that hold cached values should refresh from `MisttyConfig.current`.
+  static let misttyConfigDidReload = Notification.Name("misttyConfigDidReload")
 }
