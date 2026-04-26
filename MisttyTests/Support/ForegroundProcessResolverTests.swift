@@ -223,25 +223,26 @@ final class ForegroundProcessResolverTests: XCTestCase {
     XCTAssertEqual(result?.executable, "nvim")
   }
 
-  // Regression for the nested-nvim pgid-guard: outer nvim opens `:terminal`,
-  // a shell inside opens another nvim. The inner nvim is a same-named
-  // descendant of the outer, but in a different process group (the inner
-  // shell setpgid's its foreground job). Descent must stop at the outer
-  // server and NOT keep walking into the inner nvim — the outer is still
-  // the pane's foreground process. Without the pgid-guard we'd capture the
-  // inner nvim's server PID and type the wrong session file on restore.
-  func test_pgroupPath_pgidGuardStopsDescentAtNestedNvim() {
+  // Regression for nested nvim via `:terminal`: outer nvim opens `:terminal`,
+  // which always allocates a new pty + spawns a shell first; the inner nvim
+  // is a child of THAT shell, not of the outer nvim's server. The same-name
+  // filter naturally stops at the shell — descent from outer.server reaches
+  // children that are non-nvim (the shell), so the chain breaks regardless
+  // of pgid. We rely on this rather than a pgid guard because real-world
+  // nvim 0.12+ puts its --embed server in its own pgid (varies by launch),
+  // so a pgid filter would block the legitimate self-fork.
+  func test_pgroupPath_nestedNvimViaTerminalStopsAtOuterServer() {
     let fake = FakeDescribe()
-    // Outer nvim TUI + server share pgid=100.
     fake.byPID[100] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
                              argv: ["nvim"], pid: 100)
     fake.byPID[101] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
-                             argv: ["nvim"], pid: 101)
-    // Inner nvim from `:terminal` sits in its own pgroup=200.
+                             argv: ["nvim", "--embed"], pid: 101)
+    // `:terminal` runs a shell, which then runs the inner nvim. The shell
+    // breaks the same-name chain.
+    fake.byPID[150] = .init(executable: "bash", path: "/bin/bash",
+                             argv: ["bash"], pid: 150)
     fake.byPID[200] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
                              argv: ["nvim"], pid: 200)
-    fake.byPID[201] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
-                             argv: ["nvim"], pid: 201)
     let probe = ForegroundProcessProbe(
       ptyFD: { 7 },
       shellPID: { 50 },
@@ -249,20 +250,16 @@ final class ForegroundProcessResolverTests: XCTestCase {
       pidsInPgroup: { pgid in pgid == 100 ? [100, 101] : [] },
       childrenOf: { parent in
         if parent == 100 { return [101] }
-        if parent == 101 { return [200] }  // inner nvim, different pgroup
-        if parent == 200 { return [201] }
+        if parent == 101 { return [150] }   // :terminal's shell
+        if parent == 150 { return [200] }   // shell's nvim
         return []
       },
-      pgidOf: { pid in
-        if pid == 100 || pid == 101 { return 100 }
-        if pid == 200 || pid == 201 { return 200 }
-        return pid
-      },
+      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
-    XCTAssertEqual(result?.pid, 101, "should stop at outer server, not descend into inner nvim's pgroup")
+    XCTAssertEqual(result?.pid, 101, "should stop at outer server; bash child breaks the same-name chain")
   }
 
   // Wrapper-as-pgroup-leader (e.g. `nice nvim foo`, `/usr/bin/time nvim`,

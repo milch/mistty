@@ -127,10 +127,14 @@ enum ForegroundProcessResolver {
   /// makes `{{pid}}` substitution actually line up with the session files the
   /// user wrote. A no-op for processes that don't self-fork.
   ///
-  /// Stops when the next same-named child is in a different process group —
-  /// that distinguishes the intended "server child inherits TUI's pgid" case
-  /// from a nested scenario like outer-nvim opening `:terminal` which spawns
-  /// another nvim with its own pgid. Nested ones shouldn't win.
+  /// We previously gated the descent on the child sharing the parent's pgid,
+  /// reasoning that an outer-nvim opening `:terminal` would spawn an inner
+  /// nvim in a different pgid that we shouldn't pick up. Empirically the
+  /// nvim --embed server child also lives in its own pgid (varies even
+  /// across launches), so the gate was blocking the legitimate case. The
+  /// `executable == current.executable` filter is already enough to stop
+  /// the descent at shell boundaries (`:terminal` always spawns a shell
+  /// before any nested nvim, breaking the same-name chain).
   static func descendIntoSameExecutable(
     from start: ForegroundProcess, pgid: pid_t, probe: ForegroundProcessProbe
   ) -> ForegroundProcess {
@@ -140,7 +144,6 @@ enum ForegroundProcessResolver {
     for _ in 0..<4 {
       let children = probe.childrenOf(current.pid)
       guard let sameNamed = children.lazy
-        .filter({ probe.pgidOf($0) == pgid })
         .compactMap(probe.describe)
         .first(where: { $0.executable == current.executable })
       else { break }
