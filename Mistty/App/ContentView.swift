@@ -1465,11 +1465,14 @@ struct ContentView: View {
 
     switch state.subMode {
     case .visual:
-      // Character-wise: read from anchor to cursor
+      let (top, bottom) = CopyModeYank.normalize(
+        anchor: (row: anchor.row + offset, col: anchor.col),
+        cursor: (row: state.cursorRow + offset, col: state.cursorCol)
+      )
       textToCopy = readGhosttyText(
         surface: surface,
-        startRow: anchor.row + offset, startCol: anchor.col,
-        endRow: state.cursorRow + offset, endCol: state.cursorCol,
+        startRow: top.row, startCol: top.col,
+        endRow: bottom.row, endCol: bottom.col,
         rectangle: false,
         pointTag: tag
       )

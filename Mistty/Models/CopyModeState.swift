@@ -761,3 +761,17 @@ struct CopyModeState {
     return motionActions()
   }
 }
+
+enum CopyModeYank {
+  /// Lexicographic min/max on `(row, col)` so callers can pass `top_left`
+  /// and `bottom_right` to `ghostty_surface_read_text` in the order ghostty
+  /// requires.
+  static func normalize(
+    anchor: (row: Int, col: Int),
+    cursor: (row: Int, col: Int)
+  ) -> (top: (row: Int, col: Int), bottom: (row: Int, col: Int)) {
+    let aFirst = anchor.row < cursor.row
+      || (anchor.row == cursor.row && anchor.col <= cursor.col)
+    return aFirst ? (anchor, cursor) : (cursor, anchor)
+  }
+}

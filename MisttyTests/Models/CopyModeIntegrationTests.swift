@@ -191,4 +191,36 @@ final class CopyModeIntegrationTests: XCTestCase {
     XCTAssertNil(state.pendingContinuation)
     XCTAssertTrue(actions.contains(.exitCopyMode))
   }
+
+  // MARK: - Visual yank normalization
+
+  func test_visualYankNormalizes_whenCursorBeforeAnchor() {
+    // (row=5, col=10) anchor; (row=2, col=3) cursor.
+    let (top, bottom) = CopyModeYank.normalize(
+      anchor: (row: 5, col: 10),
+      cursor: (row: 2, col: 3)
+    )
+    XCTAssertEqual(top.row, 2)
+    XCTAssertEqual(top.col, 3)
+    XCTAssertEqual(bottom.row, 5)
+    XCTAssertEqual(bottom.col, 10)
+  }
+
+  func test_visualYankNormalizes_whenSameRowCursorBefore() {
+    let (top, bottom) = CopyModeYank.normalize(
+      anchor: (row: 4, col: 20),
+      cursor: (row: 4, col: 5)
+    )
+    XCTAssertEqual(top.col, 5)
+    XCTAssertEqual(bottom.col, 20)
+  }
+
+  func test_visualYankNormalizes_whenAnchorBeforeCursor() {
+    let (top, bottom) = CopyModeYank.normalize(
+      anchor: (row: 1, col: 0),
+      cursor: (row: 99, col: 0)
+    )
+    XCTAssertEqual(top.row, 1)
+    XCTAssertEqual(bottom.row, 99)
+  }
 }
