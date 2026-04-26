@@ -124,23 +124,60 @@ _copy-ghostty-resources app:
 install: bundle
     #!/usr/bin/env bash
     set -euo pipefail
-    # Quit only the dev build so running a release copy isn't killed.
-    osascript -e 'if application "/Applications/Mistty-dev.app" is running then tell application "/Applications/Mistty-dev.app" to quit' 2>/dev/null || true
-    rm -rf /Applications/Mistty-dev.app
-    cp -R build/Mistty-dev.app /Applications/Mistty-dev.app
-    echo "Installed: /Applications/Mistty-dev.app"
+    just _atomic-install build/Mistty-dev.app /Applications/Mistty-dev.app
     just _link-cli /Applications/Mistty-dev.app/Contents/MacOS/mistty-cli
 
 # Install to /Applications (release)
 install-release: bundle-release
     #!/usr/bin/env bash
     set -euo pipefail
-    # Quit only the release build so a running dev copy isn't killed.
-    osascript -e 'if application "/Applications/Mistty.app" is running then tell application "/Applications/Mistty.app" to quit' 2>/dev/null || true
-    rm -rf /Applications/Mistty.app
-    cp -R build/Mistty.app /Applications/Mistty.app
-    echo "Installed: /Applications/Mistty.app (release)"
+    just _atomic-install build/Mistty.app /Applications/Mistty.app
     just _link-cli /Applications/Mistty.app/Contents/MacOS/mistty-cli
+
+# Atomically swap a built `.app` into /Applications, surviving the
+# common case where `just install[-release]` is invoked from a pane
+# inside the very app being upgraded. Strategy:
+#   1. cp the new bundle to `${dst}.new` while the live one is still
+#      mounted — this is the heavy step.
+#   2. If the destination is currently running, fork a detached helper
+#      that polls until the running binary exits, then rm + mv the
+#      staging bundle into place and relaunch. Without the detach the
+#      shell hosting `just` dies along with the app it's quitting and
+#      the rm/mv never runs.
+#   3. If the destination isn't running, swap immediately.
+[private]
+_atomic-install src dst:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DST="{{dst}}"
+    SRC="{{src}}"
+    NEW="${DST}.new"
+
+    rm -rf "$NEW"
+    cp -R "$SRC" "$NEW"
+
+    if pgrep -fq "$DST/Contents/MacOS/" 2>/dev/null; then
+      # `( ... & )` runs in a subshell so the helper detaches from this
+      # script's job control; nohup + redirected stdio keeps it alive
+      # when its grandparent shell dies along with the running app.
+      (
+        nohup bash -c "
+          while pgrep -fq \"$DST/Contents/MacOS/\" 2>/dev/null; do
+            sleep 0.1
+          done
+          sleep 0.5
+          rm -rf \"$DST\"
+          mv \"$NEW\" \"$DST\"
+          open \"$DST\"
+        " </dev/null >/dev/null 2>&1 &
+      )
+      osascript -e "tell application \"$DST\" to quit" 2>/dev/null || true
+      echo "$DST running — quitting; detached helper will swap and relaunch."
+    else
+      rm -rf "$DST"
+      mv "$NEW" "$DST"
+      echo "Installed: $DST"
+    fi
 
 # Symlink ~/.local/bin/mistty-cli -> the app's bundled binary. Keeps the CLI
 # reachable from shells whose startup scripts reset PATH (nix-darwin's
