@@ -19,7 +19,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 4242 },
       pidsInPgroup: { pgid in pgid == 4242 ? [4242] : [] },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -40,7 +39,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 1000 },
       pidsInPgroup: { pgid in pgid == 1000 ? [1000] : [] },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -64,7 +62,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 81416 },
       pidsInPgroup: { pgid in pgid == 81416 ? [81416, 81418] : [] },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -97,7 +94,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
         pgid == 18102 ? [18102, 18101] : []
       },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -126,7 +122,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 6000 },             // nvim owns the tty
       pidsInPgroup: { pgid in pgid == 6000 ? [6000] : [] },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in 5000 },          // would pick dark-notify — unused
       describe: fake.describe
     )
@@ -146,7 +141,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in -1 },
       pidsInPgroup: { _ in [] },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in 7 },
       describe: fake.describe
     )
@@ -161,7 +155,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in -1 },
       pidsInPgroup: { _ in [] },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: { _ in nil }
     )
@@ -175,7 +168,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in -1 },
       pidsInPgroup: { _ in [] },
       childrenOf: { _ in [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: { _ in nil }
     )
@@ -209,11 +201,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
         if parent == 23803 { return [23804] }
         if parent == 23804 { return [23805] }  // dark-notify, different exe
         return []
-      },
-      pgidOf: { pid in
-        // Server child inherits TUI's pgid.
-        if pid == 23803 || pid == 23804 { return 23803 }
-        return pid
       },
       deepestDescendant: { _ in nil },
       describe: fake.describe
@@ -254,7 +241,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
         if parent == 150 { return [200] }   // shell's nvim
         return []
       },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -281,7 +267,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 500 },
       pidsInPgroup: { pgid in pgid == 500 ? [500, 501] : [] },
       childrenOf: { parent in parent == 500 ? [501] : [] },
-      pgidOf: { $0 == 501 ? 500 : $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )
@@ -308,7 +293,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       pidsInPgroup: { pgid in pgid == 700 ? [700, 702] : [] },
       // ssh has no same-named children.
       childrenOf: { parent in parent == 702 ? [999] : [] },
-      pgidOf: { $0 == 702 ? 700 : $0 },
       deepestDescendant: { _ in nil },
       describe: { pid in
         if pid == 999 {
@@ -338,7 +322,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
       tcgetpgrpOnPTY: { _ in 9000 },
       pidsInPgroup: { pgid in pgid == 9000 ? [9000] : [] },
       childrenOf: { parent in parent == 9000 ? [9001] : [] },
-      pgidOf: { $0 },
       deepestDescendant: { _ in nil },
       describe: fake.describe
     )

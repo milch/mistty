@@ -16,11 +16,6 @@ struct ForegroundProcessProbe {
   var tcgetpgrpOnPTY: (Int32) -> pid_t
   var pidsInPgroup: (pid_t) -> [pid_t]
   var childrenOf: (pid_t) -> [pid_t]
-  /// pgid of `pid`. Used by `descendIntoSameExecutable` to stop walking the
-  /// same-executable child chain when a child sits in a different process
-  /// group (e.g. an outer nvim's `:terminal` spawns an inner nvim with its
-  /// own pgid). Returns -1 on failure.
-  var pgidOf: (pid_t) -> pid_t
   var deepestDescendant: (pid_t) -> pid_t?
   var describe: (pid_t) -> ForegroundProcess?
 }
@@ -36,7 +31,6 @@ enum ForegroundProcessResolver {
       tcgetpgrpOnPTY: { fd in tcgetpgrp(fd) },
       pidsInPgroup: Self.pidsInPgroup(_:),
       childrenOf: Self.childrenOf(_:),
-      pgidOf: { pid in getpgid(pid) },
       deepestDescendant: Self.deepestLiveDescendant(of:),
       describe: Self.describe(pid:)
     )
@@ -84,7 +78,7 @@ enum ForegroundProcessResolver {
         // pgroup members happens to place a helper after the leader.
         if pids.contains(pgid), let described = probe.describe(pgid),
            !shellExecutables.contains(described.executable) {
-          return descendIntoSameExecutable(from: described, pgid: pgid, probe: probe)
+          return descendIntoSameExecutable(from: described, probe: probe)
         }
         // Fallback: the pgroup leader is a shell/wrapper (e.g. ghostty's
         // `login → exec-into-bash → exec-into-ssh` chain leaves `login` as
@@ -98,7 +92,7 @@ enum ForegroundProcessResolver {
             candidate = described
           }
         }
-        if let candidate { return descendIntoSameExecutable(from: candidate, pgid: pgid, probe: probe) }
+        if let candidate { return descendIntoSameExecutable(from: candidate, probe: probe) }
         // All pids in the foreground pgroup are shells/wrappers — user
         // is at a plain prompt. Explicit nil, don't fall through.
         if !pids.isEmpty { return nil }
@@ -136,7 +130,7 @@ enum ForegroundProcessResolver {
   /// the descent at shell boundaries (`:terminal` always spawns a shell
   /// before any nested nvim, breaking the same-name chain).
   static func descendIntoSameExecutable(
-    from start: ForegroundProcess, pgid: pid_t, probe: ForegroundProcessProbe
+    from start: ForegroundProcess, probe: ForegroundProcessProbe
   ) -> ForegroundProcess {
     var current = start
     // Real-world self-fork chains are depth 1 (TUI → server). A small bound
