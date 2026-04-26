@@ -43,6 +43,51 @@ icon:
     iconutil -c icns "$ICONSET_DEV" -o "$OUT_DEV"
     echo "Icons: $OUT + $OUT_DEV"
 
+# Bump the version in Mistty/Resources/Info.plist (both
+# CFBundleShortVersionString and CFBundleVersion), commit the change, and
+# create an annotated git tag `v<new>`. Refuses to run if the working tree
+# has uncommitted changes outside of Info.plist itself, so the tag points
+# at a clean release commit. Does NOT push — that's the human's call.
+bump component:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{component}}" in
+      major|minor|patch) ;;
+      *) echo "usage: just bump [major|minor|patch]" >&2; exit 2 ;;
+    esac
+    PLIST="Mistty/Resources/Info.plist"
+    # Refuse to run with unrelated uncommitted changes — otherwise the
+    # release commit would sweep them in.
+    dirty=$(git status --porcelain | awk -v keep="$PLIST" '$2 != keep')
+    if [ -n "$dirty" ]; then
+      echo "error: working tree has uncommitted changes outside of $PLIST:" >&2
+      echo "$dirty" >&2
+      exit 1
+    fi
+    current=$(plutil -extract CFBundleShortVersionString raw "$PLIST")
+    if ! [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "error: current version '$current' is not in MAJOR.MINOR.PATCH form" >&2
+      exit 1
+    fi
+    IFS='.' read -r major minor patch <<<"$current"
+    case "{{component}}" in
+      major) major=$((major + 1)); minor=0; patch=0 ;;
+      minor) minor=$((minor + 1)); patch=0 ;;
+      patch) patch=$((patch + 1)) ;;
+    esac
+    new="${major}.${minor}.${patch}"
+    if git rev-parse "v$new" >/dev/null 2>&1; then
+      echo "error: tag v$new already exists" >&2
+      exit 1
+    fi
+    plutil -replace CFBundleShortVersionString -string "$new" "$PLIST"
+    plutil -replace CFBundleVersion -string "$new" "$PLIST"
+    git add "$PLIST"
+    git commit -m "release: v$new"
+    git tag -a "v$new" -m "v$new"
+    echo "Bumped $current -> $new and tagged v$new"
+    echo "(push with: git push && git push --tags)"
+
 # Build the app (debug)
 build:
     swift build

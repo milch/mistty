@@ -547,6 +547,21 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
     }
   }
 
+  // MARK: - Meta
+
+  func getVersion(reply: @escaping (Data?, Error?) -> Void) {
+    let reply = Reply(handler: reply)
+    let info = Bundle.main.infoDictionary ?? [:]
+    let version = (info["CFBundleShortVersionString"] as? String) ?? "unknown"
+    let bundleID = (info["CFBundleIdentifier"] as? String) ?? "unknown"
+    let response = VersionResponse(version: version, bundleIdentifier: bundleID)
+    do {
+      reply(try JSONEncoder().encode(response), nil)
+    } catch {
+      reply(nil, error)
+    }
+  }
+
   // MARK: - Config
 
   func reloadConfig(reply: @escaping (Data?, Error?) -> Void) {

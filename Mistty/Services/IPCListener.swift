@@ -309,6 +309,10 @@ final class IPCListener {
     case "reloadConfig":
       service.reloadConfig(reply: reply)
 
+    // Meta
+    case "getVersion":
+      service.getVersion(reply: reply)
+
     default:
       reply(nil, MisttyIPC.error(.operationFailed, "Unknown method: \(method)"))
     }
