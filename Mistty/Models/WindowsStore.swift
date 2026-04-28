@@ -20,6 +20,14 @@ final class WindowState {
 @Observable
 @MainActor
 final class WindowsStore {
+  // Nested. Once SessionStore is deleted in Task 12, the plan can promote
+  // this back to top-level. For now, nesting avoids the naming clash.
+  struct TrackedWindow {
+    let id: Int
+    weak var window: NSWindow?
+    weak var state: WindowState?
+  }
+
   private(set) var windows: [WindowState] = []
   var activeWindow: WindowState?
 
@@ -31,6 +39,8 @@ final class WindowsStore {
 
   var pendingRestoreStates: [WindowState] = []
   var recentlyClosed: [_PlaceholderWindowSnapshot] = []
+  private(set) var trackedNSWindows: [TrackedWindow] = []
+  var openWindowAction: OpenWindowAction?
 
   // MARK: - ID generation
 
