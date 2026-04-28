@@ -90,6 +90,103 @@ final class WindowsStore {
     windows.removeAll { $0.id == state.id }
     if activeWindow?.id == state.id { activeWindow = windows.last }
   }
+
+  // MARK: - Lookup helpers
+
+  func window(byId id: Int) -> WindowState? {
+    windows.first { $0.id == id }
+  }
+
+  func session(byId id: Int) -> (window: WindowState, session: MisttySession)? {
+    for window in windows {
+      if let session = window.sessions.first(where: { $0.id == id }) {
+        return (window, session)
+      }
+    }
+    return nil
+  }
+
+  func tab(byId id: Int) -> (window: WindowState, session: MisttySession, tab: MisttyTab)? {
+    for window in windows {
+      for session in window.sessions {
+        if let tab = session.tabs.first(where: { $0.id == id }) {
+          return (window, session, tab)
+        }
+      }
+    }
+    return nil
+  }
+
+  func pane(byId id: Int) -> (window: WindowState, session: MisttySession, tab: MisttyTab, pane: MisttyPane)? {
+    for window in windows {
+      for session in window.sessions {
+        for tab in session.tabs {
+          if let pane = tab.panes.first(where: { $0.id == id }) {
+            return (window, session, tab, pane)
+          }
+        }
+      }
+    }
+    return nil
+  }
+
+  func popup(byId id: Int) -> (window: WindowState, session: MisttySession, popup: PopupState)? {
+    for window in windows {
+      for session in window.sessions {
+        if let popup = session.popups.first(where: { $0.id == id }) {
+          return (window, session, popup)
+        }
+      }
+    }
+    return nil
+  }
+
+  // MARK: - NSWindow registry
+
+  @discardableResult
+  func registerNSWindow(_ window: NSWindow, for state: WindowState) -> Int {
+    if let existing = trackedNSWindows.firstIndex(where: { $0.window === window }) {
+      // Update binding if the same NSWindow re-registers (e.g. WindowAccessor
+      // fires a second time after state restoration).
+      trackedNSWindows[existing] = TrackedWindow(id: trackedNSWindows[existing].id, window: window, state: state)
+      return trackedNSWindows[existing].id
+    }
+    let id = state.id
+    trackedNSWindows.append(TrackedWindow(id: id, window: window, state: state))
+    return id
+  }
+
+  func unregisterNSWindow(_ window: NSWindow) {
+    trackedNSWindows.removeAll { $0.window === window }
+  }
+
+  func trackedNSWindow(byId id: Int) -> TrackedWindow? {
+    trackedNSWindows.first { $0.id == id }
+  }
+
+  // MARK: - Focus helpers
+
+  /// True iff the system's keyWindow is one of our tracked terminal windows.
+  /// Used to gate app-wide shortcuts like Cmd-W when an auxiliary window
+  /// (Settings, etc.) has focus.
+  func isTerminalWindowKey() -> Bool {
+    guard let key = NSApp.keyWindow else { return false }
+    return trackedNSWindows.contains { $0.window === key }
+  }
+
+  /// True iff the system's keyWindow is the NSWindow tracked for `state`.
+  /// The window-scoped variant — used by per-window NSEvent monitors and
+  /// notification handlers so only the focused window acts.
+  func isActiveTerminalWindow(state: WindowState) -> Bool {
+    guard let key = NSApp.keyWindow else { return false }
+    return trackedNSWindows.contains { $0.window === key && $0.state?.id == state.id }
+  }
+
+  /// The `WindowState` whose tracked NSWindow is the keyWindow, if any.
+  func focusedWindow() -> WindowState? {
+    guard let key = NSApp.keyWindow else { return nil }
+    return trackedNSWindows.first { $0.window === key }?.state
+  }
 }
 
 // Placeholder — the real `WindowSnapshot` arrives in Phase 2 (Task 4).
