@@ -28,6 +28,10 @@ final class WindowsStore {
   var nextPopupID = 1
 
   var pendingRestoreStates: [WindowState] = []
+  /// Set during `restore(...)` and consumed once windows have mounted —
+  /// `WindowRootView.drainPendingRestores()` calls
+  /// `windowsStore.applyPendingActiveWindow()` to focus the right NSWindow.
+  var pendingActiveWindowID: Int?
   var recentlyClosed: [WindowSnapshot] = []
   private(set) var trackedNSWindows: [TrackedWindow] = []
   var openWindowAction: OpenWindowAction?
@@ -217,5 +221,13 @@ final class WindowsStore {
   func focusedWindow() -> WindowState? {
     guard let key = NSApp.keyWindow else { return nil }
     return trackedNSWindows.first { $0.window === key }?.state
+  }
+
+  func applyPendingActiveWindow() {
+    guard let id = pendingActiveWindowID,
+          let tracked = trackedNSWindow(byId: id) else { return }
+    pendingActiveWindowID = nil
+    tracked.window?.makeKeyAndOrderFront(nil)
+    activeWindow = tracked.state
   }
 }
