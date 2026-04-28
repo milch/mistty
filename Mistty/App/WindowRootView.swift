@@ -32,6 +32,24 @@ struct WindowRootView: View {
         _ = windowsStore.registerNSWindow(window, for: state)
       }
     )
+    .onDisappear {
+      guard let state else { return }
+      // Mirror the existing onDisappear stale-window sweep: only treat this
+      // as a window close when the NSWindow really went away (isVisible ==
+      // false in the next runloop tick). Spaces/minimize transitions have
+      // isVisible == true.
+      DispatchQueue.main.async { [windowsStore, state] in
+        let stillTracked = windowsStore.trackedNSWindows.first { $0.state?.id == state.id }
+        if let stillTracked, stillTracked.window?.isVisible == false {
+          windowsStore.unregisterNSWindow(stillTracked.window!)
+          windowsStore.closeWindow(state)
+        } else if stillTracked == nil {
+          // Already swept somewhere else; just remove the WindowState if it
+          // still lingers in the windows array.
+          windowsStore.closeWindow(state)
+        }
+      }
+    }
   }
 
   private func claimOrCreateState() {
