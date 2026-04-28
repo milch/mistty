@@ -56,6 +56,9 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 ### Misc & Bugs
 
+- When there are multiple windows open, it seems properties like whether the sidebar is open are shared between the windows. Let's make it a per-window setting so you can have a window with sidebar showing and a window without sidebar showing
+- Bell highlighting is too subtle - use the same highligth as the current tab but in orange
+
 Larger:
 
 - OSC777/OSC9/OSC99 notifications support
