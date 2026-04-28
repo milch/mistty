@@ -245,9 +245,16 @@ final class WindowsStore {
   /// After the first WindowRootView mounts and captures `openWindowAction`,
   /// fire it once per remaining state in `pendingRestoreStates`. Each new
   /// SwiftUI window mount will claim the next state at the head of the queue.
+  ///
+  /// Uses a fixed-size loop, NOT `while !pendingRestoreStates.isEmpty`. The
+  /// queue drains asynchronously — each `openWindow(id:)` schedules a SwiftUI
+  /// window mount whose `onAppear` removes one entry, but those mounts run in
+  /// later runloop ticks. A `while` loop would spin until the runloop got a
+  /// chance to fire the mounts, hanging the main thread on cold restore.
   func drainPendingRestores() {
     guard let action = openWindowAction else { return }
-    while !pendingRestoreStates.isEmpty {
+    let count = pendingRestoreStates.count
+    for _ in 0..<count {
       action(id: "terminal")
     }
   }

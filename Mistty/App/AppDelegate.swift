@@ -29,7 +29,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     do {
       let data = try JSONEncoder().encode(snapshot)
       coder.encode(data as NSData, forKey: Self.coderKey)
-      // Stub for Task 4: count sessions from the first window.
       let totalSessions = snapshot.windows.flatMap(\.sessions).count
       DebugLog.shared.log(
         "restore",
