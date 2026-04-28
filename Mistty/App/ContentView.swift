@@ -115,9 +115,18 @@ struct ContentView: View {
         // tab-id onChange below handled "user looked at the bell tab", but
         // window switches don't change activeTab.id, so we need this
         // additional hook for the cross-window case.
-        if newActive == state.id, let tab = state.activeSession?.activeTab, tab.hasBell {
+        guard newActive == state.id else { return }
+        if let tab = state.activeSession?.activeTab, tab.hasBell {
           tab.hasBell = false
           updateDockBadge()
+        }
+        // Restore popup focus on window switch. The popup pane lives in a
+        // SwiftUI overlay; when the window resigns key and later becomes
+        // key again, AppKit's first-responder auto-restore loses to the
+        // background pane's `viewDidMoveToWindow` grab, so the user ends
+        // up typing into the pane behind the popup.
+        if let popup = state.activeSession?.activePopup, popup.isVisible {
+          popup.pane.focusKeyboardInput()
         }
       }
       .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -130,6 +139,12 @@ struct ContentView: View {
         if let tab = state.activeSession?.activeTab, tab.hasBell {
           tab.hasBell = false
           updateDockBadge()
+        }
+        // Same popup-focus restore as the window-switch path above; AppKit's
+        // first-responder auto-restore is unreliable for views hosted in
+        // SwiftUI overlays.
+        if let popup = state.activeSession?.activePopup, popup.isVisible {
+          popup.pane.focusKeyboardInput()
         }
       }
       .onChange(of: state.activeSession?.activeTab?.id) { _, _ in
