@@ -2,22 +2,6 @@ import AppKit
 import Foundation
 import SwiftUI
 
-// TODO(Task 2): delete this stub. Task 2 creates `Mistty/Models/WindowState.swift`
-// with the real type — at that point this declaration becomes a duplicate-symbol
-// build error. Forward-declared here so WindowsStore compiles in isolation during
-// Phase 1. Do not add behavior to this stub.
-@Observable
-@MainActor
-final class WindowState {
-  let id: Int
-  unowned let store: WindowsStore
-
-  init(id: Int, store: WindowsStore) {
-    self.id = id
-    self.store = store
-  }
-}
-
 @Observable
 @MainActor
 final class WindowsStore {
