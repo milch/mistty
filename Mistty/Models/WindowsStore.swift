@@ -32,6 +32,23 @@ final class WindowsStore {
   private(set) var trackedNSWindows: [TrackedWindow] = []
   var openWindowAction: OpenWindowAction?
 
+  init() {
+    // Mirror `NSApp.keyWindow` into `activeWindow` so IPC sentinels
+    // (`active`, `sendKeys paneId=0`, `getText paneId=0`,
+    // `focusPaneByDirection sessionId=0`) and the bell handler always see
+    // the currently focused terminal window — not the last-created one.
+    NotificationCenter.default.addObserver(
+      forName: NSWindow.didBecomeKeyNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] note in
+      guard let self, let key = note.object as? NSWindow else { return }
+      MainActor.assumeIsolated {
+        self.activeWindow = self.trackedNSWindows.first { $0.window === key }?.state
+      }
+    }
+  }
+
   // MARK: - ID generation
 
   func generateWindowID() -> Int {
@@ -156,17 +173,22 @@ final class WindowsStore {
     recentlyClosed.removeFirst()
 
     // Rehydrate the WindowState from the in-memory snapshot using the
-    // same restore path as quit-relaunch.
-    var maxPaneID = 0
+    // same restore path as quit-relaunch. Fresh session IDs are minted —
+    // tab/pane IDs are preserved from the snapshot via restoreTab. ID
+    // counters monotonically increase, so reused IDs can't collide; we
+    // mint fresh session IDs only because session IDs are surfaced via
+    // the sidebar/IPC and a stale ID across a close/reopen would be
+    // confusing.
     let state = WindowState(id: reserveNextWindowID(), store: self)
     let config = MisttyConfig.current.restore
     let tabIDGen: () -> Int = { [weak self] in self?.generateTabID() ?? 0 }
     let paneIDGen: () -> Int = { [weak self] in self?.generatePaneID() ?? 0 }
     let popupIDGen: () -> Int = { [weak self] in self?.generatePopupID() ?? 0 }
+    var maxPaneID = 0  // restoreTab requires it inout; unused after the loop
 
     for sessionSnap in snapshot.sessions {
       let session = MisttySession(
-        id: generateSessionID(),  // fresh ids on reopen — old ids may collide
+        id: generateSessionID(),
         name: sessionSnap.name,
         directory: sessionSnap.directory,
         exec: nil,
@@ -192,8 +214,16 @@ final class WindowsStore {
 
   // MARK: - Lookup helpers
 
+  /// Resolve a window by id. Includes both the live `windows` list and
+  /// `pendingRestoreStates` — a window-id returned by `createWindow`/IPC
+  /// is reserved synchronously and pushed into the pending queue, but the
+  /// SwiftUI mount that promotes it into `windows` happens in a later
+  /// runloop tick. Without checking the pending queue, a script that runs
+  /// `window create` then immediately `session create --window <id>` would
+  /// race with the mount and get "window not found".
   func window(byId id: Int) -> WindowState? {
-    windows.first { $0.id == id }
+    if let live = windows.first(where: { $0.id == id }) { return live }
+    return pendingRestoreStates.first { $0.id == id }
   }
 
   func session(byId id: Int) -> (window: WindowState, session: MisttySession)? {
