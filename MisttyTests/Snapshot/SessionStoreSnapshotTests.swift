@@ -337,7 +337,10 @@ final class SessionStoreSnapshotTests: XCTestCase {
 
   func test_restore_unsupportedVersionPreservesExistingSessions() {
     _ = store.createSession(name: "existing", directory: URL(fileURLWithPath: "/tmp"))
-    let bad = WorkspaceSnapshot(version: 999, windows: [], activeWindowID: nil)
+    var bad = WorkspaceSnapshot(version: 999, windows: [], activeWindowID: nil)
+    // unsupportedVersion is set by the decoder, not the public init —
+    // mimic that here so restore() short-circuits.
+    bad.unsupportedVersion = 999
     store.restore(from: bad, config: RestoreConfig())
     XCTAssertEqual(store.sessions.count, 1)
     XCTAssertEqual(store.sessions[0].name, "existing")

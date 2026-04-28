@@ -15,8 +15,7 @@ public struct WorkspaceSnapshot: Codable, Sendable, Equatable {
     self.version = version
     self.windows = windows
     self.activeWindowID = activeWindowID
-    // Mark as unsupported if version is neither 1 nor 2
-    self.unsupportedVersion = (version == 1 || version == 2) ? nil : version
+    self.unsupportedVersion = nil
   }
 
   // MARK: - Codable with v1 migration
