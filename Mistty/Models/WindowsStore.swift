@@ -213,6 +213,16 @@ final class WindowsStore {
     return trackedNSWindows.contains { $0.window === key && $0.state?.id == state.id }
   }
 
+  /// IPC `createWindow` path. Reserves an id synchronously, builds an empty
+  /// `WindowState`, and pushes it onto `pendingRestoreStates` so the next
+  /// SwiftUI mount claims it. Returns the reserved id; the caller fires
+  /// `openWindowAction` to actually spawn the SwiftUI window.
+  func prepareWindowForIPCCreate() -> Int {
+    let state = WindowState(id: reserveNextWindowID(), store: self)
+    pendingRestoreStates.append(state)
+    return state.id
+  }
+
   /// Resolve the target window for a window-scoped create operation.
   /// `explicit` wins; otherwise we fall back to the focused terminal
   /// window. Returns nil if neither resolves.

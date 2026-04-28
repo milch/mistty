@@ -442,11 +442,18 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
   // MARK: - Windows
 
   func createWindow(reply: @escaping (Data?, Error?) -> Void) {
-    reply(
-      nil,
-      MisttyIPC.error(
-        .operationFailed,
-        "Not supported: programmatic window creation is not available with SwiftUI WindowGroup"))
+    let reply = Reply(handler: reply)
+    Task { @MainActor in
+      guard let action = self.windowsStore.openWindowAction else {
+        reply(nil, MisttyIPC.error(.invalidArgument,
+          "IPC not yet ready; first window must mount before createWindow can spawn additional windows"))
+        return
+      }
+      let id = self.windowsStore.prepareWindowForIPCCreate()
+      action(id: "terminal")
+      let response = WindowResponse(id: id, sessionCount: 0)
+      reply(self.encode(response), nil)
+    }
   }
 
   func listWindows(reply: @escaping (Data?, Error?) -> Void) {
