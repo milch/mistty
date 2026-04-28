@@ -112,7 +112,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   // MARK: - Tab bar
 
   func test_tabBar_threeTabs_secondActive() {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let session = store.createSession(
       name: "mistty", directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
     session.addTab()
@@ -137,13 +138,14 @@ final class ChromePolishSnapshotTests: XCTestCase {
   // MARK: - Sidebar row
 
   func test_sidebar_sessionRow_withProcessIcon() {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let session = store.createSession(
       name: "mistty", directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
     session.activeTab?.activePane?.processTitle = "nvim"
     store.activeSession = session
 
-    let view = SidebarView(store: store, width: .constant(220))
+    let view = SidebarView(state: store, windowsStore: windowsStore, width: .constant(220))
       .frame(width: 220, height: 200)
       .background(Color(NSColor.windowBackgroundColor))
 
@@ -158,13 +160,14 @@ final class ChromePolishSnapshotTests: XCTestCase {
     // Spot-check that the sidebar styling still reads correctly in light
     // mode. The bulk of the matrix is darkAqua-only; this is the foothold
     // for parametrizing more views over both appearances later.
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let session = store.createSession(
       name: "mistty", directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
     session.activeTab?.activePane?.processTitle = "nvim"
     store.activeSession = session
 
-    let view = SidebarView(store: store, width: .constant(220))
+    let view = SidebarView(state: store, windowsStore: windowsStore, width: .constant(220))
       .frame(width: 220, height: 200)
       .background(Color(NSColor.windowBackgroundColor))
 
@@ -176,13 +179,14 @@ final class ChromePolishSnapshotTests: XCTestCase {
   }
 
   func test_sidebar_sshSession() {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let session = store.createSession(
       name: "prod", directory: FileManager.default.homeDirectoryForCurrentUser)
     session.sshCommand = "ssh manu@prod.example.com"
     store.activeSession = session
 
-    let view = SidebarView(store: store, width: .constant(220))
+    let view = SidebarView(state: store, windowsStore: windowsStore, width: .constant(220))
       .frame(width: 220, height: 200)
       .background(Color(NSColor.windowBackgroundColor))
 
@@ -196,7 +200,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   // MARK: - Session manager
 
   func test_sessionManager_mixedItems() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let s1 = store.createSession(
       name: "running", directory: URL(fileURLWithPath: "/Users/me/Developer/other"))
     let s2 = store.createSession(
@@ -204,7 +209,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     store.activeSession = s2  // hides s2 from the session manager
     _ = s1
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
 
     let view = SessionManagerView(
@@ -224,7 +229,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   func test_contentView_fullWindow() {
     UserDefaults.standard.set(true, forKey: "sidebarVisible")
 
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
 
     // First session: two tabs so the tab bar is visible.
     let s1 = store.createSession(
@@ -246,7 +252,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     // Point back to the first session so the snapshot shows the tab bar.
     store.activeSession = s1
 
-    let view = ContentView(store: store, config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -259,7 +265,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   func test_contentView_sidebarOpen_singleTab() {
     UserDefaults.standard.set(true, forKey: "sidebarVisible")
 
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let s1 = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -273,7 +280,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1  // s1 has 1 tab → tab bar hidden
 
-    let view = ContentView(store: store, config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -286,7 +293,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   func test_contentView_sidebarClosed_singleTab() {
     UserDefaults.standard.set(false, forKey: "sidebarVisible")
 
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let s1 = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -295,7 +303,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1
 
-    let view = ContentView(store: store, config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -318,7 +326,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   func test_contentView_popupActive() {
     UserDefaults.standard.set(true, forKey: "sidebarVisible")
 
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let session = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -329,7 +338,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     session.openPopup(definition: PopupDefinition(
       name: "Quick Command", command: "echo hi"))
 
-    let view = ContentView(store: store, config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -342,7 +351,8 @@ final class ChromePolishSnapshotTests: XCTestCase {
   func test_contentView_sidebarClosed_multipleTabs() {
     UserDefaults.standard.set(false, forKey: "sidebarVisible")
 
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let s1 = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -355,7 +365,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1
 
-    let view = ContentView(store: store, config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, config: .default)
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -437,8 +447,10 @@ final class ChromePolishSnapshotTests: XCTestCase {
   ) {
     UserDefaults.standard.set(true, forKey: "sidebarVisible")
 
-    let store = SessionStore()
-    let s1 = store.createSession(
+    let windowsStore = WindowsStore()
+    let winState = windowsStore.createWindow()
+
+    let s1 = winState.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
     s1.activeTab?.activePane?.processTitle = "nvim"
@@ -451,12 +463,12 @@ final class ChromePolishSnapshotTests: XCTestCase {
     s1.tabs[2].activePane?.processTitle = "claude"
     s1.activeTab = s1.tabs[1]
 
-    let s2 = store.createSession(
+    let s2 = winState.createSession(
       name: "prod",
       directory: FileManager.default.homeDirectoryForCurrentUser)
     s2.sshCommand = "ssh manu@prod.example.com"
 
-    store.activeSession = s1
+    winState.activeSession = s1
 
     var ui = UIConfig()
     ui.tabBarMode = tabBarMode
@@ -465,7 +477,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     cfg.ui = ui
 
     let view =
-      ContentView(store: store, config: cfg)
+      ContentView(state: winState, windowsStore: windowsStore, config: cfg)
       .applyTopSafeArea(style: titleBarStyle)
       .overlay(alignment: .topLeading) {
         chromeOverlay(style: titleBarStyle)

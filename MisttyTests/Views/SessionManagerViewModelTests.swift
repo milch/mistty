@@ -5,12 +5,13 @@ import XCTest
 @MainActor
 final class SessionManagerViewModelTests: XCTestCase {
   func test_hideCurrentSession() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let s1 = store.createSession(name: "current", directory: URL(fileURLWithPath: "/tmp"))
     let _ = store.createSession(name: "other", directory: URL(fileURLWithPath: "/home"))
     store.activeSession = s1
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
 
     let sessionItems = vm.filteredItems.compactMap { item -> String? in
@@ -22,7 +23,8 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_sshHostSelectionCreatesSshSession() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let host = SSHHost(alias: "dev-box", hostname: "10.0.0.1")
     let config = MisttyConfig.default
     let command = config.ssh.resolveCommand(for: host.alias)
@@ -70,7 +72,8 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_frecencySorting() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let tempURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("frecency-test-\(UUID().uuidString).json")
     defer { try? FileManager.default.removeItem(at: tempURL) }
@@ -84,7 +87,7 @@ final class SessionManagerViewModelTests: XCTestCase {
     let _ = store.createSession(name: "other", directory: URL(fileURLWithPath: "/home"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store, frecencyService: service)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore, frecencyService: service)
     await vm.load()
 
     let names = vm.filteredItems.compactMap { item -> String? in
@@ -95,11 +98,12 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_fuzzyFilter_subsequence() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "my-project", directory: URL(fileURLWithPath: "/tmp"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("mprj")
 
@@ -111,13 +115,14 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_fuzzyFilter_multiToken_AND() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(
       name: "work-bazel", directory: URL(fileURLWithPath: "/tmp/workspace"))
     let _ = store.createSession(name: "work-other", directory: URL(fileURLWithPath: "/tmp/other"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("work bazel")
 
@@ -130,7 +135,8 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_fuzzyFilter_matchQualityPrimary_frecencyTiebreak() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let tempURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("frecency-test-\(UUID().uuidString).json")
     defer { try? FileManager.default.removeItem(at: tempURL) }
@@ -143,7 +149,7 @@ final class SessionManagerViewModelTests: XCTestCase {
     let _ = store.createSession(name: "dev-tools", directory: URL(fileURLWithPath: "/home"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store, frecencyService: service)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore, frecencyService: service)
     await vm.load()
     vm.updateQuery("dev")
 
@@ -155,11 +161,12 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_fuzzyFilter_storesMatchResults() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "my-project", directory: URL(fileURLWithPath: "/tmp"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("proj")
 
@@ -173,12 +180,13 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_fuzzyFilter_emptyQuery_showsAll() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "alpha", directory: URL(fileURLWithPath: "/tmp"))
     let _ = store.createSession(name: "beta", directory: URL(fileURLWithPath: "/home"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("")
 
@@ -193,11 +201,12 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_fuzzyFilter_whitespaceOnly_treatedAsEmpty() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "alpha", directory: URL(fileURLWithPath: "/tmp"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("   ")
 
@@ -212,11 +221,12 @@ final class SessionManagerViewModelTests: XCTestCase {
   // MARK: - "New" option tests
 
   func test_newOption_plainText_appearsAtTop() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "existing", directory: URL(fileURLWithPath: "/tmp"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("proj")
 
@@ -227,11 +237,12 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_notSelectedByDefault() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "project", directory: URL(fileURLWithPath: "/tmp"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("proj")
 
@@ -239,10 +250,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_becomesDefaultWhenOnlyItem() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("nonexistent-unique-query-xyz")
 
@@ -255,10 +267,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_notShownWhenQueryEmpty() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("")
 
@@ -270,10 +283,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_pathLike_existingDir() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("/tmp")
 
@@ -286,10 +300,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_pathLike_parentExists_createDir() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("/tmp/nonexistent-mistty-test-dir-\(UUID().uuidString)")
 
@@ -301,10 +316,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_pathLike_parentNotExists_noNew() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("/nonexistent-parent-\(UUID().uuidString)/child")
 
@@ -316,10 +332,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_ssh() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("ssh myhost")
 
@@ -332,10 +349,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_newOption_ssh_noHostname_noNew() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("ssh ")
 
@@ -349,10 +367,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   // MARK: - confirmSelection with modifiers
 
   func test_confirmSelection_newSession_plainText() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("myproject")
     vm.selectedIndex = 0
@@ -362,11 +381,12 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_confirmSelection_newSession_cmdOverridesToHome() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let s1 = store.createSession(name: "current", directory: URL(fileURLWithPath: "/tmp/somedir"))
     store.activeSession = s1
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("newproj")
     vm.selectedIndex = 0
@@ -378,10 +398,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_confirmSelection_newSession_ssh() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("ssh testhost")
     vm.selectedIndex = 0
@@ -407,10 +428,11 @@ final class SessionManagerViewModelTests: XCTestCase {
     FileManager.default.createFile(atPath: tempFile.path, contents: nil)
     defer { try? FileManager.default.removeItem(at: tempFile) }
 
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery(tempFile.path)
 
@@ -424,10 +446,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   // MARK: - Integration tests
 
   func test_tabCompletion_returnsDirectoryPath() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("/tmp")
 
@@ -439,10 +462,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_tabCompletion_newItem_returnsNil() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("nonexistent-xyz")
     vm.selectedIndex = 0
@@ -451,11 +475,12 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_typoTolerance_endToEnd() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "bazel-build", directory: URL(fileURLWithPath: "/tmp"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("bzael")
 
@@ -467,12 +492,13 @@ final class SessionManagerViewModelTests: XCTestCase {
   }
 
   func test_fullFlow_typeFilterSelectConfirm() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "work-project", directory: URL(fileURLWithPath: "/tmp/work"))
     let _ = store.createSession(name: "personal", directory: URL(fileURLWithPath: "/tmp/personal"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
 
     vm.updateQuery("work")
@@ -494,7 +520,8 @@ final class SessionManagerViewModelTests: XCTestCase {
   // MARK: - Running session ordering and boost
 
   func test_runningSessions_sortedFirst_byLastActivated() async {
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let _ = store.createSession(name: "alpha", directory: URL(fileURLWithPath: "/tmp/alpha-x"))
     let beta = store.createSession(name: "beta", directory: URL(fileURLWithPath: "/tmp/beta-x"))
     let _ = store.createSession(name: "gamma", directory: URL(fileURLWithPath: "/tmp/gamma-x"))
@@ -503,7 +530,7 @@ final class SessionManagerViewModelTests: XCTestCase {
     store.activeSession = beta
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
 
     let runningNames = vm.filteredItems.compactMap { item -> String? in
@@ -538,11 +565,12 @@ final class SessionManagerViewModelTests: XCTestCase {
     // Compare two real items rather than asserting against a magic threshold:
     // a running session "demo" should outrank a directory whose lastPathComponent
     // is also "demo" because the running-session boost applies.
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let session = store.createSession(name: "demo", directory: URL(fileURLWithPath: "/tmp/demo"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     vm.updateQuery("demo")
 
@@ -560,14 +588,15 @@ final class SessionManagerViewModelTests: XCTestCase {
     // (case-based) are mutually exclusive: a running SSH session is a
     // `.runningSession` so it only ever picks up the running boost. Lock
     // that behavior in so future tuning doesn't accidentally double-boost.
-    let store = SessionStore()
+    let windowsStore = WindowsStore()
+    let store = windowsStore.createWindow()
     let session = store.createSession(
       name: "prod", directory: FileManager.default.homeDirectoryForCurrentUser,
       exec: "ssh prod")
     session.sshCommand = "ssh prod"
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(store: store)
+    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
     await vm.load()
     // Match a single token against the session name (running sessions have
     // no subtitle, so multi-token "ssh prod" would never match).

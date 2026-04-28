@@ -4,7 +4,8 @@ import MisttyShared
 import SwiftUI
 
 struct ContentView: View {
-  var store: SessionStore
+  var state: WindowState
+  var windowsStore: WindowsStore
   var config: MisttyConfig
   @AppStorage("sidebarVisible") var sidebarVisible = true
   @State private var tabBarOverride: TabBarVisibilityOverride = .auto
@@ -24,7 +25,7 @@ struct ContentView: View {
     contentWithNotifications
       .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) {
         notification in
-        guard let session = store.activeSession,
+        guard let session = state.activeSession,
           let index = notification.userInfo?["index"] as? Int,
           index < session.tabs.count
         else { return }
@@ -33,27 +34,27 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .misttyFocusSessionByIndex)) {
         notification in
         guard let index = notification.userInfo?["index"] as? Int,
-          index < store.sessions.count
+          index < state.sessions.count
         else { return }
-        store.activeSession = store.sessions[index]
+        state.activeSession = state.sessions[index]
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNextTab)) { _ in
-        store.activeSession?.nextTab()
+        state.activeSession?.nextTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyPrevTab)) { _ in
-        store.activeSession?.prevTab()
+        state.activeSession?.prevTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNextSession)) { _ in
-        store.nextSession()
+        state.nextSession()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyPrevSession)) { _ in
-        store.prevSession()
+        state.prevSession()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionUp)) { _ in
-        store.moveActiveSessionUp()
+        state.moveActiveSessionUp()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionDown)) { _ in
-        store.moveActiveSessionDown()
+        state.moveActiveSessionDown()
       }
   }
 
@@ -75,11 +76,11 @@ struct ContentView: View {
         handleYankHints()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyScrollChanged)) { _ in
-        guard var state = store.activeSession?.activeTab?.copyModeState,
-              state.isHinting,
-              let source = state.hint?.source else { return }
-        populateHintMatches(&state, source: source)
-        store.activeSession?.activeTab?.copyModeState = state
+        guard var copyState = state.activeSession?.activeTab?.copyModeState,
+              copyState.isHinting,
+              let source = copyState.hint?.source else { return }
+        populateHintMatches(&copyState, source: source)
+        state.activeSession?.activeTab?.copyModeState = copyState
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
         handleCloseTab()
@@ -93,15 +94,15 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .ghosttyPwd)) { notification in
         handlePwd(notification)
       }
-      .onChange(of: store.activeSession?.activeTab?.id) { _, _ in
-        store.activeSession?.activeTab?.hasBell = false
+      .onChange(of: state.activeSession?.activeTab?.id) { _, _ in
+        state.activeSession?.activeTab?.hasBell = false
         updateDockBadge()
         // Window mode is ephemeral (tmux-style prefix). When the user switches
         // away to a different session/tab, clear it from the tab we're leaving
         // so it doesn't appear "stuck" on return — and drop the global
         // keyDown monitor, which otherwise acts on whatever tab is active
         // now (not the one we activated it for).
-        let newTab = store.activeSession?.activeTab
+        let newTab = state.activeSession?.activeTab
         if let prev = previousActiveTab, prev !== newTab, prev.isWindowModeActive {
           prev.windowModeState = .inactive
         }
@@ -121,7 +122,7 @@ struct ContentView: View {
       .overlay { popupOverlay }
       .onChange(of: showingSessionManager) { _, isShowing in
         if isShowing {
-          let vm = SessionManagerViewModel(store: store)
+          let vm = SessionManagerViewModel(state: state, windowsStore: windowsStore)
           sessionManagerVM = vm
           installKeyMonitor(vm: vm)
         } else {
@@ -167,7 +168,7 @@ struct ContentView: View {
       .onChange(of: sidebarVisible) { _, _ in
         resolveOverrideIfMatched()
       }
-      .onChange(of: store.activeSession?.tabs.count) { _, _ in
+      .onChange(of: state.activeSession?.tabs.count) { _, _ in
         resolveOverrideIfMatched()
       }
   }
@@ -179,7 +180,8 @@ struct ContentView: View {
       if sidebarVisible {
         HStack(spacing: 0) {
           SidebarView(
-            store: store,
+            state: state,
+            windowsStore: windowsStore,
             width: Binding(
               get: { CGFloat(sidebarWidth) },
               set: { sidebarWidth = Double($0) }
@@ -192,7 +194,7 @@ struct ContentView: View {
       }
 
       Group {
-        if let session = store.activeSession,
+        if let session = state.activeSession,
           let tab = session.activeTab
         {
           VStack(spacing: 0) {
@@ -265,21 +267,7 @@ struct ContentView: View {
         }
       }
     }
-    .background(
-      // viewDidMoveToWindow fires synchronously as the tracking NSView is
-      // mounted into the window's content hierarchy, giving us the
-      // *actual* host window for this ContentView — not whatever
-      // `NSApplication.shared.keyWindow` happens to return. That matters
-      // during state restoration (windows exist before they become key)
-      // and when multiple terminal windows coexist, both of which could
-      // leave the host window unregistered so `isTerminalWindowKey()`
-      // returned false and the Cmd-W fallback called
-      // `NSApp.keyWindow?.performClose(nil)` — closing the whole window.
-      WindowAccessor { window in
-        guard let window else { return }
-        _ = store.registerWindow(window)
-      }
-    )
+    // (NSWindow registration handled in WindowRootView via WindowAccessor)
     .onAppear {
       if ctrlNavMonitor == nil {
         installCtrlNavMonitor()
@@ -301,13 +289,14 @@ struct ContentView: View {
       DebugLog.shared.log(
         "view",
         "ContentView.onDisappear fired; scheduling stale-window sweep")
-      DispatchQueue.main.async { [store] in
-        for tracked in store.trackedWindows where !tracked.window.isVisible {
+      DispatchQueue.main.async { [windowsStore] in
+        for tracked in windowsStore.trackedNSWindows {
+          guard let window = tracked.window, !window.isVisible else { continue }
           DebugLog.shared.log(
             "view",
-            "onDisappear sweep: unregistering invisible id=\(tracked.id) num=\(tracked.window.windowNumber)"
+            "onDisappear sweep: unregistering invisible id=\(tracked.id) num=\(window.windowNumber)"
           )
-          store.unregisterWindow(tracked.window)
+          windowsStore.unregisterNSWindow(window)
         }
       }
       removeKeyMonitor()
@@ -317,8 +306,8 @@ struct ContentView: View {
       removeCloseMonitor()
       removeAltShortcutMonitor()
       removeWindowModeShortcutMonitor()
-      store.activeSession?.activeTab?.windowModeState = .inactive
-      if store.activeSession?.activeTab?.isCopyModeActive == true {
+      state.activeSession?.activeTab?.windowModeState = .inactive
+      if state.activeSession?.activeTab?.isCopyModeActive == true {
         exitCopyMode()
       }
       showingSessionManager = false
@@ -341,7 +330,7 @@ struct ContentView: View {
 
   @ViewBuilder
   private var popupOverlay: some View {
-    if let session = store.activeSession,
+    if let session = state.activeSession,
       let popup = session.activePopup,
       popup.isVisible
     {
@@ -381,7 +370,7 @@ struct ContentView: View {
   /// any user override — use this as the input to `TabBarVisibilityOverride`.
   /// Falls back to a tab count of 1 when no session is active.
   private func configuredTabBarShow() -> Bool {
-    let tabCount = store.activeSession?.tabs.count ?? 1
+    let tabCount = state.activeSession?.tabs.count ?? 1
     return config.ui.tabBarMode.shouldShow(
       sidebarVisible: sidebarVisible, tabCount: tabCount)
   }
@@ -402,7 +391,7 @@ struct ContentView: View {
   }
 
   private func splitPane(direction: SplitDirection, inheritSsh: Bool) {
-    guard let session = store.activeSession,
+    guard let session = state.activeSession,
       let tab = session.activeTab
     else { return }
     if inheritSsh, let sshCommand = session.sshCommand {
@@ -416,7 +405,7 @@ struct ContentView: View {
   }
 
   private func addTab(inheritSsh: Bool) {
-    guard let session = store.activeSession else { return }
+    guard let session = state.activeSession else { return }
     if inheritSsh, let sshCommand = session.sshCommand {
       session.addTab(exec: sshCommand)
     } else {
@@ -425,14 +414,14 @@ struct ContentView: View {
   }
 
   private func closePane(_ pane: MisttyPane) {
-    guard let session = store.activeSession,
+    guard let session = state.activeSession,
       let tab = session.activeTab
     else { return }
     closePaneInTab(pane, tab: tab, session: session)
   }
 
   private func returnFocusToActivePane() {
-    store.activeSession?.activeTab?.activePane?.focusKeyboardInput()
+    state.activeSession?.activeTab?.activePane?.focusKeyboardInput()
   }
 
   private func closePaneInTab(_ pane: MisttyPane, tab: MisttyTab, session: MisttySession) {
@@ -440,7 +429,7 @@ struct ContentView: View {
     if tab.panes.isEmpty {
       session.closeTab(tab)
       if session.tabs.isEmpty {
-        store.closeSession(session)
+        state.closeSession(session)
       }
     }
     // A closed tab may have carried a background bell — recompute so the
@@ -451,7 +440,7 @@ struct ContentView: View {
   // MARK: - Notification Handlers
 
   private func handlePopupToggle(_ notification: Notification) {
-    guard let session = store.activeSession,
+    guard let session = state.activeSession,
       let name = notification.userInfo?["name"] as? String
     else { return }
     let config = MisttyConfig.load()
@@ -469,7 +458,7 @@ struct ContentView: View {
       showingSessionManager = false
       return
     }
-    if let session = store.activeSession,
+    if let session = state.activeSession,
       let popup = session.activePopup,
       popup.isVisible
     {
@@ -477,14 +466,14 @@ struct ContentView: View {
       returnFocusToActivePane()
       return
     }
-    guard let tab = store.activeSession?.activeTab,
+    guard let tab = state.activeSession?.activeTab,
       let pane = tab.activePane
     else { return }
     closePane(pane)
   }
 
   private func handleWindowMode() {
-    guard let tab = store.activeSession?.activeTab else { return }
+    guard let tab = state.activeSession?.activeTab else { return }
     if tab.isWindowModeActive {
       tab.windowModeState = .inactive
       removeWindowModeMonitor()
@@ -495,7 +484,7 @@ struct ContentView: View {
   }
 
   private func handleCopyMode() {
-    guard let tab = store.activeSession?.activeTab else { return }
+    guard let tab = state.activeSession?.activeTab else { return }
     if tab.isCopyModeActive {
       exitCopyMode()
     } else {
@@ -504,22 +493,22 @@ struct ContentView: View {
   }
 
   private func handleYankHints() {
-    if store.activeSession?.activeTab?.copyModeState?.isHinting == true { return }
-    guard let tab = store.activeSession?.activeTab else { return }
+    if state.activeSession?.activeTab?.copyModeState?.isHinting == true { return }
+    guard let tab = state.activeSession?.activeTab else { return }
     if !tab.isCopyModeActive {
       enterCopyMode()
     }
-    guard var state = store.activeSession?.activeTab?.copyModeState else { return }
+    guard var copyState = state.activeSession?.activeTab?.copyModeState else { return }
     let config = MisttyConfig.load()
-    state.applyHintEntry(
+    copyState.applyHintEntry(
       action: .copy,
       source: .patterns,
       uppercaseAction: config.copyModeHints.uppercaseAction,
       alphabet: config.copyModeHints.alphabet,
       enteredDirectly: true
     )
-    populateHintMatches(&state, source: .patterns)
-    store.activeSession?.activeTab?.copyModeState = state
+    populateHintMatches(&copyState, source: .patterns)
+    state.activeSession?.activeTab?.copyModeState = copyState
   }
 
   private func handleCloseTab() {
@@ -527,12 +516,12 @@ struct ContentView: View {
       showingSessionManager = false
       return
     }
-    guard let session = store.activeSession,
+    guard let session = state.activeSession,
       let tab = session.activeTab
     else { return }
     session.closeTab(tab)
     if session.tabs.isEmpty {
-      store.closeSession(session)
+      state.closeSession(session)
     }
     updateDockBadge()
   }
@@ -542,15 +531,9 @@ struct ContentView: View {
       let raw = notification.userInfo?["title"] as? String,
       let title = TerminalTitle.sanitized(raw)
     else { return }
-    for session in store.sessions {
-      for tab in session.tabs {
-        if let pane = tab.panes.first(where: { $0.id == paneID }) {
-          pane.processTitle = title
-          tab.title = title
-          return
-        }
-      }
-    }
+    guard let resolved = windowsStore.pane(byId: paneID) else { return }
+    resolved.pane.processTitle = title
+    resolved.tab.title = title
   }
 
   private func handlePwd(_ notification: Notification) {
@@ -559,26 +542,20 @@ struct ContentView: View {
       !pwd.isEmpty
     else { return }
     let url = URL(fileURLWithPath: pwd, isDirectory: true)
-    for session in store.sessions {
-      for tab in session.tabs {
-        if let pane = tab.panes.first(where: { $0.id == paneID }) {
-          pane.currentWorkingDirectory = url
-          return
-        }
-      }
-    }
+    guard let resolved = windowsStore.pane(byId: paneID) else { return }
+    resolved.pane.currentWorkingDirectory = url
   }
 
   private func handleRingBell(_ notification: Notification) {
-    guard let paneID = notification.userInfo?["paneID"] as? Int else { return }
-    for session in store.sessions {
-      for tab in session.tabs {
-        if tab.panes.contains(where: { $0.id == paneID }),
-          !(store.activeSession?.id == session.id && session.activeTab?.id == tab.id)
-        {
-          tab.hasBell = true
-        }
-      }
+    guard let paneID = notification.userInfo?["paneID"] as? Int,
+      let resolved = windowsStore.pane(byId: paneID)
+    else { return }
+    let isActiveTabInOwningWindow =
+      resolved.window.activeSession?.id == resolved.session.id
+      && resolved.session.activeTab?.id == resolved.tab.id
+      && windowsStore.activeWindow?.id == resolved.window.id
+    if !isActiveTabInOwningWindow {
+      resolved.tab.hasBell = true
     }
     updateDockBadge()
     // Bounce the dock icon once when the bell rings while Mistty is in
@@ -594,7 +571,8 @@ struct ContentView: View {
   /// bell. Called on ring and on tab-switch (which clears `hasBell` for the
   /// newly-active tab). No-ops when `NSApp` isn't yet available (tests).
   private func updateDockBadge() {
-    let count = store.sessions
+    let count = windowsStore.windows
+      .flatMap(\.sessions)
       .flatMap(\.tabs)
       .filter(\.hasBell)
       .count
@@ -609,21 +587,14 @@ struct ContentView: View {
     // closes (process exit OR the user dismisses the wait prompt), the pane
     // is dead and reactivating the popup must spawn a fresh one; otherwise
     // the stale "press any key" output sticks around.
-    for session in store.sessions {
-      if let popup = session.popups.first(where: { $0.pane.id == paneID }) {
-        session.closePopup(popup)
-        returnFocusToActivePane()
-        return
-      }
+    if let resolved = windowsStore.popup(byId: paneID) {
+      resolved.session.closePopup(resolved.popup)
+      returnFocusToActivePane()
+      return
     }
     // Find and close the pane whose shell exited
-    for session in store.sessions {
-      for tab in session.tabs {
-        if let pane = tab.panes.first(where: { $0.id == paneID }) {
-          closePaneInTab(pane, tab: tab, session: session)
-          return
-        }
-      }
+    if let resolved = windowsStore.pane(byId: paneID) {
+      closePaneInTab(resolved.pane, tab: resolved.tab, session: resolved.session)
     }
   }
 
@@ -671,18 +642,18 @@ struct ContentView: View {
   }
 
   private func installWindowModeMonitor() {
-    if store.activeSession?.activeTab?.isCopyModeActive == true {
+    if state.activeSession?.activeTab?.isCopyModeActive == true {
       exitCopyMode()
     }
     windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       // Join-pick mode: number keys select target tab
-      if store.activeSession?.activeTab?.windowModeState == .joinPick {
+      if self.state.activeSession?.activeTab?.windowModeState == .joinPick {
         if event.keyCode == 53 {  // Escape — back to normal window mode
-          store.activeSession?.activeTab?.windowModeState = .normal
+          self.state.activeSession?.activeTab?.windowModeState = .normal
           return nil
         }
         if let chars = event.characters, let num = Int(chars), num >= 1, num <= 9 {
-          joinPaneToTab(targetIndex: num - 1)
+          self.joinPaneToTab(targetIndex: num - 1)
           return nil
         }
         return nil  // Consume all other keys in join-pick mode
@@ -695,16 +666,16 @@ struct ContentView: View {
         let cells = event.modifierFlags.contains(.shift) ? 1 : 5
         switch event.keyCode {
         case 123:  // Left
-          resizeActivePaneCells(-cells, along: .horizontal)
+          self.resizeActivePaneCells(-cells, along: .horizontal)
           return nil
         case 124:  // Right
-          resizeActivePaneCells(cells, along: .horizontal)
+          self.resizeActivePaneCells(cells, along: .horizontal)
           return nil
         case 126:  // Up
-          resizeActivePaneCells(-cells, along: .vertical)
+          self.resizeActivePaneCells(-cells, along: .vertical)
           return nil
         case 125:  // Down
-          resizeActivePaneCells(cells, along: .vertical)
+          self.resizeActivePaneCells(cells, along: .vertical)
           return nil
         default: break
         }
@@ -712,50 +683,50 @@ struct ContentView: View {
 
       switch event.keyCode {
       case 53:  // Escape — exit window mode
-        store.activeSession?.activeTab?.windowModeState = .inactive
-        removeWindowModeMonitor()
+        self.state.activeSession?.activeTab?.windowModeState = .inactive
+        self.removeWindowModeMonitor()
         return nil
       case 123:  // Left arrow
-        swapActivePane(.left)
+        self.swapActivePane(.left)
         return nil
       case 124:  // Right arrow
-        swapActivePane(.right)
+        self.swapActivePane(.right)
         return nil
       case 126:  // Up arrow
-        swapActivePane(.up)
+        self.swapActivePane(.up)
         return nil
       case 125:  // Down arrow
-        swapActivePane(.down)
+        self.swapActivePane(.down)
         return nil
       case 4:  // h — focus left (no swap)
-        focusAdjacentPane(.left)
+        self.focusAdjacentPane(.left)
         return nil
       case 38:  // j — focus down (no swap)
-        focusAdjacentPane(.down)
+        self.focusAdjacentPane(.down)
         return nil
       case 40:  // k — focus up (no swap)
-        focusAdjacentPane(.up)
+        self.focusAdjacentPane(.up)
         return nil
       case 37:  // l — focus right (no swap)
-        focusAdjacentPane(.right)
+        self.focusAdjacentPane(.right)
         return nil
       case 6:  // z — zoom toggle; exit window mode once zoom is committed
-        toggleZoom()
-        store.activeSession?.activeTab?.windowModeState = .inactive
-        removeWindowModeMonitor()
+        self.toggleZoom()
+        self.state.activeSession?.activeTab?.windowModeState = .inactive
+        self.removeWindowModeMonitor()
         return nil
       case 11:  // b — break pane to new tab
-        breakPaneToTab()
+        self.breakPaneToTab()
         return nil
       case 15:  // r — rotate split direction
-        rotateActivePane()
+        self.rotateActivePane()
         return nil
       case 46:  // m — join pane to tab
-        guard let tab = store.activeSession?.activeTab else { return nil }
+        guard let tab = self.state.activeSession?.activeTab else { return nil }
         tab.windowModeState = .joinPick
         return nil
       case 18, 19, 20, 21, 23:  // 1-5: standard layouts — stay so resize/swap follow-ups work
-        if let tab = store.activeSession?.activeTab, tab.panes.count >= 2 {
+        if let tab = self.state.activeSession?.activeTab, tab.panes.count >= 2 {
           let standardLayout: StandardLayout =
             switch event.keyCode {
             case 18: .evenHorizontal
@@ -775,7 +746,7 @@ struct ContentView: View {
   }
 
   private func joinPaneToTab(targetIndex: Int) {
-    guard let session = store.activeSession,
+    guard let session = state.activeSession,
       let sourceTab = session.activeTab,
       let pane = sourceTab.activePane
     else { return }
@@ -794,7 +765,7 @@ struct ContentView: View {
   }
 
   private func breakPaneToTab() {
-    guard let session = store.activeSession,
+    guard let session = state.activeSession,
       let tab = session.activeTab,
       let pane = tab.activePane,
       tab.panes.count > 1
@@ -809,7 +780,7 @@ struct ContentView: View {
   }
 
   private func toggleZoom() {
-    guard let tab = store.activeSession?.activeTab else { return }
+    guard let tab = state.activeSession?.activeTab else { return }
     if tab.zoomedPane != nil {
       tab.zoomedPane = nil
     } else {
@@ -818,14 +789,14 @@ struct ContentView: View {
   }
 
   private func swapActivePane(_ direction: NavigationDirection) {
-    guard let tab = store.activeSession?.activeTab,
+    guard let tab = state.activeSession?.activeTab,
       let current = tab.activePane
     else { return }
     tab.layout.swapPane(current, direction: direction)
   }
 
   private func focusAdjacentPane(_ direction: NavigationDirection) {
-    guard let tab = store.activeSession?.activeTab,
+    guard let tab = state.activeSession?.activeTab,
       let current = tab.activePane,
       let target = tab.layout.adjacentPane(from: current, direction: direction)
     else { return }
@@ -833,14 +804,14 @@ struct ContentView: View {
   }
 
   private func rotateActivePane() {
-    guard let tab = store.activeSession?.activeTab,
+    guard let tab = state.activeSession?.activeTab,
       let pane = tab.activePane
     else { return }
     tab.layout.rotateDirection(containing: pane)
   }
 
   private func resizeActivePane(delta: CGFloat, along direction: SplitDirection) {
-    guard let tab = store.activeSession?.activeTab,
+    guard let tab = state.activeSession?.activeTab,
       let pane = tab.activePane
     else { return }
     tab.layout.resizeSplit(containing: pane, delta: delta, along: direction)
@@ -850,7 +821,7 @@ struct ContentView: View {
   /// Falls back to a ratio-based resize (5% / 1%) if cell metrics aren't
   /// available yet (e.g. before the surface has measured its cell size).
   private func resizeActivePaneCells(_ cells: Int, along direction: SplitDirection) {
-    guard let tab = store.activeSession?.activeTab,
+    guard let tab = state.activeSession?.activeTab,
       let pane = tab.activePane
     else { return }
     let surfaceView = pane.surfaceView
@@ -888,12 +859,12 @@ struct ContentView: View {
   /// `copyModeState`, but only the active pane's state shows the overlay
   /// and consumes keystrokes.
   private var copyModePane: MisttyPane? {
-    let active = store.activeSession?.activeTab?.activePane
+    let active = state.activeSession?.activeTab?.activePane
     return active?.isCopyModeActive == true ? active : nil
   }
 
   private func enterCopyMode() {
-    guard let tab = store.activeSession?.activeTab,
+    guard let tab = state.activeSession?.activeTab,
       let activePane = tab.activePane
     else { return }
     if tab.isWindowModeActive {
@@ -956,7 +927,7 @@ struct ContentView: View {
     // copy mode is "active" right now). Other panes that have stored copy
     // mode state keep their scroll position until the user navigates back
     // to them and exits there too.
-    let active = store.activeSession?.activeTab?.activePane
+    let active = state.activeSession?.activeTab?.activePane
     if let surface = active?.surfaceView.surface {
       let actionStr = "scroll_to_bottom"
       _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
@@ -970,13 +941,13 @@ struct ContentView: View {
       // consumes keys when the focused pane is in copy mode. Other panes —
       // including ones with their own stored copy-mode state that the user
       // navigated away from — see keys pass through to the terminal.
-      guard let tab = store.activeSession?.activeTab,
+      guard let tab = self.state.activeSession?.activeTab,
         let active = tab.activePane,
-        var state = active.copyModeState
+        var copyState = active.copyModeState
       else { return event }
 
       // Pass through system shortcuts (Cmd+*) when not searching
-      if event.modifierFlags.contains(.command) && !state.isSearching {
+      if event.modifierFlags.contains(.command) && !copyState.isSearching {
         return event
       }
 
@@ -990,7 +961,7 @@ struct ContentView: View {
       // they navigate back). All other Ctrl-* keys (d/u/f/b paging, Ctrl-v
       // visual block, etc.) keep being handled here.
       let onlyCtrl = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control
-      if onlyCtrl, !state.isSearching, ["h", "j", "k", "l"].contains(Character(keyStr.lowercased())) {
+      if onlyCtrl, !copyState.isSearching, ["h", "j", "k", "l"].contains(Character(keyStr.lowercased())) {
         return event
       }
 
@@ -998,7 +969,7 @@ struct ContentView: View {
         self.readTerminalLine(row: row)
       }
 
-      let actions = state.handleKey(
+      let actions = copyState.handleKey(
         key: key,
         keyCode: event.keyCode,
         modifiers: event.modifierFlags,
@@ -1009,79 +980,79 @@ struct ContentView: View {
       for action in actions {
         switch action {
         case .cursorMoved:
-          break  // Position already in state
+          break  // Position already in copyState
         case .updateSelection:
-          break  // Selection derived from state
+          break  // Selection derived from copyState
         case .yank:
           break  // Not used — yank is signaled by exitCopyMode
         case .exitCopyMode:
           // Yank if there's a selection before exiting
-          if state.isSelecting {
-            store.activeSession?.activeTab?.copyModeState = state
-            yankSelection()
+          if copyState.isSelecting {
+            self.state.activeSession?.activeTab?.copyModeState = copyState
+            self.yankSelection()
           }
-          exitCopyMode()
+          self.exitCopyMode()
           return nil
         case .enterSubMode:
-          break  // Sub-mode already in state
+          break  // Sub-mode already in copyState
         case .showHelp, .hideHelp:
-          break  // showingHelp already in state
+          break  // showingHelp already in copyState
         case .startSearch:
           break  // subMode already set to search
         case .updateSearch:
           break  // searchQuery already updated
         case .confirmSearch:
-          performSearch(&state, direction: state.searchDirection)
-          countSearchMatches(&state)
+          self.performSearch(&copyState, direction: copyState.searchDirection)
+          self.countSearchMatches(&copyState)
         case .cancelSearch:
-          break  // Already handled in state
+          break  // Already handled in copyState
         case .searchNext:
-          performSearch(&state, direction: state.searchDirection)
-          countSearchMatches(&state)
+          self.performSearch(&copyState, direction: copyState.searchDirection)
+          self.countSearchMatches(&copyState)
         case .searchPrev:
-          let reversed: SearchDirection = state.searchDirection == .forward ? .reverse : .forward
-          performSearch(&state, direction: reversed)
-          countSearchMatches(&state)
+          let reversed: SearchDirection = copyState.searchDirection == .forward ? .reverse : .forward
+          self.performSearch(&copyState, direction: reversed)
+          self.countSearchMatches(&copyState)
         case .scroll(let deltaRows):
-          scrollViewport(&state, delta: deltaRows)
-          if state.isHinting, let source = state.hint?.source {
-            populateHintMatches(&state, source: source)
+          self.scrollViewport(&copyState, delta: deltaRows)
+          if copyState.isHinting, let source = copyState.hint?.source {
+            self.populateHintMatches(&copyState, source: source)
           }
         case .scrollToTop:
-          if let pane = copyModePane {
+          if let pane = self.copyModePane {
             let offset = Int(pane.surfaceView.scrollbarState.offset)
             if offset > 0 {
-              scrollViewport(&state, delta: -offset)
+              self.scrollViewport(&copyState, delta: -offset)
             }
           }
-          if state.isHinting, let source = state.hint?.source {
-            populateHintMatches(&state, source: source)
+          if copyState.isHinting, let source = copyState.hint?.source {
+            self.populateHintMatches(&copyState, source: source)
           }
         case .scrollToBottom:
-          if let pane = copyModePane {
+          if let pane = self.copyModePane {
             let sb = pane.surfaceView.scrollbarState
             let maxOffset = sb.total > sb.len ? sb.total - sb.len : 0
             let delta = Int(Int64(maxOffset) - Int64(sb.offset))
             if delta != 0 {
-              scrollViewport(&state, delta: delta)
+              self.scrollViewport(&copyState, delta: delta)
             }
           }
-          if state.isHinting, let source = state.hint?.source {
-            populateHintMatches(&state, source: source)
+          if copyState.isHinting, let source = copyState.hint?.source {
+            self.populateHintMatches(&copyState, source: source)
           }
         case .enterHintMode(let action, let source):
           let cfg = MisttyConfig.load()
-          state.applyHintEntry(
+          copyState.applyHintEntry(
             action: action,
             source: source,
             uppercaseAction: cfg.copyModeHints.uppercaseAction,
             alphabet: cfg.copyModeHints.alphabet
           )
         case .requestHintScan:
-          let source = state.hint?.source ?? .patterns
-          populateHintMatches(&state, source: source)
+          let source = copyState.hint?.source ?? .patterns
+          self.populateHintMatches(&copyState, source: source)
         case .hintInput:
-          break  // typedPrefix already set in state
+          break  // typedPrefix already set in copyState
         case .exitHintMode:
           break  // subMode already reset
         case .copyText(let text):
@@ -1097,16 +1068,16 @@ struct ContentView: View {
             try? proc.run()
           }
         case .needsContinuation:
-          let continuationActions = state.continuePendingMotion(lineReader: lineReader)
+          let continuationActions = copyState.continuePendingMotion(lineReader: lineReader)
           for contAction in continuationActions {
             switch contAction {
             case .scroll(let delta):
-              scrollViewport(&state, delta: delta)
+              self.scrollViewport(&copyState, delta: delta)
             case .needsContinuation:
-              let more = state.continuePendingMotion(lineReader: lineReader)
+              let more = copyState.continuePendingMotion(lineReader: lineReader)
               for a in more {
                 if case .scroll(let d) = a {
-                  scrollViewport(&state, delta: d)
+                  self.scrollViewport(&copyState, delta: d)
                 }
               }
             default:
@@ -1116,7 +1087,7 @@ struct ContentView: View {
         }
       }
 
-      store.activeSession?.activeTab?.copyModeState = state
+      self.state.activeSession?.activeTab?.copyModeState = copyState
       return nil
     }
   }
@@ -1150,11 +1121,11 @@ struct ContentView: View {
       // its own copy-mode state, so the user can scroll back in pane A,
       // focus elsewhere to do work, then come back to pane A and pick up
       // where they left off.
-      guard !showingSessionManager,
-        store.activeSession?.activeTab?.isWindowModeActive != true
+      guard !self.showingSessionManager,
+        self.state.activeSession?.activeTab?.isWindowModeActive != true
       else { return event }
 
-      guard let tab = store.activeSession?.activeTab,
+      guard let tab = self.state.activeSession?.activeTab,
         let pane = tab.activePane
       else { return event }
 
@@ -1195,8 +1166,8 @@ struct ContentView: View {
       // Cmd+Up/Down → prev/next tab. Skip when window/copy/session-manager
       // modes own the arrow keys (window mode binds Cmd+arrows to resize).
       if flags == .command {
-        let activeTab = store.activeSession?.activeTab
-        guard !showingSessionManager,
+        let activeTab = self.state.activeSession?.activeTab
+        guard !self.showingSessionManager,
           activeTab?.isWindowModeActive != true,
           activeTab?.isCopyModeActive != true
         else { return event }
@@ -1255,7 +1226,7 @@ struct ContentView: View {
   }
 
   private func installCloseMonitor() {
-    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
+    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore] event in
       let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
       guard flags.contains(.command),
         event.charactersIgnoringModifiers?.lowercased() == "w"
@@ -1264,7 +1235,7 @@ struct ContentView: View {
       // the key window is one of our tracked terminal windows; otherwise let
       // the event flow through so the system can close the focused window
       // (Settings, etc.).
-      guard store.isTerminalWindowKey() else {
+      guard windowsStore.isTerminalWindowKey() else {
         DebugLog.shared.log(
           "cmdw",
           "monitor: passing through — not a terminal window"
@@ -1297,12 +1268,12 @@ struct ContentView: View {
   /// fall through so Cut still works inside text fields.
   private func installWindowModeShortcutMonitor() {
     windowModeShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
-      [store] event in
+      [windowsStore] event in
       let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
       guard flags == .command,
         event.charactersIgnoringModifiers?.lowercased() == "x"
       else { return event }
-      guard store.isTerminalWindowKey() else { return event }
+      guard windowsStore.isTerminalWindowKey() else { return event }
       // Any text-editing responder (TextField field editor, NSTextView,
       // search fields) should keep Cmd+X as Cut.
       if let responder = NSApp.keyWindow?.firstResponder, responder is NSText {
@@ -1500,9 +1471,9 @@ struct ContentView: View {
   }
 
   private func scanViewportForHints(source: HintSource) -> [HintMatch] {
-    guard let state = store.activeSession?.activeTab?.copyModeState else { return [] }
+    guard let copyState = state.activeSession?.activeTab?.copyModeState else { return [] }
     var lines: [String] = []
-    for row in 0..<state.rows {
+    for row in 0..<copyState.rows {
       lines.append(readTerminalLine(row: row) ?? "")
     }
     return HintDetector.detect(lines: lines, source: source)
@@ -1514,9 +1485,9 @@ struct ContentView: View {
   }
 
   private func yankSelection() {
-    guard let pane = store.activeSession?.activeTab?.activePane,
-      let state = pane.copyModeState,
-      let anchor = state.anchor,
+    guard let pane = state.activeSession?.activeTab?.activePane,
+      let copyState = pane.copyModeState,
+      let anchor = copyState.anchor,
       let surface = pane.surfaceView.surface
     else { return }
 
@@ -1524,16 +1495,16 @@ struct ContentView: View {
     let cols = Int(size.columns)
     var textToCopy: String?
 
-    let anchorOutOfViewport = anchor.row < 0 || anchor.row >= state.rows
+    let anchorOutOfViewport = anchor.row < 0 || anchor.row >= copyState.rows
     let useScreenCoords = anchorOutOfViewport
     let tag: ghostty_point_tag_e = useScreenCoords ? GHOSTTY_POINT_SCREEN : GHOSTTY_POINT_VIEWPORT
     let offset = useScreenCoords ? Int(pane.surfaceView.scrollbarState.offset) : 0
 
-    switch state.subMode {
+    switch copyState.subMode {
     case .visual:
       let (top, bottom) = CopyModeYank.normalize(
         anchor: (row: anchor.row + offset, col: anchor.col),
-        cursor: (row: state.cursorRow + offset, col: state.cursorCol)
+        cursor: (row: copyState.cursorRow + offset, col: copyState.cursorCol)
       )
       textToCopy = readGhosttyText(
         surface: surface,
@@ -1545,8 +1516,8 @@ struct ContentView: View {
 
     case .visualLine:
       // Line-wise: full lines from min to max row
-      let minRow = min(anchor.row, state.cursorRow)
-      let maxRow = max(anchor.row, state.cursorRow)
+      let minRow = min(anchor.row, copyState.cursorRow)
+      let maxRow = max(anchor.row, copyState.cursorRow)
       textToCopy = readGhosttyText(
         surface: surface,
         startRow: minRow + offset, startCol: 0,
@@ -1557,11 +1528,11 @@ struct ContentView: View {
 
     case .visualBlock:
       // Block-wise: read each row's slice, joined by newlines
-      let minRow = min(anchor.row, state.cursorRow)
-      let maxRow = max(anchor.row, state.cursorRow)
-      let minCol = min(anchor.col, state.cursorCol)
+      let minRow = min(anchor.row, copyState.cursorRow)
+      let maxRow = max(anchor.row, copyState.cursorRow)
+      let minCol = min(anchor.col, copyState.cursorCol)
       var lines: [String] = []
-      let logicalRightCol = max(anchor.col, state.cursorCol)
+      let logicalRightCol = max(anchor.col, copyState.cursorCol)
       for row in minRow...maxRow {
         let readRow = row + offset
         let line: String?

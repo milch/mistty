@@ -5,7 +5,7 @@ import MisttyShared
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
   /// Set by `MisttyApp.init()` right after the adaptor materializes us.
-  var store: SessionStore!
+  var windowsStore: WindowsStore!
 
   /// Strong ref so the observer outlives init. Set by `MisttyApp.init()`.
   var observer: StateRestorationObserver?
@@ -14,12 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
+  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    // Multi-window terminal: closing all windows should keep the app running
+    // (Cmd+N spawns a fresh empty window; Reopen Closed Window restores).
+    return false
+  }
+
   func application(_ app: NSApplication, willEncodeRestorableState coder: NSCoder) {
-    guard let store else {
+    guard let windowsStore else {
       DebugLog.shared.log("restore", "willEncode: no store wired")
       return
     }
-    let snapshot = store.takeSnapshot()
+    let snapshot = windowsStore.takeSnapshot()
     do {
       let data = try JSONEncoder().encode(snapshot)
       coder.encode(data as NSData, forKey: Self.coderKey)
@@ -34,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func application(_ app: NSApplication, didDecodeRestorableState coder: NSCoder) {
-    guard let store else {
+    guard let windowsStore else {
       DebugLog.shared.log("restore", "didDecode: no store wired")
       return
     }
@@ -50,8 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return
       }
       let config = MisttyConfig.current.restore
-      store.restore(from: snapshot, config: config)
-      // Stub for Task 4: count sessions from all windows.
+      windowsStore.restore(from: snapshot, config: config)
       let totalSessions = snapshot.windows.flatMap(\.sessions).count
       DebugLog.shared.log(
         "restore",

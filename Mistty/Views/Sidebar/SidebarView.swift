@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct SidebarView: View {
-  @Bindable var store: SessionStore
+  @Bindable var state: WindowState
+  var windowsStore: WindowsStore
   @Binding var width: CGFloat
   var titleBarStyle: TitleBarStyle = .hiddenWithLights
   /// When true, the tab bar is currently visible and owns the
@@ -11,11 +12,11 @@ struct SidebarView: View {
 
   var body: some View {
     List {
-      ForEach(store.sessions) { session in
-        SessionRowView(session: session, store: store, tabBarVisible: tabBarVisible)
+      ForEach(state.sessions) { session in
+        SessionRowView(session: session, state: state, tabBarVisible: tabBarVisible)
       }
       .onMove { source, destination in
-        store.moveSessions(from: source, to: destination)
+        state.moveSessions(from: source, to: destination)
       }
     }
     .listStyle(.sidebar)
@@ -52,14 +53,14 @@ struct SidebarDragHandle: View {
 
 struct SessionRowView: View {
   @Bindable var session: MisttySession
-  @Bindable var store: SessionStore
+  @Bindable var state: WindowState
   var tabBarVisible: Bool = false
   @State private var isExpanded = true
   @State private var isEditing = false
   @State private var editText = ""
   @FocusState private var editFocused: Bool
 
-  var isActive: Bool { store.activeSession?.id == session.id }
+  var isActive: Bool { state.activeSession?.id == session.id }
 
   var body: some View {
     DisclosureGroup(isExpanded: $isExpanded) {
@@ -67,7 +68,7 @@ struct SessionRowView: View {
         let isActiveTab = isActive && session.activeTab?.id == tab.id
         SidebarTabRow(
           session: session,
-          store: store,
+          state: state,
           tab: tab,
           isActiveTab: isActiveTab,
           tabBarVisible: tabBarVisible
@@ -118,7 +119,7 @@ struct SessionRowView: View {
       .contentShape(Rectangle())
       .onTapGesture {
         if isEditing { return }
-        store.activeSession = session
+        state.activeSession = session
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyRenameSession)) { _ in
         // Only the active session opens its inline editor on the shortcut.
@@ -140,13 +141,13 @@ struct SessionRowView: View {
     // Hand first responder back to the terminal so subsequent keystrokes
     // don't stay trapped in the detached NSTextField — same reason the
     // tab-rename path does this.
-    store.activeSession?.activeTab?.activePane?.focusKeyboardInput()
+    state.activeSession?.activeTab?.activePane?.focusKeyboardInput()
   }
 }
 
 struct SidebarTabRow: View {
   @Bindable var session: MisttySession
-  @Bindable var store: SessionStore
+  @Bindable var state: WindowState
   @Bindable var tab: MisttyTab
   let isActiveTab: Bool
   let tabBarVisible: Bool
@@ -216,7 +217,7 @@ struct SidebarTabRow: View {
     .contentShape(Rectangle())
     .onTapGesture {
       if isEditing { return }
-      store.activeSession = session
+      state.activeSession = session
       session.activeTab = tab
     }
     .onReceive(NotificationCenter.default.publisher(for: .misttyRenameTab)) { _ in

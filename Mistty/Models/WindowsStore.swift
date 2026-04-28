@@ -230,4 +230,25 @@ final class WindowsStore {
     tracked.window?.makeKeyAndOrderFront(nil)
     activeWindow = tracked.state
   }
+
+  // MARK: - Restore helpers
+
+  /// Append a window state that arrived through `restore(...)`. The
+  /// state's `id` was assigned from the snapshot, so we don't generate a
+  /// fresh one — but `advanceIDCounters` already bumped past it.
+  func registerRestoredWindow(_ state: WindowState) {
+    if !windows.contains(where: { $0.id == state.id }) {
+      windows.append(state)
+    }
+  }
+
+  /// After the first WindowRootView mounts and captures `openWindowAction`,
+  /// fire it once per remaining state in `pendingRestoreStates`. Each new
+  /// SwiftUI window mount will claim the next state at the head of the queue.
+  func drainPendingRestores() {
+    guard let action = openWindowAction else { return }
+    while !pendingRestoreStates.isEmpty {
+      action(id: "terminal")
+    }
+  }
 }

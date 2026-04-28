@@ -106,11 +106,13 @@ final class SessionManagerViewModel {
   var selectedIndex = 0
   var matchResults: [String: ItemMatchResult] = [:]
 
-  let store: SessionStore
+  let state: WindowState
+  let windowsStore: WindowsStore
   private let frecencyService: FrecencyService
 
-  init(store: SessionStore, frecencyService: FrecencyService = FrecencyService()) {
-    self.store = store
+  init(state: WindowState, windowsStore: WindowsStore, frecencyService: FrecencyService = FrecencyService()) {
+    self.state = state
+    self.windowsStore = windowsStore
     self.frecencyService = frecencyService
   }
 
@@ -118,11 +120,11 @@ final class SessionManagerViewModel {
     let dirs = await ZoxideService.recentDirectories()
     let sshHosts = SSHConfigService.loadHosts()
 
-    let activeDirectories = Set(store.sessions.map { $0.directory.standardizedFileURL })
+    let activeDirectories = Set(state.sessions.map { $0.directory.standardizedFileURL })
 
     var items: [SessionManagerItem] = []
-    items += store.sessions
-      .filter { $0.id != store.activeSession?.id }
+    items += state.sessions
+      .filter { $0.id != state.activeSession?.id }
       .map { .runningSession($0) }
     items +=
       dirs
@@ -340,8 +342,8 @@ final class SessionManagerViewModel {
 
     // Plain text: create session with query as name in active pane's CWD
     let directory =
-      store.activeSession?.activeTab?.activePane?.directory
-      ?? store.activeSession?.directory
+      state.activeSession?.activeTab?.activePane?.directory
+      ?? state.activeSession?.directory
       ?? fm.homeDirectoryForCurrentUser
     return .newSession(query: query, directory: directory, createDirectory: false, sshCommand: nil)
   }
@@ -356,16 +358,16 @@ final class SessionManagerViewModel {
 
     switch item {
     case .runningSession(let session):
-      store.activeSession = session
+      state.activeSession = session
 
     case .directory(let url):
-      store.createSession(name: url.lastPathComponent, directory: url)
+      state.createSession(name: url.lastPathComponent, directory: url)
 
     case .sshHost(let host):
       let config = MisttyConfig.load()
       let command = config.ssh.resolveCommand(for: host.alias)
       let fullCommand = "\(command) \(host.alias)"
-      let session = store.createSession(
+      let session = state.createSession(
         name: host.alias,
         directory: FileManager.default.homeDirectoryForCurrentUser,
         exec: fullCommand
@@ -383,7 +385,7 @@ final class SessionManagerViewModel {
       if let sshCommand {
         let hostname = query.drop(while: { $0 != " " }).dropFirst()
           .trimmingCharacters(in: .whitespaces)
-        let session = store.createSession(
+        let session = state.createSession(
           name: hostname,
           directory: fm.homeDirectoryForCurrentUser,
           exec: sshCommand
@@ -402,7 +404,7 @@ final class SessionManagerViewModel {
         // record it as customName so the sidebar shows it verbatim even if
         // the active pane's CWD changes later.
         let customName: String? = isPathLike ? nil : query
-        store.createSession(name: name, directory: directory, customName: customName)
+        state.createSession(name: name, directory: directory, customName: customName)
       }
 
       // Record frecency for the new session

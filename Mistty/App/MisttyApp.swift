@@ -7,7 +7,7 @@ import SwiftUI
 @main
 struct MisttyApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-  @State private var store = SessionStore()
+  @State private var windowsStore = WindowsStore()
   @State private var ipcListener: IPCListener?
   @AppStorage("sidebarVisible") var sidebarVisible = true
   // Shared parse — see `MisttyConfig.current`. Reading the same cache
@@ -28,8 +28,8 @@ struct MisttyApp: App {
     Self.registerBundledFonts()
     DebugLog.shared.configure(enabled: config.debugLogging)
     DebugLog.shared.log("restore", "MisttyApp.init")
-    appDelegate.store = _store.wrappedValue
-    appDelegate.observer = StateRestorationObserver(store: _store.wrappedValue)
+    appDelegate.windowsStore = _windowsStore.wrappedValue
+    appDelegate.observer = StateRestorationObserver(windowsStore: _windowsStore.wrappedValue)
   }
 
   private static func registerBundledFonts() {
@@ -49,12 +49,12 @@ struct MisttyApp: App {
   }
 
   var body: some Scene {
-    WindowGroup {
-      ContentView(store: store, config: config)
+    WindowGroup(id: "terminal") {
+      WindowRootView(windowsStore: windowsStore, config: config)
         .applyTopSafeArea(style: config.ui.titleBarStyle)
         .onAppear {
           if ipcListener == nil {
-            let service = MisttyIPCService(store: store)
+            let service = MisttyIPCService(windowsStore: windowsStore)
             let listener = IPCListener(service: service)
             listener.start()
             ipcListener = listener
@@ -142,7 +142,7 @@ struct MisttyApp: App {
         Button("Close Pane") {
           // If a non-terminal window (e.g. Settings) is key, let the system
           // close that window instead of routing the shortcut to the terminal.
-          if store.isTerminalWindowKey() {
+          if windowsStore.isTerminalWindowKey() {
             DebugLog.shared.log("cmdw", "menu Close Pane → posting notification")
             NotificationCenter.default.post(name: .misttyClosePane, object: nil)
           } else {
@@ -156,7 +156,7 @@ struct MisttyApp: App {
         .keyboardShortcut("w", modifiers: .command)
 
         Button("Close Tab") {
-          if store.isTerminalWindowKey() {
+          if windowsStore.isTerminalWindowKey() {
             DebugLog.shared.log("cmdw", "menu Close Tab → posting notification")
             NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
           } else {

@@ -5,13 +5,16 @@ import XCTest
 
 @MainActor
 final class IPCServiceTests: XCTestCase {
-  var store: SessionStore!
+  var windowsStore: WindowsStore!
+  var store: WindowState!
   var service: MisttyIPCService!
 
   override func setUp() async throws {
     await MainActor.run {
-      store = SessionStore()
-      service = MisttyIPCService(store: store)
+      windowsStore = WindowsStore()
+      store = windowsStore.createWindow()
+      windowsStore.activeWindow = store
+      service = MisttyIPCService(windowsStore: windowsStore)
     }
   }
 

@@ -3,10 +3,10 @@ import Foundation
 
 @MainActor
 final class StateRestorationObserver {
-  let store: SessionStore
+  let windowsStore: WindowsStore
 
-  init(store: SessionStore) {
-    self.store = store
+  init(windowsStore: WindowsStore) {
+    self.windowsStore = windowsStore
     reobserve()
   }
 
@@ -33,28 +33,33 @@ final class StateRestorationObserver {
   /// one of the accessed properties.
   private func snapshotKeys() -> Int {
     var h = 0
-    h ^= store.sessions.count
-    if let active = store.activeSession { h ^= active.id }
-    for session in store.sessions {
-      h ^= session.id ^ session.name.hashValue
-      h ^= session.customName?.hashValue ?? 0
-      h ^= session.sshCommand?.hashValue ?? 0
-      h ^= session.tabs.count
-      if let activeTab = session.activeTab { h ^= activeTab.id }
-      for tab in session.tabs {
-        h ^= tab.id ^ (tab.customTitle?.hashValue ?? 0)
-        if let activePane = tab.activePane { h ^= activePane.id }
-        for pane in tab.panes {
-          h ^= pane.id
-          h ^= pane.directory?.absoluteString.hashValue ?? 0
-          h ^= pane.currentWorkingDirectory?.absoluteString.hashValue ?? 0
+    h ^= windowsStore.windows.count
+    if let activeWindow = windowsStore.activeWindow { h ^= activeWindow.id }
+    for window in windowsStore.windows {
+      h ^= window.id
+      h ^= window.sessions.count
+      if let active = window.activeSession { h ^= active.id }
+      for session in window.sessions {
+        h ^= session.id ^ session.name.hashValue
+        h ^= session.customName?.hashValue ?? 0
+        h ^= session.sshCommand?.hashValue ?? 0
+        h ^= session.tabs.count
+        if let activeTab = session.activeTab { h ^= activeTab.id }
+        for tab in session.tabs {
+          h ^= tab.id ^ (tab.customTitle?.hashValue ?? 0)
+          if let activePane = tab.activePane { h ^= activePane.id }
+          for pane in tab.panes {
+            h ^= pane.id
+            h ^= pane.directory?.absoluteString.hashValue ?? 0
+            h ^= pane.currentWorkingDirectory?.absoluteString.hashValue ?? 0
+          }
+          // Observe the layout tree recursively so resizing a nested
+          // split divider fires an invalidation too — the top-level
+          // `tab.layout` property access already registers an observer,
+          // but we also need to touch every split's ratio so changes
+          // deeper in the tree propagate through @Observable tracking.
+          readLayoutNode(tab.layout.root, hash: &h)
         }
-        // Observe the layout tree recursively so resizing a nested
-        // split divider fires an invalidation too — the top-level
-        // `tab.layout` property access already registers an observer,
-        // but we also need to touch every split's ratio so changes
-        // deeper in the tree propagate through @Observable tracking.
-        readLayoutNode(tab.layout.root, hash: &h)
       }
     }
     return h
