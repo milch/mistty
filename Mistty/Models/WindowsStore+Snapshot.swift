@@ -114,7 +114,7 @@ extension WindowsStore {
     pendingActiveWindowID = snapshot.activeWindowID
   }
 
-  // The lift-and-shift helpers from SessionStore+Snapshot.swift:
+  // Snapshot restore helpers:
 
   fileprivate static func restoreTab(
     from snapshot: TabSnapshot,

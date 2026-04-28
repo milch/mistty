@@ -8,7 +8,7 @@ final class MisttySession: Identifiable {
   var customName: String?
   let directory: URL
   var sshCommand: String?
-  /// Set by `SessionStore.activeSession.didSet`; only read at sort time in the
+  /// Set by `WindowState.activeSession.didSet`; only read at sort time in the
   /// session manager. No SwiftUI view observes it, so opt out of
   /// `@Observable` invalidation to avoid spurious re-renders on every
   /// activation flip.

@@ -4,23 +4,26 @@ import XCTest
 
 @MainActor
 final class MisttyTabTests: XCTestCase {
-  private var store: SessionStore!
+  private var windowsStore: WindowsStore!
+  private var state: WindowState!
 
   override func setUp() async throws {
     await MainActor.run {
-      store = SessionStore()
+      windowsStore = WindowsStore()
+      state = windowsStore.createWindow()
     }
   }
 
   override func tearDown() async throws {
     await MainActor.run {
-      for session in store.sessions { store.closeSession(session) }
-      store = nil
+      for session in state.sessions { state.closeSession(session) }
+      state = nil
+      windowsStore = nil
     }
   }
 
   private func makeTab() -> MisttyTab {
-    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let session = state.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
     return session.tabs[0]
   }
 

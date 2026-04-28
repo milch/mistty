@@ -3,26 +3,30 @@ import XCTest
 @testable import MisttyShared
 
 @MainActor
-final class SessionStoreSnapshotTests: XCTestCase {
-  private var store: SessionStore!
+final class WindowsStoreSnapshotTests: XCTestCase {
+  private var store: WindowsStore!
+  private var state: WindowState!
 
   override func setUp() async throws {
     await MainActor.run {
-      store = SessionStore()
+      store = WindowsStore()
+      state = store.createWindow()
     }
   }
+
+  // MARK: - takeSnapshot
 
   func test_takeSnapshot_emptyStoreProducesEmptySessions() {
     let snapshot = store.takeSnapshot()
     XCTAssertEqual(snapshot.version, WorkspaceSnapshot.currentVersion)
     XCTAssertEqual(snapshot.windows.count, 1)
-    XCTAssertEqual(snapshot.activeWindowID, 0)
+    XCTAssertNil(snapshot.activeWindowID)
     XCTAssertTrue(snapshot.windows[0].sessions.isEmpty)
     XCTAssertNil(snapshot.windows[0].activeSessionID)
   }
 
   func test_takeSnapshot_capturesSingleSessionWithOnePane() {
-    let session = store.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
+    let session = state.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
     let snapshot = store.takeSnapshot()
     XCTAssertEqual(snapshot.windows.count, 1)
     XCTAssertEqual(snapshot.windows[0].activeSessionID, session.id)
@@ -34,7 +38,7 @@ final class SessionStoreSnapshotTests: XCTestCase {
   }
 
   func test_takeSnapshot_capturesSplitLayout() {
-    let session = store.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
+    let session = state.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
     let tab = session.tabs[0]
     tab.splitActivePane(direction: .horizontal)
     let snapshot = store.takeSnapshot()
@@ -45,7 +49,7 @@ final class SessionStoreSnapshotTests: XCTestCase {
   }
 
   func test_takeSnapshot_preservesCustomNames() {
-    let session = store.createSession(
+    let session = state.createSession(
       name: "work", directory: URL(fileURLWithPath: "/tmp"), customName: "Work")
     session.tabs[0].customTitle = "repl"
     let snapshot = store.takeSnapshot()
@@ -54,14 +58,14 @@ final class SessionStoreSnapshotTests: XCTestCase {
   }
 
   func test_takeSnapshot_preservesSSHCommand() {
-    let session = store.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
+    let session = state.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
     session.sshCommand = "ssh user@host"
     let snapshot = store.takeSnapshot()
     XCTAssertEqual(snapshot.windows[0].sessions[0].sshCommand, "ssh user@host")
   }
 
   func test_takeSnapshot_preservesActiveIDs() {
-    let s = store.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
+    let s = state.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
     s.addTab()
     let secondTab = s.tabs[1]
     s.activeTab = secondTab
@@ -71,11 +75,19 @@ final class SessionStoreSnapshotTests: XCTestCase {
     XCTAssertEqual(snapshot.windows[0].sessions[0].tabs[1].activePaneID, secondTab.panes[0].id)
   }
 
+  // MARK: - restore
+
+  /// Helper: access the first restored window state. After restore(), states
+  /// live in pendingRestoreStates until WindowRootView mounts and claims them.
+  private func firstRestoredState() -> WindowState? {
+    store.pendingRestoreStates.first
+  }
+
   func test_restore_emptyWorkspaceLeavesStoreEmpty() {
-    _ = store.createSession(name: "leftover", directory: URL(fileURLWithPath: "/tmp"))
+    _ = state.createSession(name: "leftover", directory: URL(fileURLWithPath: "/tmp"))
     store.restore(from: WorkspaceSnapshot(version: 2, windows: [], activeWindowID: nil), config: RestoreConfig())
-    XCTAssertTrue(store.sessions.isEmpty)
-    XCTAssertNil(store.activeSession)
+    XCTAssertTrue(store.windows.isEmpty)
+    XCTAssertTrue(store.pendingRestoreStates.isEmpty)
   }
 
   func test_restore_rebuildsSingleSession() {
@@ -110,12 +122,13 @@ final class SessionStoreSnapshotTests: XCTestCase {
       activeWindowID: 1
     )
     store.restore(from: snapshot, config: RestoreConfig())
-    XCTAssertEqual(store.sessions.count, 1)
-    XCTAssertEqual(store.sessions[0].id, 7)
-    XCTAssertEqual(store.sessions[0].customName, "Work")
-    XCTAssertEqual(store.activeSession?.id, 7)
-    XCTAssertEqual(store.sessions[0].tabs[0].id, 3)
-    XCTAssertEqual(store.sessions[0].tabs[0].panes[0].id, 42)
+    let restoredState = firstRestoredState()!
+    XCTAssertEqual(restoredState.sessions.count, 1)
+    XCTAssertEqual(restoredState.sessions[0].id, 7)
+    XCTAssertEqual(restoredState.sessions[0].customName, "Work")
+    XCTAssertEqual(restoredState.activeSession?.id, 7)
+    XCTAssertEqual(restoredState.sessions[0].tabs[0].id, 3)
+    XCTAssertEqual(restoredState.sessions[0].tabs[0].panes[0].id, 42)
   }
 
   func test_restore_rebuildsSplitLayout() {
@@ -150,7 +163,8 @@ final class SessionStoreSnapshotTests: XCTestCase {
       activeWindowID: 1
     )
     store.restore(from: snapshot, config: RestoreConfig())
-    let tab = store.sessions[0].tabs[0]
+    let restoredState = firstRestoredState()!
+    let tab = restoredState.sessions[0].tabs[0]
     XCTAssertEqual(tab.panes.count, 2)
     XCTAssertEqual(tab.activePane?.id, 11)
     guard case .split(let dir, _, _, let ratio) = tab.layout.root else {
@@ -187,7 +201,10 @@ final class SessionStoreSnapshotTests: XCTestCase {
       activeWindowID: 1
     )
     store.restore(from: snapshot, config: RestoreConfig())
-    let fresh = store.createSession(name: "post", directory: URL(fileURLWithPath: "/tmp"))
+    // Register the pending state so it's accessible via windows
+    let restoredState = firstRestoredState()!
+    store.registerRestoredWindow(restoredState)
+    let fresh = restoredState.createSession(name: "post", directory: URL(fileURLWithPath: "/tmp"))
     XCTAssertGreaterThan(fresh.id, 50)
     XCTAssertGreaterThan(fresh.tabs[0].id, 30)
     XCTAssertGreaterThan(fresh.tabs[0].panes[0].id, 99)
@@ -236,7 +253,8 @@ final class SessionStoreSnapshotTests: XCTestCase {
       activeWindowID: 1
     )
     store.restore(from: snapshot, config: RestoreConfig())
-    let pane = store.sessions[0].tabs[0].panes[0]
+    let restoredState = firstRestoredState()!
+    let pane = restoredState.sessions[0].tabs[0].panes[0]
     XCTAssertEqual(pane.directory, tmp,
       "pane.directory should preserve the snapshot's initial directory so the session label stays anchored")
     XCTAssertEqual(pane.currentWorkingDirectory, subdir,
@@ -280,7 +298,8 @@ final class SessionStoreSnapshotTests: XCTestCase {
       activeWindowID: 1
     )
     store.restore(from: snapshot, config: RestoreConfig())
-    let pane = store.sessions[0].tabs[0].panes[0]
+    let restoredState = firstRestoredState()!
+    let pane = restoredState.sessions[0].tabs[0].panes[0]
     XCTAssertEqual(pane.directory, URL(fileURLWithPath: "/tmp"))
     XCTAssertNil(pane.currentWorkingDirectory)
   }
@@ -318,32 +337,37 @@ final class SessionStoreSnapshotTests: XCTestCase {
       activeWindowID: 1
     )
     store.restore(from: snapshot, config: RestoreConfig())
+    let restoredState = firstRestoredState()!
     let home = FileManager.default.homeDirectoryForCurrentUser
-    XCTAssertEqual(store.sessions[0].tabs[0].panes[0].directory, home)
+    XCTAssertEqual(restoredState.sessions[0].tabs[0].panes[0].directory, home)
   }
 
   func test_restore_roundTrip_preservesStructure() {
-    let s = store.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
+    let s = state.createSession(name: "w", directory: URL(fileURLWithPath: "/tmp"))
     s.tabs[0].splitActivePane(direction: .vertical)
     s.addTab()
     let snapshot = store.takeSnapshot()
-    let second = SessionStore()
-    second.restore(from: snapshot, config: RestoreConfig())
+    let secondStore = WindowsStore()
+    secondStore.restore(from: snapshot, config: RestoreConfig())
+    let restoredState = secondStore.pendingRestoreStates[0]
     let beforeIDs = s.tabs.map { $0.id }
-    let afterIDs = second.sessions[0].tabs.map { $0.id }
+    let afterIDs = restoredState.sessions[0].tabs.map { $0.id }
     XCTAssertEqual(beforeIDs, afterIDs)
-    XCTAssertEqual(second.sessions[0].tabs[0].panes.count, 2)
+    XCTAssertEqual(restoredState.sessions[0].tabs[0].panes.count, 2)
   }
 
   func test_restore_unsupportedVersionPreservesExistingSessions() {
-    _ = store.createSession(name: "existing", directory: URL(fileURLWithPath: "/tmp"))
+    _ = state.createSession(name: "existing", directory: URL(fileURLWithPath: "/tmp"))
     var bad = WorkspaceSnapshot(version: 999, windows: [], activeWindowID: nil)
     // unsupportedVersion is set by the decoder, not the public init —
     // mimic that here so restore() short-circuits.
     bad.unsupportedVersion = 999
     store.restore(from: bad, config: RestoreConfig())
-    XCTAssertEqual(store.sessions.count, 1)
-    XCTAssertEqual(store.sessions[0].name, "existing")
+    // restore() short-circuits on unsupported version; the existing window
+    // state and its sessions are left intact in windows.
+    XCTAssertEqual(store.windows.count, 1)
+    XCTAssertEqual(store.windows[0].sessions.count, 1)
+    XCTAssertEqual(store.windows[0].sessions[0].name, "existing")
   }
 
   func test_restore_resolvesAllowlistedCommandIntoPane() {
@@ -379,7 +403,8 @@ final class SessionStoreSnapshotTests: XCTestCase {
     )
     let config = RestoreConfig(commands: [.init(match: "nvim", strategy: nil)])
     store.restore(from: snapshot, config: config)
-    let pane = store.sessions[0].tabs[0].panes[0]
+    let restoredState = firstRestoredState()!
+    let pane = restoredState.sessions[0].tabs[0].panes[0]
     XCTAssertEqual(pane.command, "nvim foo.txt")
     // Restored commands run via initial_input (login-shell exec wrap) so
     // they pick up the user's PATH / rc — mirrors SSH pane setup.
@@ -418,7 +443,8 @@ final class SessionStoreSnapshotTests: XCTestCase {
       activeWindowID: 1
     )
     store.restore(from: snapshot, config: RestoreConfig())  // no rules
-    let pane = store.sessions[0].tabs[0].panes[0]
+    let restoredState = firstRestoredState()!
+    let pane = restoredState.sessions[0].tabs[0].panes[0]
     XCTAssertNil(pane.command)
   }
 }

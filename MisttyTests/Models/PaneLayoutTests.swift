@@ -470,8 +470,9 @@ final class PaneLayoutTests: XCTestCase {
   // MARK: - Tab integration
 
   func test_tabIntegration_splitUpdatesLayout() {
-    let store = SessionStore()
-    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let session = state.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
     let tab = session.tabs[0]
     XCTAssertEqual(tab.layout.leaves.count, 1)
     tab.splitActivePane(direction: .horizontal)
@@ -487,8 +488,9 @@ final class PaneLayoutTests: XCTestCase {
   /// become active — NOT "the last leaf in traversal order" (which would
   /// incorrectly resolve to pane 3 here).
   func test_tabIntegration_splitInNestedSubtreeFocusesNewPane() {
-    let store = SessionStore()
-    let session = store.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let session = state.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
     let tab = session.tabs[0]
     tab.splitActivePane(direction: .horizontal)  // 1 | 2  (active=2)
     tab.splitActivePane(direction: .vertical)  // 1 | 2/3 (active=3)

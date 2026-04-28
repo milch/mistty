@@ -11,8 +11,9 @@ final class MisttySessionSidebarLabelTests: XCTestCase {
     directory: URL = URL(fileURLWithPath: "/Users/me/Developer/proj"),
     sshCommand: String? = nil
   ) -> MisttySession {
-    let store = SessionStore()
-    let s = store.createSession(
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let s = state.createSession(
       name: name, directory: directory, customName: customName)
     s.sshCommand = sshCommand
     return s

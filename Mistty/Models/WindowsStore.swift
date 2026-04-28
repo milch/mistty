@@ -6,12 +6,8 @@ import MisttyShared
 @Observable
 @MainActor
 final class WindowsStore {
-  // Nested intentionally. The pre-existing top-level `TrackedWindow` in
-  // `SessionStore.swift` (different shape — non-weak NSWindow, no state)
-  // would clash if this lived at module scope. Even after SessionStore is
-  // deleted in Task 12, nesting reads better at call sites
-  // (`WindowsStore.TrackedWindow` is more self-documenting than a free
-  // `TrackedWindow`), so don't promote.
+  // Nested intentionally: `WindowsStore.TrackedWindow` is more
+  // self-documenting at call sites than a free `TrackedWindow` at module scope.
   struct TrackedWindow {
     let id: Int
     weak var window: NSWindow?

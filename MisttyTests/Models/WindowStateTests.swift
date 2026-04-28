@@ -48,4 +48,54 @@ struct WindowStateTests {
     state.nextSession()
     #expect(state.activeSession?.id == a.id)
   }
+
+  @Test
+  func nextSessionWrapsAroundWithThreeSessions() {
+    let store = WindowsStore()
+    let state = store.createWindow()
+    _ = state.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
+    _ = state.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))
+    let s3 = state.createSession(name: "c", directory: URL(fileURLWithPath: "/tmp"))
+    #expect(state.activeSession?.id == s3.id)
+    state.nextSession()
+    #expect(state.activeSession?.name == "a")
+  }
+
+  @Test
+  func prevSessionWrapsAroundWithThreeSessions() {
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let s1 = state.createSession(name: "a", directory: URL(fileURLWithPath: "/tmp"))
+    _ = state.createSession(name: "b", directory: URL(fileURLWithPath: "/tmp"))
+    _ = state.createSession(name: "c", directory: URL(fileURLWithPath: "/tmp"))
+    state.activeSession = s1
+    state.prevSession()
+    #expect(state.activeSession?.name == "c")
+  }
+
+  @Test
+  func createSessionWithExecSetsCommand() {
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let session = state.createSession(
+      name: "test", directory: URL(fileURLWithPath: "/tmp"), exec: "nvim")
+    #expect(session.tabs.first?.panes.first?.command == "nvim")
+  }
+
+  @Test
+  func createSessionWithoutExecLeavesCommandNil() {
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let session = state.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    #expect(session.tabs.first?.panes.first?.command == nil)
+  }
+
+  @Test
+  func addTabWithExecSetsCommand() {
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let session = state.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab(exec: "top")
+    #expect(session.tabs.last?.panes.first?.command == "top")
+  }
 }
