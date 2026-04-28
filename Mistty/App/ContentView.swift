@@ -624,7 +624,8 @@ struct ContentView: View {
   // MARK: - Key Monitors
 
   private func installKeyMonitor(vm: SessionManagerViewModel) {
-    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
       switch event.keyCode {
       case 53:  // Escape
         showingSessionManager = false
@@ -668,7 +669,8 @@ struct ContentView: View {
     if state.activeSession?.activeTab?.isCopyModeActive == true {
       exitCopyMode()
     }
-    windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    windowModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
       // Join-pick mode: number keys select target tab
       if self.state.activeSession?.activeTab?.windowModeState == .joinPick {
         if event.keyCode == 53 {  // Escape — back to normal window mode
@@ -959,7 +961,8 @@ struct ContentView: View {
   }
 
   private func installCopyModeMonitor() {
-    copyModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    copyModeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
       // The monitor stays installed for ContentView's lifetime; it only
       // consumes keys when the focused pane is in copy mode. Other panes —
       // including ones with their own stored copy-mode state that the user
@@ -1125,7 +1128,8 @@ struct ContentView: View {
   // MARK: - Ctrl Nav Monitor
 
   private func installCtrlNavMonitor() {
-    ctrlNavMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    ctrlNavMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
       guard event.modifierFlags.contains(.control),
         let chars = event.charactersIgnoringModifiers?.lowercased()
       else { return event }
@@ -1179,7 +1183,8 @@ struct ContentView: View {
   //   - Cmd+Up/Down → prev/next tab (primary: Cmd+[ / Cmd+])
   //   - Cmd+Shift+[ / Cmd+Shift+] → prev/next session (primary: Cmd+Shift+Up/Down)
   private func installAltShortcutMonitor() {
-    altShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    altShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
       // Arrow keys carry .function and .numericPad bits, which are inside
       // .deviceIndependentFlagsMask and would break a strict `==` match.
       // Restrict comparison to the four user-intent modifiers.
@@ -1249,7 +1254,8 @@ struct ContentView: View {
   }
 
   private func installCloseMonitor() {
-    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore] event in
+    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
       let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
       guard flags.contains(.command),
         event.charactersIgnoringModifiers?.lowercased() == "w"
@@ -1291,7 +1297,8 @@ struct ContentView: View {
   /// fall through so Cut still works inside text fields.
   private func installWindowModeShortcutMonitor() {
     windowModeShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
-      [windowsStore] event in
+      [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
       let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
       guard flags == .command,
         event.charactersIgnoringModifiers?.lowercased() == "x"
