@@ -25,6 +25,7 @@ struct ContentView: View {
     contentWithNotifications
       .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) {
         notification in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         guard let session = state.activeSession,
           let index = notification.userInfo?["index"] as? Int,
           index < session.tabs.count
@@ -33,27 +34,34 @@ struct ContentView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyFocusSessionByIndex)) {
         notification in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         guard let index = notification.userInfo?["index"] as? Int,
           index < state.sessions.count
         else { return }
         state.activeSession = state.sessions[index]
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNextTab)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         state.activeSession?.nextTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyPrevTab)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         state.activeSession?.prevTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNextSession)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         state.nextSession()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyPrevSession)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         state.prevSession()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionUp)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         state.moveActiveSessionUp()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionDown)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         state.moveActiveSessionDown()
       }
   }
@@ -61,21 +69,27 @@ struct ContentView: View {
   private var contentWithNotifications: some View {
     contentWithOverlays
       .onReceive(NotificationCenter.default.publisher(for: .misttyPopupToggle)) { notification in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handlePopupToggle(notification)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyClosePane)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handleClosePane()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyWindowMode)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handleWindowMode()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyCopyMode)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handleCopyMode()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyYankHints)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handleYankHints()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyScrollChanged)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         guard var copyState = state.activeSession?.activeTab?.copyModeState,
               copyState.isHinting,
               let source = copyState.hint?.source else { return }
@@ -83,6 +97,7 @@ struct ContentView: View {
         state.activeSession?.activeTab?.copyModeState = copyState
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handleCloseTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .ghosttySetTitle)) { notification in
@@ -139,27 +154,35 @@ struct ContentView: View {
         }
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNewTab)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         addTab(inheritSsh: true)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyNewTabPlain)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         addTab(inheritSsh: false)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         splitPane(direction: .horizontal, inheritSsh: true)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontalPlain)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         splitPane(direction: .horizontal, inheritSsh: false)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         splitPane(direction: .vertical, inheritSsh: true)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySplitVerticalPlain)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         splitPane(direction: .vertical, inheritSsh: false)
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         showingSessionManager = true
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyToggleTabBar)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         let configured = configuredTabBarShow()
         withAnimation(.easeInOut(duration: 0.15)) {
           tabBarOverride = tabBarOverride.toggled(configuredShow: configured)
