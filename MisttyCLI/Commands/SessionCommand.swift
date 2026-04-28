@@ -26,6 +26,9 @@ struct SessionCommand: ParsableCommand {
         @Option(name: .long, help: "Executable to run")
         var exec: String?
 
+        @Option(name: .long, help: "Target window id. Defaults to the focused window.")
+        var window: Int?
+
         @Option(name: .long, help: "Choose the output format")
         var format: OutputFormat = .auto
 
@@ -37,6 +40,7 @@ struct SessionCommand: ParsableCommand {
             var params: [String: Any] = ["name": name]
             if let directory { params["directory"] = directory }
             if let exec { params["exec"] = exec }
+            if let window { params["windowID"] = window }
 
             let data: Data
             do {

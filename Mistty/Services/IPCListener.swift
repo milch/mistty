@@ -227,8 +227,10 @@ final class IPCListener {
     switch method {
     // Sessions
     case "createSession":
+      let windowID = params["windowID"] as? Int
       service.createSession(
-        name: str("name") ?? "Default", directory: str("directory"), exec: str("exec"), reply: reply
+        name: str("name") ?? "Default", directory: str("directory"), exec: str("exec"),
+        windowID: windowID, reply: reply
       )
     case "listSessions":
       service.listSessions(reply: reply)

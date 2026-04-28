@@ -188,7 +188,7 @@ final class WindowsStore {
   /// Used to gate app-wide shortcuts like Cmd-W when an auxiliary window
   /// (Settings, etc.) has focus.
   func isTerminalWindowKey() -> Bool {
-    guard let key = NSApp.keyWindow else {
+    guard let app = NSApp, let key = app.keyWindow else {
       DebugLog.shared.log(
         "cmdw",
         "isTerminalWindowKey=false: no keyWindow, trackedCount=\(trackedNSWindows.count)"
@@ -209,7 +209,7 @@ final class WindowsStore {
   /// The window-scoped variant — used by per-window NSEvent monitors and
   /// notification handlers so only the focused window acts.
   func isActiveTerminalWindow(state: WindowState) -> Bool {
-    guard let key = NSApp.keyWindow else { return false }
+    guard let app = NSApp, let key = app.keyWindow else { return false }
     return trackedNSWindows.contains { $0.window === key && $0.state?.id == state.id }
   }
 
@@ -223,7 +223,7 @@ final class WindowsStore {
 
   /// The `WindowState` whose tracked NSWindow is the keyWindow, if any.
   func focusedWindow() -> WindowState? {
-    guard let key = NSApp.keyWindow else { return nil }
+    guard let app = NSApp, let key = app.keyWindow else { return nil }
     return trackedNSWindows.first { $0.window === key }?.state
   }
 
