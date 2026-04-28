@@ -80,6 +80,13 @@ struct MisttyApp: App {
             alert.runModal()
           }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .misttyReopenClosedWindow)) { _ in
+          guard let _ = windowsStore.reopenMostRecentClosed() else {
+            NSSound.beep()
+            return
+          }
+          windowsStore.openWindowAction?(id: "terminal")
+        }
     }
     .windowStyle(.hiddenTitleBar)
     .commands {
@@ -168,6 +175,11 @@ struct MisttyApp: App {
           }
         }
         .keyboardShortcut("w", modifiers: [.command, .shift])
+
+        Button("Reopen Closed Window") {
+          NotificationCenter.default.post(name: .misttyReopenClosedWindow, object: nil)
+        }
+        .keyboardShortcut("t", modifiers: [.command, .shift])
 
         Button("Window Mode") {
           NotificationCenter.default.post(name: .misttyWindowMode, object: nil)
@@ -382,4 +394,5 @@ extension Notification.Name {
   /// Triggered by the View → Reload Config menu item. Handled at the
   /// WindowGroup root in `body`, which calls `MisttyConfig.reload()`.
   static let misttyReloadConfig = Notification.Name("misttyReloadConfig")
+  static let misttyReopenClosedWindow = Notification.Name("misttyReopenClosedWindow")
 }
