@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import MisttyShared
 
 @Observable
 @MainActor
@@ -27,7 +28,7 @@ final class WindowsStore {
   var nextPopupID = 1
 
   var pendingRestoreStates: [WindowState] = []
-  var recentlyClosed: [_PlaceholderWindowSnapshot] = []
+  var recentlyClosed: [WindowSnapshot] = []
   private(set) var trackedNSWindows: [TrackedWindow] = []
   var openWindowAction: OpenWindowAction?
 
@@ -218,7 +219,3 @@ final class WindowsStore {
     return trackedNSWindows.first { $0.window === key }?.state
   }
 }
-
-// Placeholder — the real `WindowSnapshot` arrives in Phase 2 (Task 4).
-// Defined here as `_PlaceholderWindowSnapshot` aliased so we can swap later.
-typealias _PlaceholderWindowSnapshot = Void

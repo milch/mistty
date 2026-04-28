@@ -3,29 +3,37 @@ import MisttyShared
 
 extension SessionStore {
   func takeSnapshot() -> WorkspaceSnapshot {
-    WorkspaceSnapshot(
-      version: WorkspaceSnapshot.currentVersion,
-      sessions: sessions.map { session in
-        SessionSnapshot(
-          id: session.id,
-          name: session.name,
-          customName: session.customName,
-          directory: session.directory,
-          sshCommand: session.sshCommand,
-          lastActivatedAt: session.lastActivatedAt,
-          tabs: session.tabs.map { tab in
-            TabSnapshot(
-              id: tab.id,
-              customTitle: tab.customTitle,
-              directory: tab.directory,
-              layout: snapshotLayout(tab.layout.root),
-              activePaneID: tab.activePane?.id
-            )
-          },
-          activeTabID: session.activeTab?.id
-        )
-      },
+    let sessionSnapshots = sessions.map { session in
+      SessionSnapshot(
+        id: session.id,
+        name: session.name,
+        customName: session.customName,
+        directory: session.directory,
+        sshCommand: session.sshCommand,
+        lastActivatedAt: session.lastActivatedAt,
+        tabs: session.tabs.map { tab in
+          TabSnapshot(
+            id: tab.id,
+            customTitle: tab.customTitle,
+            directory: tab.directory,
+            layout: snapshotLayout(tab.layout.root),
+            activePaneID: tab.activePane?.id
+          )
+        },
+        activeTabID: session.activeTab?.id
+      )
+    }
+    // Stub for Task 4: wrap sessions in a synthetic window with id=0.
+    // Task 6 will restore per-window state restoration.
+    let window = WindowSnapshot(
+      id: 0,
+      sessions: sessionSnapshots,
       activeSessionID: activeSession?.id
+    )
+    return WorkspaceSnapshot(
+      version: WorkspaceSnapshot.currentVersion,
+      windows: [window],
+      activeWindowID: 0
     )
   }
 
@@ -44,7 +52,11 @@ extension SessionStore {
 
     var maxSessionID = 0, maxTabID = 0, maxPaneID = 0
 
-    for sessionSnap in snapshot.sessions {
+    // Stub for Task 4: extract sessions from the first window.
+    // Task 6 will restore per-window state.
+    let sessionSnapshots = snapshot.windows.first?.sessions ?? []
+
+    for sessionSnap in sessionSnapshots {
       maxSessionID = max(maxSessionID, sessionSnap.id)
       let tabIDGen: () -> Int = { [weak self] in self?.generateTabID() ?? 0 }
       let paneIDGen: () -> Int = { [weak self] in self?.generatePaneID() ?? 0 }
@@ -87,7 +99,8 @@ extension SessionStore {
       appendRestoredSession(session)
     }
 
-    if let activeID = snapshot.activeSessionID,
+    // Stub for Task 4: restore activeSessionID from the first window.
+    if let activeID = snapshot.windows.first?.activeSessionID,
        let active = sessions.first(where: { $0.id == activeID }) {
       activeSession = active
     } else {

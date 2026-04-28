@@ -23,9 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     do {
       let data = try JSONEncoder().encode(snapshot)
       coder.encode(data as NSData, forKey: Self.coderKey)
+      // Stub for Task 4: count sessions from the first window.
+      let totalSessions = snapshot.windows.flatMap(\.sessions).count
       DebugLog.shared.log(
         "restore",
-        "encoded snapshot: \(snapshot.sessions.count) sessions, \(data.count) bytes")
+        "encoded snapshot: \(totalSessions) sessions, \(data.count) bytes")
     } catch {
       DebugLog.shared.log("restore", "encode failed: \(error)")
     }
@@ -49,9 +51,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       }
       let config = MisttyConfig.current.restore
       store.restore(from: snapshot, config: config)
+      // Stub for Task 4: count sessions from all windows.
+      let totalSessions = snapshot.windows.flatMap(\.sessions).count
       DebugLog.shared.log(
         "restore",
-        "decoded snapshot: restored \(snapshot.sessions.count) sessions")
+        "decoded snapshot: restored \(totalSessions) sessions")
     } catch {
       DebugLog.shared.log("restore", "decode failed: \(error)")
     }
