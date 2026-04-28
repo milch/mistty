@@ -82,6 +82,30 @@ struct WindowsStoreLookupTests {
     #expect(store.window(byId: a.id)?.id == a.id)
     #expect(store.window(byId: 999) == nil)
   }
+
+  /// Regression test: ghostty's close-surface callback identifies the surface
+  /// by *pane* id, not popup id. The handler in `ContentView.handleCloseSurface`
+  /// must therefore look up popups by their pane's id — using the popup's own
+  /// id silently misses (the pane and popup id counters are independent).
+  /// When this lookup fails, popups with `close_on_exit = true` get stuck
+  /// showing ghostty's "Process exited. Press any key to close the terminal."
+  /// message instead of closing.
+  @Test
+  func popupByPaneIdFindsTheRightPopup() throws {
+    let store = WindowsStore()
+    let window = store.createWindow()
+    let session = window.createSession(name: "s", directory: URL(fileURLWithPath: "/"))
+    session.openPopup(definition: PopupDefinition(name: "p", command: "true"))
+
+    let popup = try #require(session.popups.first)
+    let paneID = popup.pane.id
+
+    let resolved = try #require(store.popup(byPaneId: paneID))
+    #expect(resolved.popup.id == popup.id)
+    #expect(resolved.session.id == session.id)
+    #expect(resolved.window.id == window.id)
+    #expect(store.popup(byPaneId: 9_999) == nil)
+  }
 }
 
 @MainActor

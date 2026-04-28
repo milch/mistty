@@ -272,6 +272,21 @@ final class WindowsStore {
     return nil
   }
 
+  /// Look up a popup by the id of its underlying pane. Used by the
+  /// close-surface notification path, which carries the pane id (popup
+  /// panes don't live in any tab.panes, so the regular `pane(byId:)`
+  /// lookup misses them).
+  func popup(byPaneId paneId: Int) -> (window: WindowState, session: MisttySession, popup: PopupState)? {
+    for window in windows {
+      for session in window.sessions {
+        if let popup = session.popups.first(where: { $0.pane.id == paneId }) {
+          return (window, session, popup)
+        }
+      }
+    }
+    return nil
+  }
+
   // MARK: - NSWindow registry
 
   @discardableResult

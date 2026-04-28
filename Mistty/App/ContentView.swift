@@ -648,7 +648,7 @@ struct ContentView: View {
     // closes (process exit OR the user dismisses the wait prompt), the pane
     // is dead and reactivating the popup must spawn a fresh one; otherwise
     // the stale "press any key" output sticks around.
-    if let resolved = windowsStore.popup(byId: paneID) {
+    if let resolved = windowsStore.popup(byPaneId: paneID) {
       resolved.session.closePopup(resolved.popup)
       returnFocusToActivePane()
       return
