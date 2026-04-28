@@ -2,9 +2,10 @@ import AppKit
 import Foundation
 import SwiftUI
 
-// Forward-declared in Task 1 so WindowsStore compiles. Task 2 fleshes
-// this out with sessions, activeSession, and the relocated session-management
-// methods. Do not add behavior here.
+// TODO(Task 2): delete this stub. Task 2 creates `Mistty/Models/WindowState.swift`
+// with the real type — at that point this declaration becomes a duplicate-symbol
+// build error. Forward-declared here so WindowsStore compiles in isolation during
+// Phase 1. Do not add behavior to this stub.
 @Observable
 @MainActor
 final class WindowState {
@@ -20,8 +21,12 @@ final class WindowState {
 @Observable
 @MainActor
 final class WindowsStore {
-  // Nested. Once SessionStore is deleted in Task 12, the plan can promote
-  // this back to top-level. For now, nesting avoids the naming clash.
+  // Nested intentionally. The pre-existing top-level `TrackedWindow` in
+  // `SessionStore.swift` (different shape — non-weak NSWindow, no state)
+  // would clash if this lived at module scope. Even after SessionStore is
+  // deleted in Task 12, nesting reads better at call sites
+  // (`WindowsStore.TrackedWindow` is more self-documenting than a free
+  // `TrackedWindow`), so don't promote.
   struct TrackedWindow {
     let id: Int
     weak var window: NSWindow?

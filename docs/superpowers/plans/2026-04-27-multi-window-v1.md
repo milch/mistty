@@ -260,12 +260,12 @@ final class WindowsStore {
 Until Task 7 wires up the real schema, add a placeholder so `WindowsStore` compiles. At the **bottom** of `Mistty/Models/WindowsStore.swift`:
 
 ```swift
-// Placeholder — the real `WindowSnapshot` arrives in Phase 2 (Task 7).
+// Placeholder — the real `WindowSnapshot` arrives in Phase 2 (Task 4).
 // Defined here as `_PlaceholderWindowSnapshot` aliased so we can swap later.
 typealias _PlaceholderWindowSnapshot = Void
 ```
 
-Replace `[WindowSnapshot]` with `[_PlaceholderWindowSnapshot]` in `recentlyClosed`'s declaration *for now*; Task 19 will swap the real type back in.
+Replace `[WindowSnapshot]` with `[_PlaceholderWindowSnapshot]` in `recentlyClosed`'s declaration *for now*; Task 4 will swap the real type back in.
 
 Update the declaration:
 
