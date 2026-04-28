@@ -1,6 +1,6 @@
 import Foundation
 
-public struct WorkspaceSnapshot: Codable, Sendable {
+public struct WorkspaceSnapshot: Codable, Sendable, Equatable {
   public static let currentVersion = 2
 
   public let version: Int
@@ -15,7 +15,8 @@ public struct WorkspaceSnapshot: Codable, Sendable {
     self.version = version
     self.windows = windows
     self.activeWindowID = activeWindowID
-    self.unsupportedVersion = nil
+    // Mark as unsupported if version is neither 1 nor 2
+    self.unsupportedVersion = (version == 1 || version == 2) ? nil : version
   }
 
   // MARK: - Codable with v1 migration

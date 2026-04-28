@@ -78,28 +78,34 @@ final class WorkspaceSnapshotTests: XCTestCase {
 
   func test_workspaceSnapshot_roundTrip() throws {
     let workspace = WorkspaceSnapshot(
-      version: 1,
-      sessions: [
-        SessionSnapshot(
+      version: 2,
+      windows: [
+        WindowSnapshot(
           id: 1,
-          name: "work",
-          customName: "Work",
-          directory: URL(fileURLWithPath: "/tmp"),
-          sshCommand: nil,
-          lastActivatedAt: Date(timeIntervalSince1970: 1_700_000_000),
-          tabs: [
-            TabSnapshot(
-              id: 10,
-              customTitle: "repl",
+          sessions: [
+            SessionSnapshot(
+              id: 1,
+              name: "work",
+              customName: "Work",
               directory: URL(fileURLWithPath: "/tmp"),
-              layout: .leaf(pane: PaneSnapshot(id: 100)),
-              activePaneID: 100
+              sshCommand: nil,
+              lastActivatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+              tabs: [
+                TabSnapshot(
+                  id: 10,
+                  customTitle: "repl",
+                  directory: URL(fileURLWithPath: "/tmp"),
+                  layout: .leaf(pane: PaneSnapshot(id: 100)),
+                  activePaneID: 100
+                ),
+              ],
+              activeTabID: 10
             ),
           ],
-          activeTabID: 10
+          activeSessionID: 1
         ),
       ],
-      activeSessionID: 1
+      activeWindowID: 1
     )
     XCTAssertEqual(try roundTrip(workspace), workspace)
   }
@@ -117,7 +123,7 @@ final class WorkspaceSnapshotTests: XCTestCase {
     let decoder = JSONDecoder()
     let workspace = try decoder.decode(WorkspaceSnapshot.self, from: Data(good.utf8))
     XCTAssertNil(workspace.unsupportedVersion)
-    XCTAssertTrue(workspace.sessions.isEmpty)
+    XCTAssertTrue(workspace.windows[0].sessions.isEmpty)
   }
 
   func test_workspaceSnapshot_zeroVersionRejected() throws {

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct WindowSnapshot: Codable, Sendable {
+public struct WindowSnapshot: Codable, Sendable, Equatable {
   public let id: Int
   public let sessions: [SessionSnapshot]
   public let activeSessionID: Int?
