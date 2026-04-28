@@ -109,6 +109,17 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .ghosttyPwd)) { notification in
         handlePwd(notification)
       }
+      .onChange(of: windowsStore.activeWindow?.id) { _, newActive in
+        // When this window becomes the focused terminal window, clear its
+        // active tab's bell so the dock badge drops. Pre-multi-window the
+        // tab-id onChange below handled "user looked at the bell tab", but
+        // window switches don't change activeTab.id, so we need this
+        // additional hook for the cross-window case.
+        if newActive == state.id, let tab = state.activeSession?.activeTab, tab.hasBell {
+          tab.hasBell = false
+          updateDockBadge()
+        }
+      }
       .onChange(of: state.activeSession?.activeTab?.id) { _, _ in
         state.activeSession?.activeTab?.hasBell = false
         updateDockBadge()
@@ -580,11 +591,19 @@ struct ContentView: View {
     guard let paneID = notification.userInfo?["paneID"] as? Int,
       let resolved = windowsStore.pane(byId: paneID)
     else { return }
-    let isActiveTabInOwningWindow =
-      resolved.window.activeSession?.id == resolved.session.id
-      && resolved.session.activeTab?.id == resolved.tab.id
+    // The user is "looking at" the bell-ringing pane only when the app is
+    // frontmost AND its window is the focused terminal window AND its
+    // session is that window's active session AND its tab is that
+    // session's active tab. If any of those is false, mark hasBell so the
+    // dock badge surfaces. Crucially: when the app is backgrounded
+    // (cmd-tabbed away), every bell counts toward the badge regardless
+    // of which tab is "active" — the user can't see any of it.
+    let isLookingAtPane =
+      NSApp.isActive
       && windowsStore.activeWindow?.id == resolved.window.id
-    if !isActiveTabInOwningWindow {
+      && resolved.window.activeSession?.id == resolved.session.id
+      && resolved.session.activeTab?.id == resolved.tab.id
+    if !isLookingAtPane {
       resolved.tab.hasBell = true
     }
     updateDockBadge()
