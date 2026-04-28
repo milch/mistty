@@ -120,6 +120,18 @@ struct ContentView: View {
           updateDockBadge()
         }
       }
+      .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        // Cmd+Tab back into Mistty doesn't change activeWindow.id (the same
+        // window was already key), so the activeWindow onChange doesn't
+        // fire. Listen for app activation directly and clear the focused
+        // window's active-tab bell. The isActiveTerminalWindow guard
+        // makes only the focused window's ContentView act.
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+        if let tab = state.activeSession?.activeTab, tab.hasBell {
+          tab.hasBell = false
+          updateDockBadge()
+        }
+      }
       .onChange(of: state.activeSession?.activeTab?.id) { _, _ in
         state.activeSession?.activeTab?.hasBell = false
         updateDockBadge()
