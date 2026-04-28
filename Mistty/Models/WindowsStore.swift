@@ -35,6 +35,17 @@ final class WindowsStore {
   /// every mounting onAppear from scheduling its own drain.
   private var drainScheduled: Bool = false
 
+  /// How long to wait after the first WindowRootView mounts before draining
+  /// any pending restore states that SwiftUI's `WindowGroup` auto-restore
+  /// didn't already claim. Empirical — chosen to comfortably outlast
+  /// SwiftUI's own restore-then-mount round trip on a typical machine.
+  /// Too short → over-fire, end up with extra empty windows; too long →
+  /// perceptible delay before the rest of the user's windows materialize
+  /// on cold launch. 250ms is the rough middle. If users on slower
+  /// hardware ever report extra-empty-window regressions, this is the
+  /// first constant to bump.
+  private static let pendingRestoreDrainDelay: TimeInterval = 0.25
+
   init() {
     // Mirror `NSApp.keyWindow` into `activeWindow` so IPC sentinels
     // (`active`, `sendKeys paneId=0`, `getText paneId=0`,
@@ -112,6 +123,17 @@ final class WindowsStore {
     // twice from onDisappear races), skip the snapshot so we don't push a
     // duplicate onto recentlyClosed.
     guard windows.contains(where: { $0.id == state.id }) else { return }
+
+    // Skip the recently-closed snapshot for empty windows. Cmd+W on an
+    // empty window legitimately closes it, but pushing nothing-states onto
+    // the LIFO stack would let several empties mask a genuine prior closed
+    // window with content (capacity is 10), and reopening an empty window
+    // is just busywork.
+    guard !state.sessions.isEmpty else {
+      windows.removeAll { $0.id == state.id }
+      if activeWindow?.id == state.id { activeWindow = windows.last }
+      return
+    }
 
     // Snapshot into recently-closed before removal so Reopen Closed Window
     // can rehydrate. In-memory only — wiped on app quit. Uses the same
@@ -376,7 +398,7 @@ final class WindowsStore {
   func drainPendingRestores() {
     guard openWindowAction != nil, !drainScheduled else { return }
     drainScheduled = true
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.pendingRestoreDrainDelay) { [weak self] in
       guard let self else { return }
       MainActor.assumeIsolated {
         let remaining = self.pendingRestoreStates.count

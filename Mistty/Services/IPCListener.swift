@@ -228,8 +228,12 @@ final class IPCListener {
     // Sessions
     case "createSession":
       let windowID = params["windowID"] as? Int
+      // `name` is optional on the wire — passing nil lets the receiver use
+      // its default-name fallback (currently "Default") without promoting
+      // that fallback to customName, so the cwd-derived sidebarLabel still
+      // wins when --name was omitted on the CLI.
       service.createSession(
-        name: str("name") ?? "Default", directory: str("directory"), exec: str("exec"),
+        name: str("name"), directory: str("directory"), exec: str("exec"),
         windowID: windowID, reply: reply
       )
     case "listSessions":

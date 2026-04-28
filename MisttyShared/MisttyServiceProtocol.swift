@@ -3,7 +3,7 @@ import Foundation
 public protocol MisttyServiceProtocol {
     // MARK: - Sessions
 
-    func createSession(name: String, directory: String?, exec: String?, windowID: Int?, reply: @escaping (Data?, Error?) -> Void)
+    func createSession(name: String?, directory: String?, exec: String?, windowID: Int?, reply: @escaping (Data?, Error?) -> Void)
     func listSessions(reply: @escaping (Data?, Error?) -> Void)
     func getSession(id: Int, reply: @escaping (Data?, Error?) -> Void)
     func closeSession(id: Int, reply: @escaping (Data?, Error?) -> Void)

@@ -73,7 +73,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
   // MARK: - Sessions
 
   func createSession(
-    name: String, directory: String?, exec: String?, windowID: Int?,
+    name: String?, directory: String?, exec: String?, windowID: Int?,
     reply: @escaping (Data?, Error?) -> Void
   ) {
     let reply = Reply(handler: reply)
@@ -85,11 +85,13 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       }
       let dir = directory.map { URL(fileURLWithPath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser
-      // Pass --name through as customName so it wins over the cwd-derived
-      // sidebarLabel (which would otherwise display the directory's
-      // lastPathComponent — e.g. the user's username when dir == ~).
+      // When --name is supplied, promote it to customName so it wins over
+      // the cwd-derived sidebarLabel (which would otherwise display the
+      // directory's lastPathComponent — e.g. the user's username when
+      // dir == ~). When --name is omitted, leave customName nil so the
+      // sidebarLabel falls through to its usual cwd basename.
       let session = target.createSession(
-        name: name, directory: dir, exec: exec, customName: name)
+        name: name ?? "Default", directory: dir, exec: exec, customName: name)
       reply(self.encode(self.sessionResponse(session, windowID: target.id)), nil)
     }
   }

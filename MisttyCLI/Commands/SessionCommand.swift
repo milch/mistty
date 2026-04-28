@@ -17,8 +17,8 @@ struct SessionCommand: ParsableCommand {
     struct Create: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Create a new session")
 
-        @Option(name: .long, help: "Session name")
-        var name: String = "Default"
+        @Option(name: .long, help: "Session name (overrides the directory-derived sidebar label)")
+        var name: String?
 
         @Option(name: .long, help: "Working directory")
         var directory: String?
@@ -37,7 +37,8 @@ struct SessionCommand: ParsableCommand {
             let client = IPCClient()
             try client.ensureReachable()
 
-            var params: [String: Any] = ["name": name]
+            var params: [String: Any] = [:]
+            if let name { params["name"] = name }
             if let directory { params["directory"] = directory }
             if let exec { params["exec"] = exec }
             if let window { params["windowID"] = window }
