@@ -2,12 +2,14 @@ import Foundation
 
 public struct TabResponse: Codable, Sendable, PrintableByFormatter {
     public let id: Int
+    public let window: Int
     public let title: String
     public let paneCount: Int
     public let paneIds: [Int]
 
-    public init(id: Int, title: String, paneCount: Int, paneIds: [Int]) {
+    public init(id: Int, window: Int, title: String, paneCount: Int, paneIds: [Int]) {
         self.id = id
+        self.window = window
         self.title = title
         self.paneCount = paneCount
         self.paneIds = paneIds
@@ -16,6 +18,7 @@ public struct TabResponse: Codable, Sendable, PrintableByFormatter {
     public static func formatHeader() -> [String] {
         [
             "ID",
+            "Window",
             "Title",
             "Panes",
             "Pane IDs",
@@ -25,6 +28,7 @@ public struct TabResponse: Codable, Sendable, PrintableByFormatter {
     public func formatRow() -> [String] {
         [
             "\(self.id)",
+            "\(self.window)",
             self.title,
             "\(self.paneCount)",
             self.paneIds.map { "\($0)" }.joined(separator: ", "),

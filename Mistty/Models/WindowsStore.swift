@@ -213,6 +213,14 @@ final class WindowsStore {
     return trackedNSWindows.contains { $0.window === key && $0.state?.id == state.id }
   }
 
+  /// Resolve the target window for a window-scoped create operation.
+  /// `explicit` wins; otherwise we fall back to the focused terminal
+  /// window. Returns nil if neither resolves.
+  func resolveTargetWindow(explicit: Int?) -> WindowState? {
+    if let explicit { return window(byId: explicit) }
+    return focusedWindow()
+  }
+
   /// The `WindowState` whose tracked NSWindow is the keyWindow, if any.
   func focusedWindow() -> WindowState? {
     guard let key = NSApp.keyWindow else { return nil }

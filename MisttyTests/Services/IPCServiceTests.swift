@@ -20,7 +20,7 @@ final class IPCServiceTests: XCTestCase {
 
   func testCreateSession() async throws {
     let expectation = XCTestExpectation(description: "create session")
-    service.createSession(name: "test", directory: "/tmp", exec: nil) { data, error in
+    service.createSession(name: "test", directory: "/tmp", exec: nil, windowID: store.id) { data, error in
       XCTAssertNil(error)
       XCTAssertNotNil(data)
       let response = try! JSONDecoder().decode(SessionResponse.self, from: data!)
@@ -28,6 +28,7 @@ final class IPCServiceTests: XCTestCase {
       XCTAssertEqual(response.directory, "/tmp")
       XCTAssertEqual(response.tabCount, 1)
       XCTAssertFalse(response.tabIds.isEmpty)
+      XCTAssertGreaterThan(response.window, 0)
       expectation.fulfill()
     }
     await fulfillment(of: [expectation], timeout: 2)
@@ -37,11 +38,12 @@ final class IPCServiceTests: XCTestCase {
 
   func testCreateSessionDefaultDirectory() async throws {
     let expectation = XCTestExpectation(description: "create session default dir")
-    service.createSession(name: "home", directory: nil, exec: nil) { data, error in
+    service.createSession(name: "home", directory: nil, exec: nil, windowID: store.id) { data, error in
       XCTAssertNil(error)
       XCTAssertNotNil(data)
       let response = try! JSONDecoder().decode(SessionResponse.self, from: data!)
       XCTAssertEqual(response.name, "home")
+      XCTAssertGreaterThan(response.window, 0)
       expectation.fulfill()
     }
     await fulfillment(of: [expectation], timeout: 2)
@@ -59,6 +61,8 @@ final class IPCServiceTests: XCTestCase {
       XCTAssertEqual(responses.count, 2)
       XCTAssertEqual(responses[0].name, "alpha")
       XCTAssertEqual(responses[1].name, "beta")
+      XCTAssertGreaterThan(responses[0].window, 0)
+      XCTAssertGreaterThan(responses[1].window, 0)
       expectation.fulfill()
     }
     await fulfillment(of: [expectation], timeout: 2)

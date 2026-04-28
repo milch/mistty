@@ -30,9 +30,10 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
     reply(nil, MisttyIPC.error(.operationFailed, "Not implemented"))
   }
 
-  @MainActor private func sessionResponse(_ session: MisttySession) -> SessionResponse {
+  @MainActor private func sessionResponse(_ session: MisttySession, windowID: Int) -> SessionResponse {
     SessionResponse(
       id: session.id,
+      window: windowID,
       name: session.name,
       directory: session.directory.path,
       tabCount: session.tabs.count,
@@ -40,25 +41,28 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
     )
   }
 
-  @MainActor private func tabResponse(_ tab: MisttyTab) -> TabResponse {
+  @MainActor private func tabResponse(_ tab: MisttyTab, windowID: Int) -> TabResponse {
     TabResponse(
       id: tab.id,
+      window: windowID,
       title: tab.displayTitle,
       paneCount: tab.panes.count,
       paneIds: tab.panes.map(\.id)
     )
   }
 
-  @MainActor private func paneResponse(_ pane: MisttyPane) -> PaneResponse {
+  @MainActor private func paneResponse(_ pane: MisttyPane, windowID: Int) -> PaneResponse {
     PaneResponse(
       id: pane.id,
+      window: windowID,
       directory: pane.directory?.path
     )
   }
 
-  @MainActor private func popupResponse(_ popup: PopupState) -> PopupResponse {
+  @MainActor private func popupResponse(_ popup: PopupState, windowID: Int) -> PopupResponse {
     PopupResponse(
       id: popup.id,
+      window: windowID,
       name: popup.definition.name,
       command: popup.definition.command,
       isVisible: popup.isVisible,
@@ -69,28 +73,29 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
   // MARK: - Sessions
 
   func createSession(
-    name: String, directory: String?, exec: String?, reply: @escaping (Data?, Error?) -> Void
+    name: String, directory: String?, exec: String?, windowID: Int?,
+    reply: @escaping (Data?, Error?) -> Void
   ) {
     let reply = Reply(handler: reply)
     Task { @MainActor in
-      let dir = URL(
-        fileURLWithPath: directory ?? FileManager.default.homeDirectoryForCurrentUser.path)
-      // Phase 3 placeholder: resolve to active/focused window.
-      // Phase 5 Task 14 will add proper --window resolution.
-      let targetWindow = self.windowsStore.activeWindow ?? self.windowsStore.windows.first
-      guard let targetWindow else {
-        reply(nil, MisttyIPC.error(.operationFailed, "No window available"))
+      guard let target = self.windowsStore.resolveTargetWindow(explicit: windowID) else {
+        reply(nil, MisttyIPC.error(.invalidArgument,
+          "no focused window; pass --window <id> or focus a terminal window first"))
         return
       }
-      let session = targetWindow.createSession(name: name, directory: dir, exec: exec)
-      reply(self.encode(self.sessionResponse(session)), nil)
+      let dir = directory.map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.homeDirectoryForCurrentUser
+      let session = target.createSession(name: name, directory: dir, exec: exec)
+      reply(self.encode(self.sessionResponse(session, windowID: target.id)), nil)
     }
   }
 
   func listSessions(reply: @escaping (Data?, Error?) -> Void) {
     let reply = Reply(handler: reply)
     Task { @MainActor in
-      let responses = self.windowsStore.windows.flatMap { $0.sessions }.map { self.sessionResponse($0) }
+      let responses = self.windowsStore.windows.flatMap { window in
+        window.sessions.map { self.sessionResponse($0, windowID: window.id) }
+      }
       reply(self.encode(responses), nil)
     }
   }
@@ -102,7 +107,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.entityNotFound, "Session \(id) not found"))
         return
       }
-      reply(self.encode(self.sessionResponse(resolved.session)), nil)
+      reply(self.encode(self.sessionResponse(resolved.session, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -135,7 +140,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         return
       }
       if let name { tab.customTitle = name }
-      reply(self.encode(self.tabResponse(tab)), nil)
+      reply(self.encode(self.tabResponse(tab, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -146,7 +151,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.entityNotFound, "Session \(sessionId) not found"))
         return
       }
-      let responses = resolved.session.tabs.map { self.tabResponse($0) }
+      let responses = resolved.session.tabs.map { self.tabResponse($0, windowID: resolved.window.id) }
       reply(self.encode(responses), nil)
     }
   }
@@ -158,7 +163,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.entityNotFound, "Tab \(id) not found"))
         return
       }
-      reply(self.encode(self.tabResponse(resolved.tab)), nil)
+      reply(self.encode(self.tabResponse(resolved.tab, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -182,7 +187,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         return
       }
       resolved.tab.customTitle = name
-      reply(self.encode(self.tabResponse(resolved.tab)), nil)
+      reply(self.encode(self.tabResponse(resolved.tab, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -201,7 +206,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.operationFailed, "Failed to create pane"))
         return
       }
-      reply(self.encode(self.paneResponse(newPane)), nil)
+      reply(self.encode(self.paneResponse(newPane, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -212,7 +217,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.entityNotFound, "Tab \(tabId) not found"))
         return
       }
-      let responses = resolved.tab.panes.map { self.paneResponse($0) }
+      let responses = resolved.tab.panes.map { self.paneResponse($0, windowID: resolved.window.id) }
       reply(self.encode(responses), nil)
     }
   }
@@ -224,7 +229,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.entityNotFound, "Pane \(id) not found"))
         return
       }
-      reply(self.encode(self.paneResponse(resolved.pane)), nil)
+      reply(self.encode(self.paneResponse(resolved.pane, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -250,7 +255,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       resolved.window.activeSession = resolved.session
       resolved.session.activeTab = resolved.tab
       resolved.tab.focusPane(resolved.pane)
-      reply(self.encode(self.paneResponse(resolved.pane)), nil)
+      reply(self.encode(self.paneResponse(resolved.pane, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -260,10 +265,15 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
     let reply = Reply(handler: reply)
     Task { @MainActor in
       let session: MisttySession?
+      let owningWindowID: Int
       if sessionId == 0 {
-        session = self.windowsStore.activeWindow?.activeSession
+        let activeWin = self.windowsStore.activeWindow
+        session = activeWin?.activeSession
+        owningWindowID = activeWin?.id ?? 0
       } else {
-        session = self.windowsStore.session(byId: sessionId)?.session
+        let resolved = self.windowsStore.session(byId: sessionId)
+        session = resolved?.session
+        owningWindowID = resolved?.window.id ?? 0
       }
       guard let session else {
         reply(nil, MisttyIPC.error(.entityNotFound, "Session not found"))
@@ -296,7 +306,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       }
 
       tab.focusPane(target)
-      reply(self.encode(self.paneResponse(target)), nil)
+      reply(self.encode(self.paneResponse(target, windowID: owningWindowID)), nil)
     }
   }
 
@@ -339,11 +349,12 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
   func activePane(reply: @escaping (Data?, Error?) -> Void) {
     let reply = Reply(handler: reply)
     Task { @MainActor in
-      guard let pane = self.windowsStore.activeWindow?.activeSession?.activeTab?.activePane else {
+      guard let activeWin = self.windowsStore.activeWindow,
+            let pane = activeWin.activeSession?.activeTab?.activePane else {
         reply(nil, MisttyIPC.error(.entityNotFound, "No active pane"))
         return
       }
-      reply(self.encode(self.paneResponse(pane)), nil)
+      reply(self.encode(self.paneResponse(pane, windowID: activeWin.id)), nil)
     }
   }
 
@@ -509,7 +520,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.operationFailed, "Failed to create popup"))
         return
       }
-      reply(self.encode(self.popupResponse(popup)), nil)
+      reply(self.encode(self.popupResponse(popup, windowID: resolved.window.id)), nil)
     }
   }
 
@@ -540,7 +551,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       }
       resolved.session.togglePopup(definition: definition)
       if let popup = resolved.session.popups.first(where: { $0.definition.name == name }) {
-        reply(self.encode(self.popupResponse(popup)), nil)
+        reply(self.encode(self.popupResponse(popup, windowID: resolved.window.id)), nil)
       } else {
         reply(self.encode([String: String]()), nil)
       }
@@ -554,7 +565,7 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         reply(nil, MisttyIPC.error(.entityNotFound, "Session \(sessionId) not found"))
         return
       }
-      let responses = resolved.session.popups.map { self.popupResponse($0) }
+      let responses = resolved.session.popups.map { self.popupResponse($0, windowID: resolved.window.id) }
       reply(self.encode(responses), nil)
     }
   }
