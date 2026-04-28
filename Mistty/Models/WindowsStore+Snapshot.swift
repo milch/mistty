@@ -116,7 +116,7 @@ extension WindowsStore {
 
   // Snapshot restore helpers:
 
-  fileprivate static func restoreTab(
+  static func restoreTab(
     from snapshot: TabSnapshot,
     paneIDGen: @escaping () -> Int,
     config: RestoreConfig,
@@ -147,7 +147,7 @@ extension WindowsStore {
     return tab
   }
 
-  fileprivate static func restoreLayoutNode(
+  static func restoreLayoutNode(
     _ snapshot: LayoutNodeSnapshot,
     config: RestoreConfig,
     panes: inout [Int: MisttyPane],
@@ -175,7 +175,7 @@ extension WindowsStore {
     }
   }
 
-  fileprivate static func resolveCWD(_ url: URL?) -> URL? {
+  static func resolveCWD(_ url: URL?) -> URL? {
     guard let url else { return nil }
     let path = url.path
     var isDir: ObjCBool = false

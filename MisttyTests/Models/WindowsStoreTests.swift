@@ -83,3 +83,39 @@ struct WindowsStoreLookupTests {
     #expect(store.window(byId: 999) == nil)
   }
 }
+
+@MainActor
+struct WindowsStoreRecentlyClosedTests {
+  @Test
+  func closeWindowSnapshotsIntoRecentlyClosed() {
+    let store = WindowsStore()
+    let state = store.createWindow()
+    let session = state.createSession(name: "demo", directory: URL(fileURLWithPath: "/tmp"))
+    store.closeWindow(state)
+    #expect(store.recentlyClosed.count == 1)
+    #expect(store.recentlyClosed[0].sessions.count == 1)
+    #expect(store.recentlyClosed[0].sessions[0].id == session.id)
+  }
+
+  @Test
+  func recentlyClosedCappedAtTen() {
+    let store = WindowsStore()
+    for _ in 0..<15 {
+      let state = store.createWindow()
+      store.closeWindow(state)
+    }
+    #expect(store.recentlyClosed.count == 10)
+  }
+
+  @Test
+  func reopenMostRecentPushesOntoPendingRestoreStates() {
+    let store = WindowsStore()
+    let state = store.createWindow()
+    _ = state.createSession(name: "demo", directory: URL(fileURLWithPath: "/tmp"))
+    store.closeWindow(state)
+    let restored = store.reopenMostRecentClosed()
+    #expect(restored != nil)
+    #expect(store.pendingRestoreStates.count == 1)
+    #expect(store.recentlyClosed.isEmpty)
+  }
+}

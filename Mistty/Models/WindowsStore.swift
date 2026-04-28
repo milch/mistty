@@ -88,8 +88,106 @@ final class WindowsStore {
   }
 
   func closeWindow(_ state: WindowState) {
+    // Idempotency guard: if the window is no longer in our list (e.g. called
+    // twice from onDisappear races), skip the snapshot so we don't push a
+    // duplicate onto recentlyClosed.
+    guard windows.contains(where: { $0.id == state.id }) else { return }
+
+    // Snapshot into recently-closed before removal so Reopen Closed Window
+    // can rehydrate. In-memory only — wiped on app quit.
+    let snapshot = WindowSnapshot(
+      id: state.id,
+      sessions: state.sessions.map { session in
+        // Build SessionSnapshot via the same path takeSnapshot uses.
+        // For this in-memory copy we don't need foreground-process capture
+        // — closing a window doesn't quit the running shell, but reopening
+        // it spawns a fresh shell at the captured CWD anyway.
+        SessionSnapshot(
+          id: session.id,
+          name: session.name,
+          customName: session.customName,
+          directory: session.directory,
+          sshCommand: session.sshCommand,
+          lastActivatedAt: session.lastActivatedAt,
+          tabs: session.tabs.map { tab in
+            TabSnapshot(
+              id: tab.id, customTitle: tab.customTitle, directory: tab.directory,
+              layout: simpleSnapshotLayout(tab.layout.root),
+              activePaneID: tab.activePane?.id)
+          },
+          activeTabID: session.activeTab?.id)
+      },
+      activeSessionID: state.activeSession?.id
+    )
+    recentlyClosed.insert(snapshot, at: 0)
+    if recentlyClosed.count > 10 {
+      recentlyClosed.removeLast(recentlyClosed.count - 10)
+    }
     windows.removeAll { $0.id == state.id }
     if activeWindow?.id == state.id { activeWindow = windows.last }
+  }
+
+  /// Stripped-down layout snapshot used by recently-closed (no
+  /// foreground-process capture; we just preserve the layout shape and
+  /// CWDs). Reopened windows respawn their shells at the captured CWD.
+  private func simpleSnapshotLayout(_ node: PaneLayoutNode) -> LayoutNodeSnapshot {
+    switch node {
+    case .leaf(let pane):
+      return .leaf(pane: PaneSnapshot(
+        id: pane.id,
+        directory: pane.directory,
+        currentWorkingDirectory: pane.currentWorkingDirectory,
+        captured: nil))
+    case .empty:
+      return .leaf(pane: PaneSnapshot(id: 0))
+    case .split(let dir, let a, let b, let ratio):
+      return .split(
+        direction: dir == .horizontal ? .horizontal : .vertical,
+        a: simpleSnapshotLayout(a),
+        b: simpleSnapshotLayout(b),
+        ratio: Double(ratio))
+    }
+  }
+
+  /// Pop the most recently closed window and queue it for restore.
+  /// Caller fires `openWindowAction(id: "terminal")` to spawn the window.
+  func reopenMostRecentClosed() -> Int? {
+    guard let snapshot = recentlyClosed.first else { return nil }
+    recentlyClosed.removeFirst()
+
+    // Rehydrate the WindowState from the in-memory snapshot using the
+    // same restore path as quit-relaunch.
+    var maxPaneID = 0
+    let state = WindowState(id: reserveNextWindowID(), store: self)
+    let config = MisttyConfig.current.restore
+    let tabIDGen: () -> Int = { [weak self] in self?.generateTabID() ?? 0 }
+    let paneIDGen: () -> Int = { [weak self] in self?.generatePaneID() ?? 0 }
+    let popupIDGen: () -> Int = { [weak self] in self?.generatePopupID() ?? 0 }
+
+    for sessionSnap in snapshot.sessions {
+      let session = MisttySession(
+        id: generateSessionID(),  // fresh ids on reopen — old ids may collide
+        name: sessionSnap.name,
+        directory: sessionSnap.directory,
+        exec: nil,
+        customName: sessionSnap.customName,
+        tabIDGenerator: tabIDGen,
+        paneIDGenerator: paneIDGen,
+        popupIDGenerator: popupIDGen)
+      session.sshCommand = sessionSnap.sshCommand
+      for tab in session.tabs { session.closeTab(tab) }
+      for tabSnap in sessionSnap.tabs {
+        let tab = WindowsStore.restoreTab(
+          from: tabSnap, paneIDGen: paneIDGen,
+          config: config, maxPaneID: &maxPaneID)
+        session.addTabByRestore(tab)
+      }
+      session.activeTab = session.tabs.first
+      state.appendRestoredSession(session)
+    }
+    state.activeSession = state.sessions.first
+    pendingRestoreStates.append(state)
+    return state.id
   }
 
   // MARK: - Lookup helpers
