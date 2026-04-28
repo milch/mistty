@@ -34,7 +34,9 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 ### Keyboard shortcut configuration
 
 - Many of the keyboard shortcuts are hardcoded right now, make them configurable
-- Session reordering so ctrl-1..9 is actually useful (shortcut + drag-and-drop in sidebar)
+- Make cmd-shift-w the shortcut to close the window (mirrors Arc, Zen, …) and cmd-ctrl-w the shortcut to close the full tab with all panes
+- In Zen/Arc cmd-opt-up/down changes tabs -> switch our session up/down to use that and make cmd-shift-up/down swap the session up or down. The bracket basedshortcuts can stay as they are
+- Move existing shortcuts to the shortcut config
 
 ### Preference Pane
 
@@ -43,11 +45,13 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 ### Non-standard pane
 
-- mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown view over the terminal (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
+- mistty-cli should be able to open a markdown file with full rendering support. This overlays a markdown pane over the terminal pane (make sure to respect light/dark mode when rendering!) `mistty-cli open --{markdown,md} <file>`
   - supports rendering mermaid diagrams & images
   - Obsidian markdown support
   - hitting "e" opens the file in $EDITOR for editing, closing the file goes back to the markdown view and shows the updated render
-  - Excalidraw rendering support?
+  - Copy mode for scrolling
+  - (v2+) Excalidraw rendering support?
+  - live updates
 - Same with an embedded webview, e.g. open localhost:3000 in a pane that is a web view for rendering, open docs or html files, ...
 
 ### Misc & Bugs
@@ -175,9 +179,9 @@ Broken into three phases. Phase 1 has a full spec at `docs/superpowers/specs/202
 Spec: `docs/superpowers/specs/2026-04-25-copy-mode-yank-and-config-reload-design.md`. Plan: `docs/superpowers/plans/2026-04-25-copy-mode-yank-and-config-reload.md`.
 
 - Per-pane copy-mode state: `CopyModeState` lives on `MisttyPane` (was on `MisttyTab`). Each pane keeps its own scroll position / cursor / selection across focus switches. The overlay only renders on the focused pane; other panes with stored state stay scrolled to their saved position with no chrome until refocused. `MisttyTab.copyModeState` is now a passthrough getter/setter onto the active pane so existing call sites keep working
-- Ctrl-h/j/k/l switches focus while copy mode stays active on the source pane. The copy-mode keyDown monitor passes those four keys through to `ctrlNavMonitor` (other Ctrl-* keys — d/u/f/b paging, Ctrl-v block mode — keep being handled by copy mode); resuming copy mode is just `Ctrl-h` back. Monitor moved into ContentView's `.onAppear` set so it stays installed for the view's lifetime; enter/exit no longer install or remove it
+- Ctrl-h/j/k/l switches focus while copy mode stays active on the source pane. The copy-mode keyDown monitor passes those four keys through to `ctrlNavMonitor` (other Ctrl-\* keys — d/u/f/b paging, Ctrl-v block mode — keep being handled by copy mode); resuming copy mode is just `Ctrl-h` back. Monitor moved into ContentView's `.onAppear` set so it stays installed for the view's lifetime; enter/exit no longer install or remove it
 - `gg` / `G` now scroll to the top of scrollback / live edge respectively (was: cursor-only within the visible viewport). New `H` / `M` / `L` jump cursor to viewport top / middle / last row without scrolling, with count support (3H = third from top, 3L = third from bottom). New `CopyModeAction.scrollToTop` / `.scrollToBottom` — `ContentView` translates them into `scrollViewport` calls using the live scrollbar offset/total
-- Scroll-drift fix: `scrollViewport` adjusts the anchor by the *actual* offset change post-clamp, not the requested delta. Phantom scrolls past the top of scrollback or the live edge no longer drift the anchor away from its true screen position (combined with the libghostty pin-clamp patch in `### Bug fixes`, this is what made cross-viewport yank produce correct content — see the entry there for the full root cause)
+- Scroll-drift fix: `scrollViewport` adjusts the anchor by the _actual_ offset change post-clamp, not the requested delta. Phantom scrolls past the top of scrollback or the live edge no longer drift the anchor away from its true screen position (combined with the libghostty pin-clamp patch in `### Bug fixes`, this is what made cross-viewport yank produce correct content — see the entry there for the full root cause)
 
 ### Copy mode — yank hints (Phase 3)
 
