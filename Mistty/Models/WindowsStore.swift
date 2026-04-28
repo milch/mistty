@@ -31,6 +31,9 @@ final class WindowsStore {
   var recentlyClosed: [WindowSnapshot] = []
   private(set) var trackedNSWindows: [TrackedWindow] = []
   var openWindowAction: OpenWindowAction?
+  /// Set once any `WindowRootView` schedules the deferred drain; prevents
+  /// every mounting onAppear from scheduling its own drain.
+  private var drainScheduled: Bool = false
 
   init() {
     // Mirror `NSApp.keyWindow` into `activeWindow` so IPC sentinels
@@ -111,14 +114,13 @@ final class WindowsStore {
     guard windows.contains(where: { $0.id == state.id }) else { return }
 
     // Snapshot into recently-closed before removal so Reopen Closed Window
-    // can rehydrate. In-memory only — wiped on app quit.
+    // can rehydrate. In-memory only — wiped on app quit. Uses the same
+    // snapshotLayout helper as takeSnapshot() so foreground-process capture
+    // works the same way: nvim, claude, ssh, etc. relaunch on reopen
+    // (subject to the user's [[restore.command]] allowlist).
     let snapshot = WindowSnapshot(
       id: state.id,
       sessions: state.sessions.map { session in
-        // Build SessionSnapshot via the same path takeSnapshot uses.
-        // For this in-memory copy we don't need foreground-process capture
-        // — closing a window doesn't quit the running shell, but reopening
-        // it spawns a fresh shell at the captured CWD anyway.
         SessionSnapshot(
           id: session.id,
           name: session.name,
@@ -129,7 +131,7 @@ final class WindowsStore {
           tabs: session.tabs.map { tab in
             TabSnapshot(
               id: tab.id, customTitle: tab.customTitle, directory: tab.directory,
-              layout: simpleSnapshotLayout(tab.layout.root),
+              layout: snapshotLayout(tab.layout.root),
               activePaneID: tab.activePane?.id)
           },
           activeTabID: session.activeTab?.id)
@@ -142,28 +144,6 @@ final class WindowsStore {
     }
     windows.removeAll { $0.id == state.id }
     if activeWindow?.id == state.id { activeWindow = windows.last }
-  }
-
-  /// Stripped-down layout snapshot used by recently-closed (no
-  /// foreground-process capture; we just preserve the layout shape and
-  /// CWDs). Reopened windows respawn their shells at the captured CWD.
-  private func simpleSnapshotLayout(_ node: PaneLayoutNode) -> LayoutNodeSnapshot {
-    switch node {
-    case .leaf(let pane):
-      return .leaf(pane: PaneSnapshot(
-        id: pane.id,
-        directory: pane.directory,
-        currentWorkingDirectory: pane.currentWorkingDirectory,
-        captured: nil))
-    case .empty:
-      return .leaf(pane: PaneSnapshot(id: 0))
-    case .split(let dir, let a, let b, let ratio):
-      return .split(
-        direction: dir == .horizontal ? .horizontal : .vertical,
-        a: simpleSnapshotLayout(a),
-        b: simpleSnapshotLayout(b),
-        ratio: Double(ratio))
-    }
   }
 
   /// Pop the most recently closed window and queue it for restore.
@@ -384,20 +364,27 @@ final class WindowsStore {
     }
   }
 
-  /// After the first WindowRootView mounts and captures `openWindowAction`,
-  /// fire it once per remaining state in `pendingRestoreStates`. Each new
-  /// SwiftUI window mount will claim the next state at the head of the queue.
+  /// Drain any remaining pending restore states by firing `openWindow` once
+  /// per state still queued. Called after a delay so SwiftUI's own
+  /// `WindowGroup` auto-restore (which can spawn windows that ALSO claim
+  /// pending states via their `onAppear`) has time to finish first;
+  /// otherwise we'd over-fire and end up with extra empty windows.
   ///
-  /// Uses a fixed-size loop, NOT `while !pendingRestoreStates.isEmpty`. The
-  /// queue drains asynchronously — each `openWindow(id:)` schedules a SwiftUI
-  /// window mount whose `onAppear` removes one entry, but those mounts run in
-  /// later runloop ticks. A `while` loop would spin until the runloop got a
-  /// chance to fire the mounts, hanging the main thread on cold restore.
+  /// Idempotent — only the first `WindowRootView.onAppear` arms the timer,
+  /// and the timer fires exactly once with whatever count remains at that
+  /// point. If SwiftUI auto-restore claimed everything, this is a no-op.
   func drainPendingRestores() {
-    guard let action = openWindowAction else { return }
-    let count = pendingRestoreStates.count
-    for _ in 0..<count {
-      action(id: "terminal")
+    guard openWindowAction != nil, !drainScheduled else { return }
+    drainScheduled = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+      guard let self else { return }
+      MainActor.assumeIsolated {
+        let remaining = self.pendingRestoreStates.count
+        for _ in 0..<remaining {
+          self.openWindowAction?(id: "terminal")
+        }
+        self.drainScheduled = false
+      }
     }
   }
 }

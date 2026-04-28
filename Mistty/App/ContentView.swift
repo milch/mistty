@@ -491,7 +491,14 @@ struct ContentView: View {
     }
     guard let tab = state.activeSession?.activeTab,
       let pane = tab.activePane
-    else { return }
+    else {
+      // Empty window (no active session/tab/pane): Cmd+W closes the window
+      // itself rather than no-op'ing. Without this, an empty window can
+      // only be closed via the menu bar's red traffic light.
+      let tracked = windowsStore.trackedNSWindows.first { $0.state?.id == state.id }
+      tracked?.window?.close()
+      return
+    }
     closePane(pane)
   }
 

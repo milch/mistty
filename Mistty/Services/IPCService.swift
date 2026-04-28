@@ -85,7 +85,11 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       }
       let dir = directory.map { URL(fileURLWithPath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser
-      let session = target.createSession(name: name, directory: dir, exec: exec)
+      // Pass --name through as customName so it wins over the cwd-derived
+      // sidebarLabel (which would otherwise display the directory's
+      // lastPathComponent — e.g. the user's username when dir == ~).
+      let session = target.createSession(
+        name: name, directory: dir, exec: exec, customName: name)
       reply(self.encode(self.sessionResponse(session, windowID: target.id)), nil)
     }
   }

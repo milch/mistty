@@ -185,7 +185,7 @@ extension WindowsStore {
     return FileManager.default.homeDirectoryForCurrentUser
   }
 
-  fileprivate func snapshotLayout(_ node: PaneLayoutNode) -> LayoutNodeSnapshot {
+  func snapshotLayout(_ node: PaneLayoutNode) -> LayoutNodeSnapshot {
     switch node {
     case .leaf(let pane):
       let captured = ForegroundProcessResolver.current(for: pane).map {
