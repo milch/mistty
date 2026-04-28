@@ -54,15 +54,37 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 Larger:
 
-- Multiple windows are broken
 - OSC777/OSC9/OSC99 notifications support
 - Zen mode (similar to zoomed - except that it pulls out the pane similar to a popup, full height with default 120 character width (configurable), background is dimmed)
+
+### Multi-window v2+ followups
+
+Once v1 ships:
+
+- Per-NSWindow encoding via `NSWindow.encodeRestorableState(_:)` (replaces the single app-level snapshot blob). Unlocks per-window frame/position persistence — already noted under "State restoration v2+ followups" but cleaner once each window is a first-class persistence unit.
+- Switch terminal windows from SwiftUI `WindowGroup` to AppKit `NSWindowController`. Cleaner multi-window correctness (window-creation timing, restoration coordination, menu integration) at the cost of a chunkier rewrite. The `WindowsStore` / `WindowState` data model from v1 carries over unchanged.
+- Cross-window session/tab/pane moves (Arc-style drag/drop). Requires NSView reparenting coordination for `TerminalSurfaceView`.
+- Window menu listing all open windows for jump-to-window navigation.
+- Per-window custom names/titles.
 
 ## Future
 
 - OSC for state restoration? TUI communicates with term how to get it to resume from where it left. Could be something as simple as `$PROG file.txt` or `nvim -U session.vim` or something more complex.
 
 ## Implemented
+
+### Multi-window v1
+
+Spec: `docs/superpowers/specs/2026-04-27-multi-window-v1-design.md`. Plan: `docs/superpowers/plans/2026-04-27-multi-window-v1.md`.
+
+- Each terminal window owns its own sessions/tabs/panes/active markers; opening a new window no longer steals panes from existing windows. `WindowsStore` (global registry: ID counters, lookups, NSWindow tracking) + `WindowState` (per-window sessions/active session) replace the prior single `SessionStore`. SwiftUI `WindowGroup(id: "terminal")` mounts `WindowRootView`; each window claims a `WindowState` from `pendingRestoreStates` (FIFO during restore) or creates a fresh empty one (Cmd+N)
+- `WorkspaceSnapshot` v2 with `windows: [WindowSnapshot]`. v1 payloads migrate transparently into a single window so existing users don't lose state. Custom `init(from:)` handles v1 → v2 migration; the public `init(version:windows:activeWindowID:)` is naive (only the decoder sets `unsupportedVersion`)
+- Per-window scoping enforced via `WindowsStore.isActiveTerminalWindow(state:)`: every Mistty notification handler in `ContentView` and every `NSEvent.addLocalMonitorForEvents` monitor guards on this so only the focused window's `ContentView` acts. Pane-targeted ghostty notifications stay unguarded — they filter via `windowsStore.pane(byId:)`. Dock badge sums bells across `windowsStore.windows.flatMap(\.sessions).flatMap(\.tabs)` (global)
+- Closing the last window keeps the app running (`applicationShouldTerminateAfterLastWindowClosed → false`). Closed windows held in an in-memory `recentlyClosed` stack capped at 10; new menu item **Reopen Closed Window** (Cmd+Shift+T) re-spawns the most recent via the same `pendingRestoreStates` plumbing
+- IPC: read endpoints (`session list`, `tab list`, `pane list`, `popup list`) flatten across all windows with a new `window: Int` field on each response. Mutating ops by global id (no `--window` needed). `session create` resolves `--window <id>` → focused terminal window → error "no focused window; pass --window <id> or focus a terminal window first". `window create` (previously "Not supported") now reserves an id synchronously, queues an empty `WindowState` onto `pendingRestoreStates`, and fires `openWindowAction` to spawn the SwiftUI window
+- `WindowRootView.onDisappear` retires the `WindowState` and snapshots into `recentlyClosed` only when the NSWindow actually closed (`isVisible == false` on next runloop tick) — minimize/spaces transitions don't trigger close. `closeWindow` is idempotent (`windows.contains(where:)` guard) so the IPC `closeWindow` path and the `onDisappear` sweep can both fire safely
+- `drainPendingRestores()` uses a sized `for` loop over the queue snapshot, NOT `while !pendingRestoreStates.isEmpty` — the queue drains async (each `openWindow(id:)` schedules a SwiftUI mount whose `onAppear` removes one entry in a later runloop tick), so the while-form would hang the main thread on multi-window cold restore
+- `DebugLog` breadcrumbs on the `cmdw` and `window` channels are preserved (ported from `SessionStore` to `WindowsStore` so the load-bearing diagnostic logs from past Cmd-W debugging survive the type split)
 
 ### Session workflow
 
