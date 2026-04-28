@@ -148,16 +148,33 @@ final class WindowsStore {
     if let existing = trackedNSWindows.firstIndex(where: { $0.window === window }) {
       // Update binding if the same NSWindow re-registers (e.g. WindowAccessor
       // fires a second time after state restoration).
-      trackedNSWindows[existing] = TrackedWindow(id: trackedNSWindows[existing].id, window: window, state: state)
-      return trackedNSWindows[existing].id
+      let id = trackedNSWindows[existing].id
+      trackedNSWindows[existing] = TrackedWindow(id: id, window: window, state: state)
+      DebugLog.shared.log(
+        "window",
+        "registerNSWindow: re-registered id=\(id) windowID=\(state.id) num=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) count=\(trackedNSWindows.count)"
+      )
+      return id
     }
     let id = state.id
     trackedNSWindows.append(TrackedWindow(id: id, window: window, state: state))
+    DebugLog.shared.log(
+      "window",
+      "registerNSWindow: id=\(id) num=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) count=\(trackedNSWindows.count)"
+    )
     return id
   }
 
   func unregisterNSWindow(_ window: NSWindow) {
+    let before = trackedNSWindows.count
+    let removedIds = trackedNSWindows
+      .filter { $0.window === window }
+      .map { $0.id }
     trackedNSWindows.removeAll { $0.window === window }
+    DebugLog.shared.log(
+      "window",
+      "unregisterNSWindow: removed=\(removedIds) num=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) count=\(before)→\(trackedNSWindows.count)"
+    )
   }
 
   func trackedNSWindow(byId id: Int) -> TrackedWindow? {
@@ -170,8 +187,21 @@ final class WindowsStore {
   /// Used to gate app-wide shortcuts like Cmd-W when an auxiliary window
   /// (Settings, etc.) has focus.
   func isTerminalWindowKey() -> Bool {
-    guard let key = NSApp.keyWindow else { return false }
-    return trackedNSWindows.contains { $0.window === key }
+    guard let key = NSApp.keyWindow else {
+      DebugLog.shared.log(
+        "cmdw",
+        "isTerminalWindowKey=false: no keyWindow, trackedCount=\(trackedNSWindows.count)"
+      )
+      return false
+    }
+    let isTracked = trackedNSWindows.contains { $0.window === key }
+    if !isTracked {
+      DebugLog.shared.log(
+        "cmdw",
+        "isTerminalWindowKey=false: key=\(ObjectIdentifier(key)) num=\(key.windowNumber) title=\"\(key.title)\" class=\(type(of: key)) trackedIds=\(trackedNSWindows.map(\.id))"
+      )
+    }
+    return isTracked
   }
 
   /// True iff the system's keyWindow is the NSWindow tracked for `state`.
