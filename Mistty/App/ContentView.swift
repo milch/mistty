@@ -17,9 +17,7 @@ struct ContentView: View {
   @State private var previousActiveTab: MisttyTab?
   @State private var copyModeMonitor: Any?
   @State private var ctrlNavMonitor: Any?
-  @State private var closeMonitor: Any?
-  @State private var altShortcutMonitor: Any?
-  @State private var windowModeShortcutMonitor: Any?
+  @State private var shortcutMonitor: ShortcutMonitor?
 
   var body: some View {
     contentWithNotifications
@@ -63,6 +61,9 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionDown)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         state.moveActiveSessionDown()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyConfigDidReload)) { _ in
+        shortcutMonitor?.updateConfig(MisttyConfig.current.shortcuts)
       }
   }
 
@@ -333,14 +334,8 @@ struct ContentView: View {
       if ctrlNavMonitor == nil {
         installCtrlNavMonitor()
       }
-      if closeMonitor == nil {
-        installCloseMonitor()
-      }
-      if altShortcutMonitor == nil {
-        installAltShortcutMonitor()
-      }
-      if windowModeShortcutMonitor == nil {
-        installWindowModeShortcutMonitor()
+      if shortcutMonitor == nil {
+        installShortcutMonitor()
       }
       if copyModeMonitor == nil {
         installCopyModeMonitor()
@@ -364,9 +359,7 @@ struct ContentView: View {
       removeWindowModeMonitor()
       removeCopyModeMonitor()
       removeCtrlNavMonitor()
-      removeCloseMonitor()
-      removeAltShortcutMonitor()
-      removeWindowModeShortcutMonitor()
+      removeShortcutMonitor()
       state.activeSession?.activeTab?.windowModeState = .inactive
       if state.activeSession?.activeTab?.isCopyModeActive == true {
         exitCopyMode()
@@ -1228,150 +1221,32 @@ struct ContentView: View {
     }
   }
 
-  // MARK: - Alternate Shortcut Monitor
-  //
-  // SwiftUI Buttons only support one .keyboardShortcut each, so alternate
-  // bindings for existing menu actions are handled here to keep the menu
-  // uncluttered. Covers:
-  //   - Cmd+Up/Down → prev/next tab (primary: Cmd+[ / Cmd+])
-  //   - Cmd+Shift+[ / Cmd+Shift+] → prev/next session (primary: Cmd+Shift+Up/Down)
-  private func installAltShortcutMonitor() {
-    altShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
-      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
-      // Arrow keys carry .function and .numericPad bits, which are inside
-      // .deviceIndependentFlagsMask and would break a strict `==` match.
-      // Restrict comparison to the four user-intent modifiers.
-      let meaningful: NSEvent.ModifierFlags = [.shift, .control, .option, .command]
-      let flags = event.modifierFlags.intersection(meaningful)
+  // MARK: - Shortcut Monitor
 
-      // Cmd+Up/Down → prev/next tab. Skip when window/copy/session-manager
-      // modes own the arrow keys (window mode binds Cmd+arrows to resize).
-      if flags == .command {
-        let activeTab = self.state.activeSession?.activeTab
-        guard !self.showingSessionManager,
-          activeTab?.isWindowModeActive != true,
-          activeTab?.isCopyModeActive != true
-        else { return event }
-
-        switch event.keyCode {
-        case 126:  // up arrow
-          NotificationCenter.default.post(name: .misttyPrevTab, object: nil)
-          return nil
-        case 125:  // down arrow
-          NotificationCenter.default.post(name: .misttyNextTab, object: nil)
-          return nil
-        default:
-          break
-        }
+  private func installShortcutMonitor() {
+    let context = ShortcutMonitor.Context(
+      isTerminalWindowKey: { [windowsStore, state] in
+        windowsStore.isActiveTerminalWindow(state: state)
+          && windowsStore.isTerminalWindowKey()
+      },
+      firstResponderIsTextField: {
+        NSApp.keyWindow?.firstResponder is NSText
+      },
+      inModalMode: { [state] in
+        let activeTab = state.activeSession?.activeTab
+        return showingSessionManager
+          || activeTab?.isWindowModeActive == true
+          || activeTab?.isCopyModeActive == true
       }
-
-      // Cmd+Shift+[/] → prev/next session. Match on keyCode because
-      // charactersIgnoringModifiers still applies shift (returning `{`/`}`),
-      // and going through `characters` introduces layout-dependent mappings.
-      if flags == [.command, .shift] {
-        switch event.keyCode {
-        case 33:  // left bracket
-          NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
-          return nil
-        case 30:  // right bracket
-          NotificationCenter.default.post(name: .misttyNextSession, object: nil)
-          return nil
-        default:
-          break
-        }
-      }
-
-      // Cmd+Opt+[/] → move session up/down (alt for Cmd+Opt+Up/Down).
-      if flags == [.command, .option] {
-        switch event.keyCode {
-        case 33:  // left bracket
-          NotificationCenter.default.post(name: .misttyMoveSessionUp, object: nil)
-          return nil
-        case 30:  // right bracket
-          NotificationCenter.default.post(name: .misttyMoveSessionDown, object: nil)
-          return nil
-        default:
-          break
-        }
-      }
-
-      return event
-    }
+    )
+    let monitor = ShortcutMonitor(config: MisttyConfig.current.shortcuts, context: context)
+    monitor.install()
+    shortcutMonitor = monitor
   }
 
-  private func removeAltShortcutMonitor() {
-    if let monitor = altShortcutMonitor {
-      NSEvent.removeMonitor(monitor)
-      altShortcutMonitor = nil
-    }
-  }
-
-  private func installCloseMonitor() {
-    closeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [windowsStore, state] event in
-      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
-      let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-      guard flags.contains(.command),
-        event.charactersIgnoringModifiers?.lowercased() == "w"
-      else { return event }
-      // Local monitors fire for every window in the app. Only intercept when
-      // the key window is one of our tracked terminal windows; otherwise let
-      // the event flow through so the system can close the focused window
-      // (Settings, etc.).
-      guard windowsStore.isTerminalWindowKey() else {
-        DebugLog.shared.log(
-          "cmdw",
-          "monitor: passing through — not a terminal window"
-        )
-        return event
-      }
-      let name: Notification.Name =
-        flags.contains(.shift) ? .misttyCloseTab : .misttyClosePane
-      DebugLog.shared.log(
-        "cmdw", "monitor: consuming, posting \(name.rawValue)"
-      )
-      NotificationCenter.default.post(name: name, object: nil)
-      return nil
-    }
-  }
-
-  private func removeCloseMonitor() {
-    if let monitor = closeMonitor {
-      NSEvent.removeMonitor(monitor)
-      closeMonitor = nil
-    }
-  }
-
-  /// Cmd+X overlaps the system Cut command. Whenever any TextField is first
-  /// responder (sidebar rename, session-manager search, Settings fields),
-  /// SwiftUI disables the "View > Window Mode" menu item and routes Cmd+X to
-  /// Cut — so the shortcut appears "lost" (no effect, indicator disappears
-  /// from the menu). Mirror the Cmd+W pattern: an app-level local monitor
-  /// intercepts Cmd+X before SwiftUI's menu routing runs. Text responders
-  /// fall through so Cut still works inside text fields.
-  private func installWindowModeShortcutMonitor() {
-    windowModeShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
-      [windowsStore, state] event in
-      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
-      let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-      guard flags == .command,
-        event.charactersIgnoringModifiers?.lowercased() == "x"
-      else { return event }
-      guard windowsStore.isTerminalWindowKey() else { return event }
-      // Any text-editing responder (TextField field editor, NSTextView,
-      // search fields) should keep Cmd+X as Cut.
-      if let responder = NSApp.keyWindow?.firstResponder, responder is NSText {
-        return event
-      }
-      NotificationCenter.default.post(name: .misttyWindowMode, object: nil)
-      return nil
-    }
-  }
-
-  private func removeWindowModeShortcutMonitor() {
-    if let monitor = windowModeShortcutMonitor {
-      NSEvent.removeMonitor(monitor)
-      windowModeShortcutMonitor = nil
-    }
+  private func removeShortcutMonitor() {
+    shortcutMonitor?.uninstall()
+    shortcutMonitor = nil
   }
 
   private func performSearch(_ state: inout CopyModeState, direction: SearchDirection) {
