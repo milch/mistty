@@ -77,8 +77,8 @@ struct SettingsView: View {
               TextField(
                 "Shortcut",
                 text: Binding(
-                  get: { config.popups[index].shortcut ?? "" },
-                  set: { config.popups[index].shortcut = $0.isEmpty ? nil : $0 }
+                  get: { config.popups[index].shortcutRaw ?? "" },
+                  set: { config.popups[index].shortcutRaw = $0.isEmpty ? nil : $0 }
                 )
               )
               .frame(width: 120)

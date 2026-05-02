@@ -40,4 +40,16 @@ struct MisttyConfigShortcutsTests {
       """)
     }
   }
+
+  @Test func popupChordParsesViaChord() throws {
+    let cfg = try MisttyConfig.parse("""
+    [[popup]]
+    name = "scratch"
+    command = "vim"
+    shortcut = "cmd+shift+x"
+    """)
+    let popup = cfg.popups.first
+    #expect(popup?.shortcutChord == Chord("cmd+shift+x"))
+    #expect(popup?.shortcutRaw == "cmd+shift+x")
+  }
 }

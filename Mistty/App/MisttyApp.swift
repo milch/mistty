@@ -265,9 +265,8 @@ struct MisttyApp: App {
         Divider()
 
         ForEach(Array(config.popups.enumerated()), id: \.offset) { _, popup in
-          if let key = parseShortcutKey(popup.shortcut),
-            let modifiers = parseShortcutModifiers(popup.shortcut)
-          {
+          if let chord = popup.shortcutChord {
+            let (key, mods) = chord.swiftUI()
             Button("Toggle \(popup.name)") {
               NotificationCenter.default.post(
                 name: .misttyPopupToggle,
@@ -275,7 +274,7 @@ struct MisttyApp: App {
                 userInfo: ["name": popup.name]
               )
             }
-            .keyboardShortcut(key, modifiers: modifiers)
+            .keyboardShortcut(key, modifiers: mods)
           }
         }
       }
@@ -323,35 +322,6 @@ struct MisttyApp: App {
     }
   }
 
-  /// Normalize shortcut string: lowercase, accept both "+" and "-" as separators.
-  private func shortcutParts(_ shortcut: String?) -> [Substring]? {
-    guard let shortcut else { return nil }
-    let normalized = shortcut.lowercased().replacing("-", with: "+")
-    let parts = normalized.split(separator: "+")
-    return parts.isEmpty ? nil : parts
-  }
-
-  private func parseShortcutKey(_ shortcut: String?) -> KeyEquivalent? {
-    guard let parts = shortcutParts(shortcut),
-      let last = parts.last, last.count == 1, let char = last.first
-    else { return nil }
-    return KeyEquivalent(char)
-  }
-
-  private func parseShortcutModifiers(_ shortcut: String?) -> EventModifiers? {
-    guard let parts = shortcutParts(shortcut) else { return nil }
-    var modifiers: EventModifiers = []
-    for part in parts.dropLast() {
-      switch part {
-      case "cmd", "command": modifiers.insert(.command)
-      case "shift": modifiers.insert(.shift)
-      case "opt", "option", "alt": modifiers.insert(.option)
-      case "ctrl", "control": modifiers.insert(.control)
-      default: break
-      }
-    }
-    return modifiers.isEmpty ? nil : modifiers
-  }
 }
 
 extension View {

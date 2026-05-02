@@ -78,12 +78,12 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertEqual(config.popups.count, 2)
     XCTAssertEqual(config.popups[0].name, "lazygit")
     XCTAssertEqual(config.popups[0].command, "lazygit")
-    XCTAssertEqual(config.popups[0].shortcut, "cmd+shift+g")
+    XCTAssertEqual(config.popups[0].shortcutRaw, "cmd+shift+g")
     XCTAssertEqual(config.popups[0].width, 0.8)
     XCTAssertEqual(config.popups[0].height, 0.8)
     XCTAssertEqual(config.popups[0].closeOnExit, true)
     XCTAssertEqual(config.popups[1].name, "btop")
-    XCTAssertEqual(config.popups[1].shortcut, nil)
+    XCTAssertEqual(config.popups[1].shortcutRaw, nil)
     XCTAssertEqual(config.popups[1].closeOnExit, false)
   }
 
@@ -102,7 +102,7 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertEqual(config.popups[0].width, 0.8)
     XCTAssertEqual(config.popups[0].height, 0.8)
     XCTAssertEqual(config.popups[0].closeOnExit, true)
-    XCTAssertEqual(config.popups[0].shortcut, nil)
+    XCTAssertEqual(config.popups[0].shortcutRaw, nil)
   }
 
   func test_parsesSSHConfig() throws {

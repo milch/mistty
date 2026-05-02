@@ -483,8 +483,8 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("[[popup]]")
       lines.append("name = \"\(popup.name)\"")
       lines.append("command = \"\(popup.command)\"")
-      if let shortcut = popup.shortcut {
-        lines.append("shortcut = \"\(shortcut)\"")
+      if let raw = popup.shortcutRaw, !raw.isEmpty {
+        lines.append("shortcut = \"\(tomlEscape(raw))\"")
       }
       lines.append("width = \(popup.width)")
       lines.append("height = \(popup.height)")
