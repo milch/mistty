@@ -9,7 +9,6 @@ struct MisttyApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
   @State private var windowsStore = WindowsStore()
   @State private var ipcListener: IPCListener?
-  @AppStorage("sidebarVisible") var sidebarVisible = true
   // Shared parse — see `MisttyConfig.current`. Reading the same cache
   // GhosttyAppManager uses keeps SwiftUI state and libghostty in lockstep and
   // avoids parsing the TOML twice at bootstrap.
@@ -267,7 +266,7 @@ struct MisttyApp: App {
           }
           .keyboardShortcut(
             KeyEquivalent(Character("\(index)")),
-            modifiers: eventModifiers(from: config.shortcuts.tabIndexModifier))
+            modifiers: config.shortcuts.tabIndexModifier.swiftUIModifiers)
         }
 
         ForEach(1...9, id: \.self) { index in
@@ -280,7 +279,7 @@ struct MisttyApp: App {
           }
           .keyboardShortcut(
             KeyEquivalent(Character("\(index)")),
-            modifiers: eventModifiers(from: config.shortcuts.sessionIndexModifier))
+            modifiers: config.shortcuts.sessionIndexModifier.swiftUIModifiers)
         }
 
         kbShortcut(
@@ -395,15 +394,6 @@ struct MisttyApp: App {
     } else {
       view
     }
-  }
-
-  private func eventModifiers(from flags: NSEvent.ModifierFlags) -> EventModifiers {
-    var m: EventModifiers = []
-    if flags.contains(.command) { m.insert(.command) }
-    if flags.contains(.shift)   { m.insert(.shift) }
-    if flags.contains(.option)  { m.insert(.option) }
-    if flags.contains(.control) { m.insert(.control) }
-    return m
   }
 
 }

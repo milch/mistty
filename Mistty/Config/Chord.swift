@@ -68,14 +68,7 @@ struct Chord: Hashable, Sendable {
 extension Chord {
   /// SwiftUI `(KeyEquivalent, EventModifiers)` pair for `.keyboardShortcut`.
   func swiftUI() -> (KeyEquivalent, EventModifiers) {
-    let mods: EventModifiers = {
-      var m: EventModifiers = []
-      if modifiers.contains(.command) { m.insert(.command) }
-      if modifiers.contains(.shift)   { m.insert(.shift) }
-      if modifiers.contains(.option)  { m.insert(.option) }
-      if modifiers.contains(.control) { m.insert(.control) }
-      return m
-    }()
+    let mods = modifiers.swiftUIModifiers
     let eq: KeyEquivalent
     switch key {
     case .character(let c): eq = KeyEquivalent(c)
@@ -168,5 +161,19 @@ extension Chord.Special {
     case .f11: return 103
     case .f12: return 111
     }
+  }
+}
+
+extension NSEvent.ModifierFlags {
+  /// Lower the AppKit modifier set to its SwiftUI `EventModifiers` equivalent.
+  /// Only the four user-intent modifiers (cmd / shift / option / control) are
+  /// carried over; arrow events' `.function`/`.numericPad` bits are ignored.
+  var swiftUIModifiers: EventModifiers {
+    var m: EventModifiers = []
+    if contains(.command) { m.insert(.command) }
+    if contains(.shift)   { m.insert(.shift) }
+    if contains(.option)  { m.insert(.option) }
+    if contains(.control) { m.insert(.control) }
+    return m
   }
 }

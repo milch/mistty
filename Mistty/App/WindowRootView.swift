@@ -54,7 +54,6 @@ struct WindowRootView: View {
     .onReceive(NotificationCenter.default.publisher(for: .misttyCloseWindow)) { _ in
       guard let state else { return }
       guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-      guard windowsStore.isTerminalWindowKey() else { return }
       NSApp.keyWindow?.performClose(nil)
     }
     .onReceive(NotificationCenter.default.publisher(for: .misttyToggleSidebar)) { _ in
