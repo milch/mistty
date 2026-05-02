@@ -258,3 +258,67 @@ match = "less"                 # less myfile.log replayed
 
 [[restore.command]]
 match = "htop"                 # bare-named utilities with no args
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Keyboard shortcuts
+# ─────────────────────────────────────────────────────────────────────────────
+# Override Mistty's global / menu-bar shortcuts by setting the action under
+# [shortcuts] to a chord string or array of chord strings. Defaults below are
+# uncommented for visibility — un-comment and edit only the lines you want
+# to change. Missing actions keep their default; setting a binding to `""`
+# disables the default.
+#
+# Chord grammar:
+#   <modifier>+<modifier>+...+<key>
+#   Modifiers: cmd, shift, opt (alias: alt), ctrl (alias: control). Order
+#     doesn't matter; case-insensitive; `+` and `-` both accepted as separators.
+#   Keys: any single character (a, ], 1, /), or one of these special-key
+#     words (case-insensitive): up, down, left, right, escape, return, tab,
+#     space, backspace, home, end, pageup, pagedown, f1..f12.
+#
+# Bracket / arrow modifier inconsistency (deliberate):
+#   - cmd+opt+arrows         cycles sessions (Arc/Zen-style)
+#   - cmd+shift+arrows       swaps sessions
+#   - cmd+shift+brackets     cycles sessions (legacy bracket binding)
+#   - cmd+opt+brackets       swaps sessions
+# i.e. cmd+shift+down (swap) and cmd+shift+] (cycle) share modifiers but bind
+# to different actions; same for cmd+opt+down (cycle) vs cmd+opt+] (swap).
+# This preserves muscle memory for both arrow and bracket users — override
+# below if you want to unify them.
+#
+# Conflicts (two actions bound to the same chord) abort config reload with an
+# error; the previous good config stays in effect until the conflict is fixed.
+
+#[shortcuts]
+# new_tab                = "cmd+t"
+# new_tab_plain          = "cmd+opt+t"
+# close_pane             = "cmd+w"
+# close_tab              = "cmd+ctrl+w"      # mistty change: was cmd+shift+w
+# close_window           = "cmd+shift+w"     # new action (Arc/Zen-style)
+# window_mode            = "cmd+x"
+# copy_mode              = "cmd+shift+c"
+# yank_hints             = "cmd+shift+y"
+# session_manager        = "cmd+j"
+# toggle_sidebar         = "cmd+s"
+# toggle_tab_bar         = "cmd+shift+b"
+# reload_config          = ""                # no default chord; bind manually
+# split_horizontal       = "cmd+d"
+# split_horizontal_plain = "cmd+opt+d"
+# split_vertical         = "cmd+shift+d"
+# split_vertical_plain   = "cmd+shift+opt+d"
+# reopen_closed_window   = "cmd+shift+t"
+# rename_tab             = "cmd+shift+r"
+# rename_session         = "cmd+opt+r"
+#
+# next_tab               = ["cmd+]", "cmd+down"]
+# prev_tab               = ["cmd+[", "cmd+up"]
+# next_session           = ["cmd+opt+down", "cmd+shift+]"]
+# prev_session           = ["cmd+opt+up",   "cmd+shift+["]
+# swap_session_down      = ["cmd+shift+down", "cmd+opt+]"]
+# swap_session_up        = ["cmd+shift+up",   "cmd+opt+["]
+#
+# Indexed shortcuts: cmd+1..cmd+9 focus tabs, ctrl+1..ctrl+9 focus sessions.
+# Override the modifier (a single chord without a key); remapping individual
+# digits is not supported. Tab and session modifiers must differ.
+# focus_tab_modifier     = "cmd"
+# focus_session_modifier = "ctrl"
