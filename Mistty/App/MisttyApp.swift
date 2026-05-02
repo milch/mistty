@@ -93,120 +93,167 @@ struct MisttyApp: App {
       CommandGroup(after: .toolbar) {
         Divider()
 
-        Button("Toggle Sidebar") {
-          withAnimation(.easeInOut(duration: 0.18)) {
-            sidebarVisible.toggle()
+        kbShortcut(
+          .toggleSidebar,
+          on: Button("Toggle Sidebar") {
+            NotificationCenter.default.post(name: .misttyToggleSidebar, object: nil)
           }
-        }
-        .keyboardShortcut("s", modifiers: .command)
+        )
 
-        Button("Toggle Tab Bar") {
-          NotificationCenter.default.post(name: .misttyToggleTabBar, object: nil)
-        }
-        .keyboardShortcut("b", modifiers: [.command, .shift])
+        kbShortcut(
+          .toggleTabBar,
+          on: Button("Toggle Tab Bar") {
+            NotificationCenter.default.post(name: .misttyToggleTabBar, object: nil)
+          }
+        )
 
-        Button("Reload Config") {
-          NotificationCenter.default.post(name: .misttyReloadConfig, object: nil)
-        }
+        kbShortcut(
+          .reloadConfig,
+          on: Button("Reload Config") {
+            NotificationCenter.default.post(name: .misttyReloadConfig, object: nil)
+          }
+        )
 
-        Button("New Tab") {
-          NotificationCenter.default.post(name: .misttyNewTab, object: nil)
-        }
-        .keyboardShortcut("t", modifiers: .command)
+        kbShortcut(
+          .newTab,
+          on: Button("New Tab") {
+            NotificationCenter.default.post(name: .misttyNewTab, object: nil)
+          }
+        )
 
-        Button("New Tab (Plain)") {
-          NotificationCenter.default.post(name: .misttyNewTabPlain, object: nil)
-        }
-        .keyboardShortcut("t", modifiers: [.command, .option])
+        kbShortcut(
+          .newTabPlain,
+          on: Button("New Tab (Plain)") {
+            NotificationCenter.default.post(name: .misttyNewTabPlain, object: nil)
+          }
+        )
 
-        Button("Split Pane Horizontally") {
-          NotificationCenter.default.post(name: .misttySplitHorizontal, object: nil)
-        }
-        .keyboardShortcut("d", modifiers: .command)
+        kbShortcut(
+          .splitHorizontal,
+          on: Button("Split Pane Horizontally") {
+            NotificationCenter.default.post(name: .misttySplitHorizontal, object: nil)
+          }
+        )
 
-        Button("Split Pane Horizontally (Plain)") {
-          NotificationCenter.default.post(name: .misttySplitHorizontalPlain, object: nil)
-        }
-        .keyboardShortcut("d", modifiers: [.command, .option])
+        kbShortcut(
+          .splitHorizontalPlain,
+          on: Button("Split Pane Horizontally (Plain)") {
+            NotificationCenter.default.post(name: .misttySplitHorizontalPlain, object: nil)
+          }
+        )
 
-        Button("Split Pane Vertically") {
-          NotificationCenter.default.post(name: .misttySplitVertical, object: nil)
-        }
-        .keyboardShortcut("d", modifiers: [.command, .shift])
+        kbShortcut(
+          .splitVertical,
+          on: Button("Split Pane Vertically") {
+            NotificationCenter.default.post(name: .misttySplitVertical, object: nil)
+          }
+        )
 
-        Button("Split Pane Vertically (Plain)") {
-          NotificationCenter.default.post(name: .misttySplitVerticalPlain, object: nil)
-        }
-        .keyboardShortcut("d", modifiers: [.command, .shift, .option])
+        kbShortcut(
+          .splitVerticalPlain,
+          on: Button("Split Pane Vertically (Plain)") {
+            NotificationCenter.default.post(name: .misttySplitVerticalPlain, object: nil)
+          }
+        )
 
-        Button("Session Manager") {
-          NotificationCenter.default.post(name: .misttySessionManager, object: nil)
-        }
-        .keyboardShortcut("j", modifiers: .command)
+        kbShortcut(
+          .sessionManager,
+          on: Button("Session Manager") {
+            NotificationCenter.default.post(name: .misttySessionManager, object: nil)
+          }
+        )
 
         Divider()
 
-        Button("Close Pane") {
-          // If a non-terminal window (e.g. Settings) is key, let the system
-          // close that window instead of routing the shortcut to the terminal.
-          if windowsStore.isTerminalWindowKey() {
-            DebugLog.shared.log("cmdw", "menu Close Pane → posting notification")
-            NotificationCenter.default.post(name: .misttyClosePane, object: nil)
-          } else {
-            DebugLog.shared.log(
-              "cmdw",
-              "menu Close Pane → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
-            )
-            NSApp.keyWindow?.performClose(nil)
+        kbShortcut(
+          .closePane,
+          on: Button("Close Pane") {
+            // If a non-terminal window (e.g. Settings) is key, let the system
+            // close that window instead of routing the shortcut to the terminal.
+            if windowsStore.isTerminalWindowKey() {
+              DebugLog.shared.log("cmdw", "menu Close Pane → posting notification")
+              NotificationCenter.default.post(name: .misttyClosePane, object: nil)
+            } else {
+              DebugLog.shared.log(
+                "cmdw",
+                "menu Close Pane → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
+              )
+              NSApp.keyWindow?.performClose(nil)
+            }
           }
-        }
-        .keyboardShortcut("w", modifiers: .command)
+        )
 
-        Button("Close Tab") {
-          if windowsStore.isTerminalWindowKey() {
-            DebugLog.shared.log("cmdw", "menu Close Tab → posting notification")
-            NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
-          } else {
-            DebugLog.shared.log(
-              "cmdw",
-              "menu Close Tab → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
-            )
-            NSApp.keyWindow?.performClose(nil)
+        kbShortcut(
+          .closeTab,
+          on: Button("Close Tab") {
+            if windowsStore.isTerminalWindowKey() {
+              DebugLog.shared.log("cmdw", "menu Close Tab → posting notification")
+              NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
+            } else {
+              DebugLog.shared.log(
+                "cmdw",
+                "menu Close Tab → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
+              )
+              NSApp.keyWindow?.performClose(nil)
+            }
           }
-        }
-        .keyboardShortcut("w", modifiers: [.command, .shift])
+        )
 
-        Button("Reopen Closed Window") {
-          NotificationCenter.default.post(name: .misttyReopenClosedWindow, object: nil)
-        }
-        .keyboardShortcut("t", modifiers: [.command, .shift])
+        kbShortcut(
+          .closeWindow,
+          on: Button("Close Window") {
+            if windowsStore.isTerminalWindowKey() {
+              DebugLog.shared.log("cmdw", "menu Close Window → posting notification")
+              NotificationCenter.default.post(name: .misttyCloseWindow, object: nil)
+            } else {
+              NSApp.keyWindow?.performClose(nil)
+            }
+          }
+        )
 
-        Button("Window Mode") {
-          NotificationCenter.default.post(name: .misttyWindowMode, object: nil)
-        }
-        .keyboardShortcut("x", modifiers: .command)
+        kbShortcut(
+          .reopenClosedWindow,
+          on: Button("Reopen Closed Window") {
+            NotificationCenter.default.post(name: .misttyReopenClosedWindow, object: nil)
+          }
+        )
 
-        Button("Copy Mode") {
-          NotificationCenter.default.post(name: .misttyCopyMode, object: nil)
-        }
-        .keyboardShortcut("c", modifiers: [.command, .shift])
+        kbShortcut(
+          .windowMode,
+          on: Button("Window Mode") {
+            NotificationCenter.default.post(name: .misttyWindowMode, object: nil)
+          }
+        )
 
-        Button("Yank Hints") {
-          NotificationCenter.default.post(name: .misttyYankHints, object: nil)
-        }
-        .keyboardShortcut("y", modifiers: [.command, .shift])
+        kbShortcut(
+          .copyMode,
+          on: Button("Copy Mode") {
+            NotificationCenter.default.post(name: .misttyCopyMode, object: nil)
+          }
+        )
+
+        kbShortcut(
+          .yankHints,
+          on: Button("Yank Hints") {
+            NotificationCenter.default.post(name: .misttyYankHints, object: nil)
+          }
+        )
 
         Divider()
 
-        Button("Rename Tab") {
-          NotificationCenter.default.post(name: .misttyRenameTab, object: nil)
-        }
-        .keyboardShortcut("r", modifiers: [.command, .shift])
+        kbShortcut(
+          .renameTab,
+          on: Button("Rename Tab") {
+            NotificationCenter.default.post(name: .misttyRenameTab, object: nil)
+          }
+        )
 
-        Button("Rename Session") {
-          NotificationCenter.default.post(name: .misttyRenameSession, object: nil)
-        }
-        .keyboardShortcut("r", modifiers: [.command, .option])
+        kbShortcut(
+          .renameSession,
+          on: Button("Rename Session") {
+            NotificationCenter.default.post(name: .misttyRenameSession, object: nil)
+          }
+        )
 
         Divider()
 
@@ -218,7 +265,9 @@ struct MisttyApp: App {
               userInfo: ["index": index - 1]
             )
           }
-          .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
+          .keyboardShortcut(
+            KeyEquivalent(Character("\(index)")),
+            modifiers: eventModifiers(from: config.shortcuts.tabIndexModifier))
         }
 
         ForEach(1...9, id: \.self) { index in
@@ -229,38 +278,52 @@ struct MisttyApp: App {
               userInfo: ["index": index - 1]
             )
           }
-          .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .control)
+          .keyboardShortcut(
+            KeyEquivalent(Character("\(index)")),
+            modifiers: eventModifiers(from: config.shortcuts.sessionIndexModifier))
         }
 
-        Button("Next Tab") {
-          NotificationCenter.default.post(name: .misttyNextTab, object: nil)
-        }
-        .keyboardShortcut("]", modifiers: .command)
+        kbShortcut(
+          .nextTab,
+          on: Button("Next Tab") {
+            NotificationCenter.default.post(name: .misttyNextTab, object: nil)
+          }
+        )
 
-        Button("Previous Tab") {
-          NotificationCenter.default.post(name: .misttyPrevTab, object: nil)
-        }
-        .keyboardShortcut("[", modifiers: .command)
+        kbShortcut(
+          .prevTab,
+          on: Button("Previous Tab") {
+            NotificationCenter.default.post(name: .misttyPrevTab, object: nil)
+          }
+        )
 
-        Button("Previous Session") {
-          NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
-        }
-        .keyboardShortcut(.upArrow, modifiers: [.command, .shift])
+        kbShortcut(
+          .prevSession,
+          on: Button("Previous Session") {
+            NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
+          }
+        )
 
-        Button("Next Session") {
-          NotificationCenter.default.post(name: .misttyNextSession, object: nil)
-        }
-        .keyboardShortcut(.downArrow, modifiers: [.command, .shift])
+        kbShortcut(
+          .nextSession,
+          on: Button("Next Session") {
+            NotificationCenter.default.post(name: .misttyNextSession, object: nil)
+          }
+        )
 
-        Button("Move Session Up") {
-          NotificationCenter.default.post(name: .misttyMoveSessionUp, object: nil)
-        }
-        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+        kbShortcut(
+          .swapSessionUp,
+          on: Button("Move Session Up") {
+            NotificationCenter.default.post(name: .misttyMoveSessionUp, object: nil)
+          }
+        )
 
-        Button("Move Session Down") {
-          NotificationCenter.default.post(name: .misttyMoveSessionDown, object: nil)
-        }
-        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+        kbShortcut(
+          .swapSessionDown,
+          on: Button("Move Session Down") {
+            NotificationCenter.default.post(name: .misttyMoveSessionDown, object: nil)
+          }
+        )
 
         Divider()
 
@@ -320,6 +383,27 @@ struct MisttyApp: App {
         }
       }
     }
+  }
+
+  @ViewBuilder
+  private func kbShortcut<V: View>(
+    _ action: ShortcutAction, on view: V
+  ) -> some View {
+    if let chord = config.shortcuts.primary(for: action) {
+      let (key, mods) = chord.swiftUI()
+      view.keyboardShortcut(key, modifiers: mods)
+    } else {
+      view
+    }
+  }
+
+  private func eventModifiers(from flags: NSEvent.ModifierFlags) -> EventModifiers {
+    var m: EventModifiers = []
+    if flags.contains(.command) { m.insert(.command) }
+    if flags.contains(.shift)   { m.insert(.shift) }
+    if flags.contains(.option)  { m.insert(.option) }
+    if flags.contains(.control) { m.insert(.control) }
+    return m
   }
 
 }

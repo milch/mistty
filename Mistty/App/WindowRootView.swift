@@ -6,6 +6,7 @@ struct WindowRootView: View {
   let windowsStore: WindowsStore
   let config: MisttyConfig
   @State private var state: WindowState?
+  @AppStorage("sidebarVisible") var sidebarVisible = true
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
@@ -48,6 +49,19 @@ struct WindowRootView: View {
           // still lingers in the windows array.
           windowsStore.closeWindow(state)
         }
+      }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .misttyCloseWindow)) { _ in
+      guard let state else { return }
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+      guard windowsStore.isTerminalWindowKey() else { return }
+      NSApp.keyWindow?.performClose(nil)
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .misttyToggleSidebar)) { _ in
+      guard let state else { return }
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+      withAnimation(.easeInOut(duration: 0.18)) {
+        sidebarVisible.toggle()
       }
     }
   }
