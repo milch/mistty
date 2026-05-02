@@ -375,6 +375,8 @@ extension Notification.Name {
   static let misttySessionManager = Notification.Name("misttySessionManager")
   static let misttyClosePane = Notification.Name("misttyClosePane")
   static let misttyCloseTab = Notification.Name("misttyCloseTab")
+  static let misttyCloseWindow = Notification.Name("misttyCloseWindow")
+  static let misttyToggleSidebar = Notification.Name("misttyToggleSidebar")
   static let misttyToggleTabBar = Notification.Name("misttyToggleTabBar")
   static let misttyRenameTab = Notification.Name("misttyRenameTab")
   static let misttyRenameSession = Notification.Name("misttyRenameSession")
