@@ -174,6 +174,7 @@ struct MisttyConfig: Sendable, Equatable {
   var ssh: SSHConfig = SSHConfig()
   var copyModeHints: CopyModeHintsConfig = CopyModeHintsConfig()
   var ui: UIConfig = UIConfig()
+  var shortcuts: ShortcutsConfig = .default
   var ghostty: GhosttyPassthroughConfig = GhosttyPassthroughConfig()
   var restore: RestoreConfig = RestoreConfig()
 
@@ -305,6 +306,9 @@ struct MisttyConfig: Sendable, Equatable {
         config.ui.paneBorderWidth = w
       }
     }
+    if let shortcutsTable = table["shortcuts"]?.table {
+      config.shortcuts = try ShortcutsConfig.parse(shortcutsTable)
+    }
     if let ghosttyTable = table["ghostty"]?.table {
       config.ghostty = GhosttyPassthroughConfig.parse(ghosttyTable)
     }
@@ -434,6 +438,17 @@ struct MisttyConfig: Sendable, Equatable {
     }
   }
 
+  /// Canonical textual form of a modifier set, mirroring `Chord.toString()`'s
+  /// cmd → shift → opt → ctrl ordering so saved shortcut blocks stay stable.
+  private func modifierString(_ flags: NSEvent.ModifierFlags) -> String {
+    var parts: [String] = []
+    if flags.contains(.command) { parts.append("cmd") }
+    if flags.contains(.shift)   { parts.append("shift") }
+    if flags.contains(.option)  { parts.append("opt") }
+    if flags.contains(.control) { parts.append("ctrl") }
+    return parts.joined(separator: "+")
+  }
+
   // TODO: `save()` serializes known fields but drops comments and any keys
   // Mistty hasn't modelled (unknown top-level entries, custom sections).
   // Fine today because only `SettingsView` calls this, but worth replacing
@@ -528,6 +543,36 @@ struct MisttyConfig: Sendable, Equatable {
       if ui.paneBorderWidth != UIConfig().paneBorderWidth {
         lines.append("pane_border_width = \(ui.paneBorderWidth)")
       }
+    }
+    let defaultBindings = ShortcutAction.defaults
+    let userBindings = shortcuts.bindings
+    var shortcutLines: [String] = []
+    for action in ShortcutAction.allCases.sorted(by: { $0.rawValue < $1.rawValue }) {
+      let resolved = userBindings[action] ?? []
+      let defaultChords = defaultBindings[action] ?? []
+      guard resolved != defaultChords else { continue }
+      if resolved.isEmpty {
+        shortcutLines.append("\(action.rawValue) = \"\"")
+      } else if resolved.count == 1 {
+        shortcutLines.append("\(action.rawValue) = \"\(resolved[0].toString())\"")
+      } else {
+        let arr = resolved.map { #""\#($0.toString())""# }.joined(separator: ", ")
+        shortcutLines.append("\(action.rawValue) = [\(arr)]")
+      }
+    }
+    let defaultTabMod: NSEvent.ModifierFlags = .command
+    let defaultSessionMod: NSEvent.ModifierFlags = .control
+    if shortcuts.tabIndexModifier.rawValue != defaultTabMod.rawValue {
+      shortcutLines.append("focus_tab_modifier = \"\(modifierString(shortcuts.tabIndexModifier))\"")
+    }
+    if shortcuts.sessionIndexModifier.rawValue != defaultSessionMod.rawValue {
+      shortcutLines.append(
+        "focus_session_modifier = \"\(modifierString(shortcuts.sessionIndexModifier))\"")
+    }
+    if !shortcutLines.isEmpty {
+      lines.append("")
+      lines.append("[shortcuts]")
+      lines.append(contentsOf: shortcutLines)
     }
     if !ghostty.entries.isEmpty {
       lines.append("")

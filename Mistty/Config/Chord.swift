@@ -119,6 +119,23 @@ extension Chord {
   }
 }
 
+extension Chord {
+  /// Round-trip back to TOML. Modifier order is canonicalized to
+  /// cmd → shift → opt → ctrl so saves are deterministic.
+  func toString() -> String {
+    var parts: [String] = []
+    if modifiers.contains(.command) { parts.append("cmd") }
+    if modifiers.contains(.shift)   { parts.append("shift") }
+    if modifiers.contains(.option)  { parts.append("opt") }
+    if modifiers.contains(.control) { parts.append("ctrl") }
+    switch key {
+    case .character(let c): parts.append(String(c))
+    case .special(let s):   parts.append(s.rawValue)
+    }
+    return parts.joined(separator: "+")
+  }
+}
+
 extension Chord.Special {
   /// macOS virtual keycodes from `Carbon/HIToolbox/Events.h`. Stable across
   /// keyboard layouts — bracket characters intentionally aren't here because

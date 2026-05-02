@@ -110,6 +110,35 @@ extension ChordTests {
   }
 }
 
+extension ChordTests {
+  @Test func toStringRoundTripCharacter() {
+    let chord = Chord("cmd+shift+t")!
+    #expect(chord.toString() == "cmd+shift+t")
+  }
+
+  @Test func toStringRoundTripSpecial() {
+    let chord = Chord("cmd+opt+down")!
+    #expect(chord.toString() == "cmd+opt+down")
+  }
+
+  @Test func toStringCanonicalizesModifierOrder() {
+    // Input is shift+cmd+ctrl, expected canonical output is cmd+shift+ctrl.
+    let chord = Chord("shift+cmd+ctrl+t")!
+    #expect(chord.toString() == "cmd+shift+ctrl+t")
+  }
+
+  @Test func toStringRoundTripAllDefaults() {
+    // Every default chord should round-trip cleanly through toString → Chord.
+    for (_, chords) in ShortcutAction.defaults {
+      for chord in chords {
+        let serialized = chord.toString()
+        let reparsed = Chord(serialized)
+        #expect(reparsed == chord, "round-trip failed for \(serialized)")
+      }
+    }
+  }
+}
+
 // MARK: - NSEvent factory for tests
 private func makeKeyDown(
   keyCode: UInt16,
