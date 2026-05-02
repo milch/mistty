@@ -138,4 +138,39 @@ struct ShortcutMonitorTests {
     let result = monitor.handle(event: event)
     #expect(!result.consumed)
   }
+
+  @Test func shiftBracketDispatchesViaKeyCode() {
+    // cmd+shift+] → next_session. The OS sends "}" as
+    // charactersIgnoringModifiers because shift IS applied; Chord(event:)
+    // must map keyCode 30 back to "]" so the user's `cmd+shift+]` config
+    // matches.
+    let cfg = ShortcutsConfig.default
+    let monitor = ShortcutMonitor(config: cfg, context: makeContext())
+    let event = NSEvent.keyEvent(
+      with: .keyDown, location: .zero,
+      modifierFlags: [.command, .shift],
+      timestamp: 0, windowNumber: 0, context: nil,
+      characters: "}", charactersIgnoringModifiers: "}",
+      isARepeat: false, keyCode: 30  // kVK_ANSI_RightBracket
+    )!
+    let result = monitor.handle(event: event)
+    #expect(result.consumed)
+    #expect(result.action == .nextSession)
+  }
+
+  @Test func shiftLeftBracketDispatchesViaKeyCode() {
+    // cmd+shift+[ → prev_session.
+    let cfg = ShortcutsConfig.default
+    let monitor = ShortcutMonitor(config: cfg, context: makeContext())
+    let event = NSEvent.keyEvent(
+      with: .keyDown, location: .zero,
+      modifierFlags: [.command, .shift],
+      timestamp: 0, windowNumber: 0, context: nil,
+      characters: "{", charactersIgnoringModifiers: "{",
+      isARepeat: false, keyCode: 33  // kVK_ANSI_LeftBracket
+    )!
+    let result = monitor.handle(event: event)
+    #expect(result.consumed)
+    #expect(result.action == .prevSession)
+  }
 }

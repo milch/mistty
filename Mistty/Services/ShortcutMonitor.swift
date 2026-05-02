@@ -119,15 +119,36 @@ extension Chord {
   init?(event: NSEvent) {
     let mask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
     let mods = event.modifierFlags.intersection(mask)
-    // Special key by keyCode first.
+    // Special key by keyCode first (arrows, function keys, escape, etc.).
     if let s = Special.allCases.first(where: { $0.keyCode == event.keyCode }) {
       self.init(key: .special(s), modifiers: mods)
       return
     }
-    // Character path.
+    // For punctuation that shifts to a different glyph (`]` → `}`, `[` → `{`),
+    // map back to the unshifted character via keyCode so that chords like
+    // "cmd+shift+]" match the user's config which says `]`, not `}`.
+    if let unshifted = Self.unshiftedPunctuation(for: event.keyCode) {
+      self.init(key: .character(unshifted), modifiers: mods)
+      return
+    }
+    // Character path. `charactersIgnoringModifiers` still applies shift, so
+    // for letters/digits this reads correctly (cmd+a → "a"), and for
+    // punctuation the case above already short-circuited.
     guard let chars = event.charactersIgnoringModifiers?.lowercased(),
           chars.count == 1, let c = chars.first
     else { return nil }
     self.init(key: .character(c), modifiers: mods)
+  }
+
+  /// Map well-known punctuation keyCodes to their unshifted character.
+  /// These are the keys whose character changes under shift (`]` → `}`),
+  /// where `charactersIgnoringModifiers` would otherwise produce the
+  /// shifted glyph and break a `cmd+shift+]` config match.
+  private static func unshiftedPunctuation(for keyCode: UInt16) -> Character? {
+    switch keyCode {
+    case 30: return "]"   // kVK_ANSI_RightBracket
+    case 33: return "["   // kVK_ANSI_LeftBracket
+    default: return nil
+    }
   }
 }
