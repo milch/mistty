@@ -4,13 +4,13 @@ import SwiftUI
 
 /// A keyboard chord (modifiers + key). Used both as a SwiftUI menu binding
 /// and as an AppKit NSEvent matcher.
-struct Chord: Hashable {
-  enum Key: Hashable {
+struct Chord: Hashable, Sendable {
+  enum Key: Hashable, Sendable {
     case character(Character)
     case special(Special)
   }
 
-  enum Special: String, CaseIterable {
+  enum Special: String, CaseIterable, Sendable {
     case up, down, left, right
     case escape, `return`, tab, space
     case backspace, home, end

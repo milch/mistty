@@ -107,6 +107,42 @@ struct ShortcutsConfigTests {
     #expect(cfg.action(matching: Chord("cmd+shift+n")!) == .newTab)
     #expect(cfg.action(matching: Chord("cmd+t")!) == nil)
   }
+
+  @Test func unparseableModifierThrows() throws {
+    #expect(throws: ShortcutConfigError.self) {
+      try parse("""
+      [shortcuts]
+      focus_tab_modifier = "hyper"
+      """)
+    }
+  }
+
+  @Test func wrongValueTypeOnModifierKeyThrows() throws {
+    #expect(throws: ShortcutConfigError.self) {
+      try parse("""
+      [shortcuts]
+      focus_tab_modifier = 42
+      """)
+    }
+  }
+
+  @Test func wrongValueTypeOnActionKeyThrows() throws {
+    #expect(throws: ShortcutConfigError.self) {
+      try parse("""
+      [shortcuts]
+      new_tab = 42
+      """)
+    }
+  }
+
+  @Test func wrongValueTypeInsideActionArrayThrows() throws {
+    #expect(throws: ShortcutConfigError.self) {
+      try parse("""
+      [shortcuts]
+      new_tab = ["cmd+t", 42]
+      """)
+    }
+  }
 }
 
 private func parse(_ toml: String) throws -> ShortcutsConfig {

@@ -55,6 +55,7 @@ enum ShortcutConfigError: Error, Equatable {
 
   struct Conflict: Equatable {
     var chord: Chord
+    // `actions` is sorted by raw value; the array of conflicts is sorted by the first action's raw value.
     var actions: [ShortcutAction]
   }
 
@@ -109,7 +110,9 @@ extension ShortcutsConfig {
     }
     let conflicts = reverse
       .filter { $1.count > 1 }
+      // `actions` is sorted by ShortcutAction.rawValue (we iterate `sortedActions`).
       .map { ShortcutConfigError.Conflict(chord: $0.key, actions: $0.value) }
+      .sorted { $0.actions.first!.rawValue < $1.actions.first!.rawValue }
     if !conflicts.isEmpty {
       throw ShortcutConfigError.conflicts(conflicts)
     }
