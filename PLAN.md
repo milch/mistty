@@ -31,13 +31,6 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 - Upstream the shell-PID accessor patch to ghostty.
 - **Opt-out mechanism for builtin auto-restore** — `ssh` is in `RestoreConfig.builtinAutoRestore` so SSH sessions relaunch without requiring an allowlist entry. Users with unreachable hosts or one-shot SSH panes have no way to suppress the reconnect attempt short of also suppressing the session's existence. Consider a `strategy = false` or similar sentinel, or a per-executable `auto_restore = false` flag in the rule.
 
-### Keyboard shortcut configuration
-
-- Many of the keyboard shortcuts are hardcoded right now, make them configurable
-- Make cmd-shift-w the shortcut to close the window (mirrors Arc, Zen, …) and cmd-ctrl-w the shortcut to close the full tab with all panes
-- In Zen/Arc cmd-opt-up/down changes tabs -> switch our session up/down to use that and make cmd-shift-up/down swap the session up or down. The bracket basedshortcuts can stay as they are
-- Move existing shortcuts to the shortcut config
-
 ### Preference Pane
 
 - We have a non-standard preference pane right now. Make a pref pane like Safari, Mail, etc., that looks like a standard macOS preference pane
@@ -79,6 +72,17 @@ Once v1 ships:
 - OSC for state restoration? TUI communicates with term how to get it to resume from where it left. Could be something as simple as `$PROG file.txt` or `nvim -U session.vim` or something more complex.
 
 ## Implemented
+
+### Configurable keyboard shortcuts
+
+Spec: `docs/superpowers/specs/2026-04-28-keyboard-shortcuts-config-design.md`. Plan: `docs/superpowers/plans/2026-05-01-keyboard-shortcuts-config.md`.
+
+- All global / menu-bar shortcuts (~25 actions) configurable via a `[shortcuts]` table in `~/.config/mistty/config.toml`. Layered over hard-coded defaults; `""` disables a default; arrays bind multiple chords to the same action. Live-reload via `MisttyConfig.reload()`
+- Behavior changes (Arc/Zen alignment): `close_tab` moved to `cmd+ctrl+w` (was `cmd+shift+w`), new `close_window` action on `cmd+shift+w`, session-cycle on `cmd+opt+arrows` (was `cmd+shift+arrows`), session-swap on `cmd+shift+arrows` (was `cmd+opt+arrows`). Bracket aliases keep their existing meaning
+- Architecture: new `Chord` value type (string parser, SwiftUI menu adapter, NSEvent matcher); `ShortcutAction` enum + `defaults` table + per-action `FirePolicy`; `ShortcutsConfig` parses + validates with collected conflict detection; single `ShortcutMonitor` (driven by `MisttyConfig.current.shortcuts`) replaces the three legacy NSEvent monitors (`closeMonitor`, `altShortcutMonitor`, `windowModeShortcutMonitor`)
+- Indexed focus-tab/focus-session shortcuts collapsed into `focus_tab_modifier` / `focus_session_modifier` config keys (defaults `cmd` / `ctrl`). Tab and session modifiers must differ
+- Conflict handling: two actions resolving to the same chord aborts config reload with a banner in Settings; the previous good config stays active until the conflict is fixed
+- Settings UI for shortcuts deferred to the preference-pane redesign; in-mode keys (window-mode hjkl/etc., copy-mode vim grammar) remain hardcoded by design
 
 ### Multi-window v1
 
