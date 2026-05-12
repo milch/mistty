@@ -25,7 +25,7 @@ enum SessionManagerItem {
 
   var displayName: String {
     switch self {
-    case .runningSession(let s): return s.name
+    case .runningSession(let s): return s.sidebarLabel
     case .directory(let u): return u.lastPathComponent
     case .sshHost(let h): return h.alias
     case .newSession(let query, let directory, let createDir, let sshCommand):
@@ -46,7 +46,7 @@ enum SessionManagerItem {
 
   var subtitle: String? {
     switch self {
-    case .runningSession: return nil
+    case .runningSession(let s): return s.directory.path
     case .directory(let u): return u.path
     case .sshHost(let h): return h.hostname
     case .newSession(_, let directory, _, let sshCommand):
@@ -159,7 +159,7 @@ final class SessionManagerViewModel {
   ) {
     switch item {
     case .runningSession(let s):
-      return (s.name, nil, 0)
+      return (s.sidebarLabel, s.directory.path, 0)
     case .directory(let u):
       return (u.lastPathComponent, u.path, 0)
     case .sshHost(let h):
@@ -281,7 +281,7 @@ final class SessionManagerViewModel {
     let item = filteredItems[selectedIndex]
     switch item {
     case .newSession: return nil
-    case .runningSession(let s): return s.name
+    case .runningSession(let s): return s.sidebarLabel
     case .directory(let u): return u.path
     case .sshHost(let h): return h.alias
     }

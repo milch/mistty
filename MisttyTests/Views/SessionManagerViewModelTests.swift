@@ -100,7 +100,11 @@ final class SessionManagerViewModelTests: XCTestCase {
   func test_fuzzyFilter_subsequence() async {
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
-    let _ = store.createSession(name: "my-project", directory: URL(fileURLWithPath: "/tmp"))
+    // customName mirrors the real-world plain-text-create path so the
+    // session's sidebar label (which is what the manager now matches
+    // against, post-rename-aware fuzzy fix) is "my-project".
+    let _ = store.createSession(
+      name: "my-project", directory: URL(fileURLWithPath: "/tmp"), customName: "my-project")
     store.activeSession = nil
 
     let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
@@ -118,8 +122,11 @@ final class SessionManagerViewModelTests: XCTestCase {
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
     let _ = store.createSession(
-      name: "work-bazel", directory: URL(fileURLWithPath: "/tmp/workspace"))
-    let _ = store.createSession(name: "work-other", directory: URL(fileURLWithPath: "/tmp/other"))
+      name: "work-bazel", directory: URL(fileURLWithPath: "/tmp/workspace"),
+      customName: "work-bazel")
+    let _ = store.createSession(
+      name: "work-other", directory: URL(fileURLWithPath: "/tmp/other"),
+      customName: "work-other")
     store.activeSession = nil
 
     let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
@@ -145,8 +152,10 @@ final class SessionManagerViewModelTests: XCTestCase {
     service.recordAccess(for: "session:dev-tools")
     service.recordAccess(for: "session:dev-tools")
 
-    let _ = store.createSession(name: "dev", directory: URL(fileURLWithPath: "/tmp"))
-    let _ = store.createSession(name: "dev-tools", directory: URL(fileURLWithPath: "/home"))
+    let _ = store.createSession(
+      name: "dev", directory: URL(fileURLWithPath: "/tmp"), customName: "dev")
+    let _ = store.createSession(
+      name: "dev-tools", directory: URL(fileURLWithPath: "/home"), customName: "dev-tools")
     store.activeSession = nil
 
     let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore, frecencyService: service)
@@ -477,7 +486,8 @@ final class SessionManagerViewModelTests: XCTestCase {
   func test_typoTolerance_endToEnd() async {
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
-    let _ = store.createSession(name: "bazel-build", directory: URL(fileURLWithPath: "/tmp"))
+    let _ = store.createSession(
+      name: "bazel-build", directory: URL(fileURLWithPath: "/tmp"), customName: "bazel-build")
     store.activeSession = nil
 
     let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)

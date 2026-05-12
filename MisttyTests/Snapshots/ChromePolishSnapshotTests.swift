@@ -217,9 +217,15 @@ final class ChromePolishSnapshotTests: XCTestCase {
     )
     .frame(width: 560, height: 400)
 
+    // Running-session rows now show a `.secondary`-colored directory
+    // subtitle, whose anti-aliased text rasterizes inconsistently across
+    // runs (~92K vs 93K PNG, no visible diff). Allow a small pixel
+    // tolerance so the test isn't flaky on byte-exact comparison.
     assertSnapshot(
       of: host(view, size: CGSize(width: 560, height: 400)),
-      as: .image(size: CGSize(width: 560, height: 400)),
+      as: .image(
+        precision: 0.99, perceptualPrecision: 0.98,
+        size: CGSize(width: 560, height: 400)),
       named: "session-manager-mixed"
     )
   }
