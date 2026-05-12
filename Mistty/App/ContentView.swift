@@ -1230,7 +1230,13 @@ struct ContentView: View {
           && windowsStore.isTerminalWindowKey()
       },
       firstResponderIsTextField: {
-        NSApp.keyWindow?.firstResponder is NSText
+        // Walk the responder chain for `cut:`. If anything handles it (e.g. the
+        // window's field editor when a SwiftUI TextField is focused, NSTextView,
+        // NSTextField, etc.), pass through so Cmd+X reaches the system Cut menu
+        // command. More robust than `firstResponder is NSText` — SwiftUI's
+        // .focused TextField doesn't always make an NSText subclass the first
+        // responder.
+        NSApp.target(forAction: #selector(NSText.cut(_:))) != nil
       },
       inModalMode: { [state] in
         let activeTab = state.activeSession?.activeTab
