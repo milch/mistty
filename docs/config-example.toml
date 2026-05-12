@@ -72,6 +72,13 @@ default_command = "ssh"
 # regex = "^.*\\.staging\\.example\\.com$"
 # command = "ssh -o StrictHostKeyChecking=no"
 
+# ─── Copy mode ───────────────────────────────────────────────────────────────
+[copy_mode]
+# Minimum rows of context kept visible above/below the cursor during vim-style
+# j/k motions. Mirrors vim's `scrolloff`. 0 (default) lets the cursor reach
+# the viewport edge before scrolling kicks in.
+# scrolloff = 3
+
 # ─── Copy mode hints ─────────────────────────────────────────────────────────
 [copy_mode.hints]
 # Letters used to label hints. Order matters — earlier letters are assigned first.

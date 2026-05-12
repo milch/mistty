@@ -172,6 +172,11 @@ struct MisttyConfig: Sendable, Equatable {
   var sidebarVisible: Bool = true
   var popups: [PopupDefinition] = []
   var ssh: SSHConfig = SSHConfig()
+  /// Minimum rows of context kept visible above/below the copy-mode cursor
+  /// during vim-style j/k motions. 0 disables the behavior (cursor can reach
+  /// the viewport edge), matching the historical default. Mirrors vim's
+  /// `scrolloff` option.
+  var copyModeScrolloff: Int = 0
   var copyModeHints: CopyModeHintsConfig = CopyModeHintsConfig()
   var ui: UIConfig = UIConfig()
   var shortcuts: ShortcutsConfig = .default
@@ -271,16 +276,20 @@ struct MisttyConfig: Sendable, Equatable {
         }
       }
     }
-    if let copyMode = table["copy_mode"]?.table,
-       let hints = copyMode["hints"]?.table {
-      if let alpha = hints["alphabet"]?.string, !alpha.isEmpty {
-        config.copyModeHints.alphabet = alpha
+    if let copyMode = table["copy_mode"]?.table {
+      if let scroll = copyMode["scrolloff"]?.int, scroll >= 0 {
+        config.copyModeScrolloff = scroll
       }
-      if let ua = hints["uppercase_action"]?.string {
-        switch ua {
-        case "open": config.copyModeHints.uppercaseAction = .open
-        case "copy": config.copyModeHints.uppercaseAction = .copy
-        default: break
+      if let hints = copyMode["hints"]?.table {
+        if let alpha = hints["alphabet"]?.string, !alpha.isEmpty {
+          config.copyModeHints.alphabet = alpha
+        }
+        if let ua = hints["uppercase_action"]?.string {
+          switch ua {
+          case "open": config.copyModeHints.uppercaseAction = .open
+          case "copy": config.copyModeHints.uppercaseAction = .copy
+          default: break
+          }
         }
       }
     }
@@ -511,6 +520,11 @@ struct MisttyConfig: Sendable, Equatable {
         }
         lines.append("command = \"\(tomlEscape(host.command))\"")
       }
+    }
+    if copyModeScrolloff != 0 {
+      lines.append("")
+      lines.append("[copy_mode]")
+      lines.append("scrolloff = \(copyModeScrolloff)")
     }
     if copyModeHints != CopyModeHintsConfig() {
       lines.append("")

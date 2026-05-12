@@ -959,13 +959,42 @@ struct ContentView: View {
       cursorCol = pos.col
     }
 
+    // Freeze the viewport on entry. Ghostty's viewport defaults to `.active`
+    // mode (auto-follows the live edge), so streaming output keeps scrolling
+    // the visible area and copy-mode selections become impossible.
+    // `ghostty_surface_pin_viewport` (Mistty patch
+    // `patches/ghostty/0005-pin-viewport.patch`) transitions the viewport
+    // from `.active` to `.pin` at the current top row with no visual shift.
+    if let surface = surfaceView.surface {
+      ghostty_surface_pin_viewport(surface)
+    }
+
+    // When the user enters copy mode while looking at scrollback, the live
+    // cursor row is below the visible viewport and our `cursorPosition()`
+    // clamp lands the copy-mode cursor at the bottom of the viewport — so
+    // the first j/k motion snaps the view away from what they're looking
+    // at. Detect that case via the scrollbar offset (`< maxOffset` ⇔ user
+    // is in scrollback) and anchor the cursor at mid-viewport instead.
+    let sb = surfaceView.scrollbarState
+    let maxOffset = sb.total > sb.len ? sb.total - sb.len : 0
+    if sb.offset < maxOffset {
+      cursorRow = rows / 2
+      cursorCol = 0
+    }
+
     activePane.copyModeState = CopyModeState(
       rows: rows, cols: cols, cursorRow: cursorRow, cursorCol: cursorCol)
   }
 
-  private func scrollViewport(_ state: inout CopyModeState, delta: Int) {
+  /// Scroll the focused pane's viewport by `delta` rows (positive = forward,
+  /// toward the live edge; negative = backward, into scrollback). Returns
+  /// the actual delta applied after clamping, which may be smaller in
+  /// absolute value than `delta` if the scroll hit the top of scrollback or
+  /// the live edge.
+  @discardableResult
+  private func scrollViewport(_ state: inout CopyModeState, delta: Int) -> Int {
     guard let pane = copyModePane,
-          let surface = pane.surfaceView.surface else { return }
+          let surface = pane.surfaceView.surface else { return 0 }
     let actionStr = "scroll_page_lines:\(delta)"
     _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
     // Update scrollbar offset synchronously — the async callback will
@@ -991,6 +1020,7 @@ struct ContentView: View {
       state.anchor = (row: anchor.row - actualDelta, col: anchor.col)
     }
     state.scrollGeneration &+= 1
+    return actualDelta
   }
 
   private func exitCopyMode() {
@@ -1041,6 +1071,7 @@ struct ContentView: View {
         self.readTerminalLine(row: row)
       }
 
+      let prevCursorRow = copyState.cursorRow
       let actions = copyState.handleKey(
         key: key,
         keyCode: event.keyCode,
@@ -1156,6 +1187,26 @@ struct ContentView: View {
               break
             }
           }
+        }
+      }
+
+      // Scrolloff: keep N rows of context visible above/below the cursor
+      // when vertical motions land near a viewport edge. Skips hint/search
+      // modes (their cursor positions aren't user-driven navigation) and
+      // moves that didn't change the row.
+      let scrolloff = MisttyConfig.current.copyModeScrolloff
+      if scrolloff > 0,
+        !copyState.isHinting, !copyState.isSearching,
+        copyState.cursorRow != prevCursorRow
+      {
+        let r = copyState.cursorRow
+        let bottomEdge = copyState.rows - 1 - scrolloff
+        if r > bottomEdge {
+          let actual = self.scrollViewport(&copyState, delta: r - bottomEdge)
+          copyState.cursorRow -= actual
+        } else if r < scrolloff {
+          let actual = self.scrollViewport(&copyState, delta: r - scrolloff)
+          copyState.cursorRow -= actual
         }
       }
 

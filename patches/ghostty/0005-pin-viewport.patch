@@ -1,0 +1,57 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1087,6 +1087,9 @@ bool ghostty_surface_process_exited(ghostty_surface_t);
+ /* Mistty patch: see embedded.zig. */
+ int ghostty_surface_pty_fd(ghostty_surface_t);
+ 
++/* Mistty patch: see embedded.zig. */
++void ghostty_surface_pin_viewport(ghostty_surface_t);
++
+ void ghostty_surface_refresh(ghostty_surface_t);
+ void ghostty_surface_draw(ghostty_surface_t);
+ void ghostty_surface_set_content_scale(ghostty_surface_t, double, double);
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1648,7 +1648,40 @@ pub const CAPI = struct {
+             },
+         }
+     }
+ 
++    /// Mistty patch: pin the viewport at its current position without
++    /// scrolling. Transitions the viewport from `.active` mode (which
++    /// auto-follows the live edge so streaming output keeps the latest
++    /// content visible) to `.pin` mode (anchored at a specific row, so new
++    /// output goes into scrollback). Used by Mistty's copy mode to "freeze"
++    /// the view on entry without the visible content shifting — the
++    /// existing `scroll_page_lines:-N` binding always causes at least one
++    /// row of upward shift, which is jarring when the user wasn't
++    /// actively scrolling. No-op when the viewport is already `.pin` or
++    /// `.top`, or when the screen has no scrollback (alternate screen in
++    /// vim/less/etc. — `PageList.scroll` early-returns in that case to
++    /// keep the viewport stuck at `.active`; mirror that invariant here).
++    /// Requires holding the renderer mutex because it mutates
++    /// rendering-relevant state; queues a render so the new viewport state
++    /// reaches the renderer thread on the next frame.
++    export fn ghostty_surface_pin_viewport(surface: *Surface) void {
++        const core = &surface.core_surface;
++        core.renderer_state.mutex.lock();
++        defer core.renderer_state.mutex.unlock();
++        const pages = &core.io.terminal.screens.active.pages;
++        if (pages.explicit_max_size == 0) return;
++        switch (pages.viewport) {
++            .top, .pin => return,
++            .active => {
++                const top = pages.getTopLeft(.active);
++                pages.viewport_pin.* = top;
++                pages.viewport = .pin;
++                pages.viewport_pin_row_offset = null;
++            },
++        }
++        core.renderer_thread.wakeup.notify() catch {};
++    }
++
+     /// Returns true if the surface has a selection.
+     export fn ghostty_surface_has_selection(surface: *Surface) bool {
+         return surface.core_surface.hasSelection();
