@@ -216,7 +216,12 @@ final class GhosttyAppManager {
     let misttyConfig = MisttyConfig.current
     if let parseError = MisttyConfig.lastParseError {
       let message = describeTOMLParseError(parseError)
-      let showAlert: @MainActor () -> Void = {
+      // Defer the alert to the next runloop tick. By then NSApp is set up
+      // (it isn't yet during MisttyApp.init, which is what runs GhosttyAppManager.shared).
+      // Whether or not the app has fully finished launching at that point,
+      // NSApp.activate + NSAlert.runModal both work — the alert blocks the
+      // main thread modally; once the user dismisses it, launch continues.
+      DispatchQueue.main.async {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
@@ -225,24 +230,6 @@ final class GhosttyAppManager {
           "Falling back to defaults.\n\n\(message)\n\nFile: \(MisttyConfig.configURL.path)"
         alert.addButton(withTitle: "OK")
         alert.runModal()
-      }
-      if NSApp.isRunning {
-        // Already past didFinishLaunching — show on next runloop tick so we
-        // don't block init.
-        DispatchQueue.main.async { showAlert() }
-      } else {
-        // Wait for the launch notification. `notifications(named:)` only
-        // observes events posted AFTER the AsyncSequence is created, but
-        // we just checked `isRunning` so the notification is still pending.
-        Task { @MainActor in
-          let notifications = NotificationCenter.default.notifications(
-            named: NSApplication.didFinishLaunchingNotification
-          )
-          for await _ in notifications {
-            showAlert()
-            break
-          }
-        }
       }
     }
 
