@@ -51,11 +51,20 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 - When there are multiple windows open, it seems properties like whether the sidebar is open are shared between the windows. Let's make it a per-window setting so you can have a window with sidebar showing and a window without sidebar showing
 - Bell highlighting is too subtle - use the same highligth as the current tab but in orange
+- Tabs need to be movable too (both in session & move between sessions?) + Drag & Drop
+- IF you rename the session, the session manager references the default name (path). Should allow matching on both name and dir for running sessions with custom names
+- “reparent session” aka set CWD for the session (= new tabs)
+- We need the equivalent of `scrolloff` in copy mode
+- nvim sessions over SSH/et -> skip for smart-splits navigation
+- Yank mode: we need a way to just put the cursor on a label too
+- Drag & Drop of files onto the terminal should paste the path
+- Starting copy mode or yank mode should fix the scroll position
 
 Larger:
 
 - OSC777/OSC9/OSC99 notifications support
 - Zen mode (similar to zoomed - except that it pulls out the pane similar to a popup, full height with default 120 character width (configurable), background is dimmed)
+- Refactor so that the “session manager” uses configurable data sources. Zoxide can be one but generic “read json from a file” or “list these dir contents” or “run this command to populate the list” could be nice
 
 ### Multi-window v2+ followups
 
