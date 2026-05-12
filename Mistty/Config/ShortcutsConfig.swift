@@ -75,6 +75,38 @@ enum ShortcutConfigError: Error, Equatable {
   }
 }
 
+extension ShortcutConfigError: LocalizedError {
+  var errorDescription: String? {
+    switch self {
+    case .unknownAction(let key):
+      return "Unknown shortcut action: \"\(key)\"."
+    case .unparseableChord(let action, let raw):
+      return "Could not parse chord \"\(raw)\" for shortcut \"\(action)\"."
+    case .unparseableModifier(let key, let raw):
+      return "Could not parse modifier \"\(raw)\" for \"\(key)\"."
+    case .wrongValueType(let key):
+      return "Shortcut \"\(key)\" has the wrong value type — expected a chord string or array of chord strings."
+    case .conflicts(let items):
+      let lines = items.map { conflict -> String in
+        let names = conflict.actions.map(\.rawValue).joined(separator: ", ")
+        return "  • \"\(conflict.chord.toString())\" bound to: \(names)"
+      }
+      let lead = items.count == 1
+        ? "Shortcut conflict — one chord is bound to multiple actions:"
+        : "Shortcut conflicts — \(items.count) chords are each bound to multiple actions:"
+      return lead + "\n" + lines.joined(separator: "\n")
+    case .indexedModifierClash(let mods):
+      var parts: [String] = []
+      if mods.contains(.command) { parts.append("cmd") }
+      if mods.contains(.shift)   { parts.append("shift") }
+      if mods.contains(.option)  { parts.append("opt") }
+      if mods.contains(.control) { parts.append("ctrl") }
+      let str = parts.isEmpty ? "(empty)" : parts.joined(separator: "+")
+      return "focus_tab_modifier and focus_session_modifier must differ; both are currently \"\(str)\"."
+    }
+  }
+}
+
 extension ShortcutsConfig {
   /// Parse the user's `[shortcuts]` table. An empty table yields `.default`.
   static func parse(_ table: TOMLTable) throws -> ShortcutsConfig {

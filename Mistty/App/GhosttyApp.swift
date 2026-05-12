@@ -216,20 +216,32 @@ final class GhosttyAppManager {
     let misttyConfig = MisttyConfig.current
     if let parseError = MisttyConfig.lastParseError {
       let message = describeTOMLParseError(parseError)
-      Task { @MainActor in
-        let notifications = NotificationCenter.default.notifications(
-          named: NSApplication.didFinishLaunchingNotification
-        )
-        for await _ in notifications {
-          NSApp.activate(ignoringOtherApps: true)
-          let alert = NSAlert()
-          alert.alertStyle = .warning
-          alert.messageText = "Mistty could not parse config.toml"
-          alert.informativeText =
-            "Falling back to defaults.\n\n\(message)\n\nFile: \(MisttyConfig.configURL.path)"
-          alert.addButton(withTitle: "OK")
-          alert.runModal()
-          break
+      let showAlert: @MainActor () -> Void = {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Mistty could not parse config.toml"
+        alert.informativeText =
+          "Falling back to defaults.\n\n\(message)\n\nFile: \(MisttyConfig.configURL.path)"
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+      }
+      if NSApp.isRunning {
+        // Already past didFinishLaunching — show on next runloop tick so we
+        // don't block init.
+        DispatchQueue.main.async { showAlert() }
+      } else {
+        // Wait for the launch notification. `notifications(named:)` only
+        // observes events posted AFTER the AsyncSequence is created, but
+        // we just checked `isRunning` so the notification is still pending.
+        Task { @MainActor in
+          let notifications = NotificationCenter.default.notifications(
+            named: NSApplication.didFinishLaunchingNotification
+          )
+          for await _ in notifications {
+            showAlert()
+            break
+          }
         }
       }
     }

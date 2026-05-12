@@ -143,6 +143,22 @@ struct ShortcutsConfigTests {
       """)
     }
   }
+
+  @Test func conflictsErrorMessageIncludesBothActions() throws {
+    do {
+      _ = try parse("""
+      [shortcuts]
+      new_tab = "cmd+t"
+      session_manager = "cmd+t"
+      """)
+      Issue.record("expected conflict error")
+    } catch let e as ShortcutConfigError {
+      let msg = e.localizedDescription
+      #expect(msg.contains("new_tab"))
+      #expect(msg.contains("session_manager"))
+      #expect(msg.contains("cmd+t"))
+    }
+  }
 }
 
 private func parse(_ toml: String) throws -> ShortcutsConfig {

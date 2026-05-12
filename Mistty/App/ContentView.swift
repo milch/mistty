@@ -1230,51 +1230,26 @@ struct ContentView: View {
           && windowsStore.isTerminalWindowKey()
       },
       firstResponderIsTextField: {
-        guard let window = NSApp.keyWindow else {
-          DebugLog.shared.log("cmdw", "cmd+x text-check: no key window")
-          return false
-        }
+        guard let window = NSApp.keyWindow else { return false }
         let responder = window.firstResponder
-        let responderName = responder.map { String(describing: type(of: $0)) } ?? "nil"
-
         // Classic AppKit path: field editor is an NSTextView (subclass of NSText).
-        if responder is NSText {
-          DebugLog.shared.log("cmdw", "cmd+x text-check: NSText match (\(responderName))")
-          return true
-        }
-
+        if responder is NSText { return true }
         // Something in the responder chain claims to handle cut:.
-        if let target = NSApp.target(forAction: #selector(NSText.cut(_:))) {
-          DebugLog.shared.log(
-            "cmdw",
-            "cmd+x text-check: target(cut:) match (\(type(of: target)))")
-          return true
-        }
-
+        if NSApp.target(forAction: #selector(NSText.cut(_:))) != nil { return true }
         // Walk the responder chain looking for any text-editing class. SwiftUI's
         // TextField wrapper class names change across macOS releases; pattern-match
-        // on the type name so we catch SwiftUI's private types too.
+        // on the type name to catch SwiftUI's private types too.
         var cursor: NSResponder? = responder
-        var chain: [String] = []
         while let r = cursor {
           let name = String(describing: type(of: r))
-          chain.append(name)
           if name.contains("TextField")
             || name.contains("TextView")
             || name.contains("TextEditor")
           {
-            DebugLog.shared.log(
-              "cmdw",
-              "cmd+x text-check: className match (\(name)) chain=\(chain.joined(separator: " > "))"
-            )
             return true
           }
           cursor = r.nextResponder
         }
-        DebugLog.shared.log(
-          "cmdw",
-          "cmd+x text-check: NO MATCH. chain=\(chain.joined(separator: " > "))"
-        )
         return false
       },
       inModalMode: { [state] in
