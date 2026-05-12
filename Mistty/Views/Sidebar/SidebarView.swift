@@ -159,13 +159,8 @@ struct SidebarTabRow: View {
     HStack {
       Text(String(ProcessIcon.glyph(forProcessTitle: tab.activePane?.processTitle)))
         .font(.custom(ProcessIcon.fontName, size: 12))
-        .foregroundStyle(isActiveTab ? Color.accentColor : .secondary)
+        .foregroundStyle(isActiveTab ? Color.accentColor : (tab.hasBell ? Color.orange : .secondary))
         .frame(width: 14, alignment: .center)
-      if tab.hasBell {
-        Circle()
-          .fill(Color.orange)
-          .frame(width: 6, height: 6)
-      }
       if isEditing {
         TextField(
           "Tab name", text: $editText,
@@ -203,12 +198,12 @@ struct SidebarTabRow: View {
     .padding(.vertical, 2)
     .background {
       RoundedRectangle(cornerRadius: 4)
-        .fill(isActiveTab ? Color.accentColor.opacity(0.18) : Color.clear)
+        .fill(rowBackgroundColor)
     }
     .overlay(alignment: .leading) {
-      if isActiveTab {
+      if let stripeColor = leadingStripeColor {
         RoundedRectangle(cornerRadius: 1)
-          .fill(Color.accentColor)
+          .fill(stripeColor)
           .frame(width: 2)
           .padding(.vertical, 2)
       }
@@ -240,5 +235,17 @@ struct SidebarTabRow: View {
     // Hand first responder back to the terminal so subsequent
     // keystrokes don't stay trapped in the detached NSTextField.
     tab.activePane?.focusKeyboardInput()
+  }
+
+  private var rowBackgroundColor: Color {
+    if isActiveTab { return Color.accentColor.opacity(0.18) }
+    if tab.hasBell { return Color.orange.opacity(0.18) }
+    return Color.clear
+  }
+
+  private var leadingStripeColor: Color? {
+    if isActiveTab { return Color.accentColor }
+    if tab.hasBell { return Color.orange }
+    return nil
   }
 }

@@ -46,12 +46,6 @@ struct TabBarItem: View {
 
   var body: some View {
     HStack(spacing: 4) {
-      if tab.hasBell {
-        Circle()
-          .fill(Color.orange)
-          .frame(width: 6, height: 6)
-      }
-
       if tab.zoomedPane != nil {
         Image(systemName: "arrow.down.right.and.arrow.up.left")
           .font(.system(size: 9, weight: .semibold))
@@ -92,7 +86,7 @@ struct TabBarItem: View {
     }
     .padding(.horizontal, 10)
     .padding(.vertical, 4)
-    .background(isActive ? Color.primary.opacity(0.08) : Color.clear)
+    .background(tabBackground)
     .cornerRadius(5)
     .onTapGesture { onSelect() }
     .onReceive(NotificationCenter.default.publisher(for: .misttyRenameTab)) { _ in
@@ -101,5 +95,11 @@ struct TabBarItem: View {
         isEditing = true
       }
     }
+  }
+
+  private var tabBackground: Color {
+    if isActive { return Color.primary.opacity(0.08) }
+    if tab.hasBell { return Color.orange.opacity(0.22) }
+    return Color.clear
   }
 }
