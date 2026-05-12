@@ -1230,13 +1230,38 @@ struct ContentView: View {
           && windowsStore.isTerminalWindowKey()
       },
       firstResponderIsTextField: {
-        // Walk the responder chain for `cut:`. If anything handles it (e.g. the
-        // window's field editor when a SwiftUI TextField is focused, NSTextView,
-        // NSTextField, etc.), pass through so Cmd+X reaches the system Cut menu
-        // command. More robust than `firstResponder is NSText` — SwiftUI's
-        // .focused TextField doesn't always make an NSText subclass the first
-        // responder.
-        NSApp.target(forAction: #selector(NSText.cut(_:))) != nil
+        guard let window = NSApp.keyWindow else { return false }
+        let responder = window.firstResponder
+
+        // Classic AppKit path: field editor is an NSTextView (subclass of NSText).
+        if responder is NSText { return true }
+
+        // Something in the responder chain claims to handle cut:.
+        if NSApp.target(forAction: #selector(NSText.cut(_:))) != nil { return true }
+
+        // Walk the responder chain looking for any text-editing class. SwiftUI's
+        // TextField wrapper class names change across macOS releases; pattern-match
+        // on the type name so we catch SwiftUI's private types too.
+        var cursor: NSResponder? = responder
+        var chain: [String] = []
+        while let r = cursor {
+          let name = String(describing: type(of: r))
+          chain.append(name)
+          if name.contains("TextField")
+            || name.contains("TextView")
+            || name.contains("TextEditor")
+          {
+            return true
+          }
+          cursor = r.nextResponder
+        }
+        // One-time diagnostic on the `cmdw` channel so we can see the actual
+        // chain if this still mis-fires. Inspect via `~/Library/Logs/Mistty/`.
+        DebugLog.shared.log(
+          "cmdw",
+          "cmd+x window-mode: not a text responder. chain=\(chain.joined(separator: " > "))"
+        )
+        return false
       },
       inModalMode: { [state] in
         let activeTab = state.activeSession?.activeTab
