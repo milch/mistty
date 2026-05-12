@@ -7,7 +7,6 @@ struct ContentView: View {
   var state: WindowState
   var windowsStore: WindowsStore
   var config: MisttyConfig
-  @AppStorage("sidebarVisible") var sidebarVisible = true
   @State private var tabBarOverride: TabBarVisibilityOverride = .auto
   @SceneStorage("sidebarWidth") var sidebarWidth: Double = 220
   @State var showingSessionManager = false
@@ -227,7 +226,7 @@ struct ContentView: View {
           tabBarOverride = tabBarOverride.toggled(configuredShow: configured)
         }
       }
-      .onChange(of: sidebarVisible) { _, _ in
+      .onChange(of: state.sidebarVisible) { _, _ in
         resolveOverrideIfMatched()
       }
       .onChange(of: state.activeSession?.tabs.count) { _, _ in
@@ -239,7 +238,7 @@ struct ContentView: View {
   private var mainContent: some View {
     let tabBarShouldShow = shouldShowTabBar()
     HStack(spacing: 0) {
-      if sidebarVisible {
+      if state.sidebarVisible {
         HStack(spacing: 0) {
           SidebarView(
             state: state,
@@ -265,7 +264,7 @@ struct ContentView: View {
                 TabBarView(
                   session: session,
                   leadingInset:
-                    (config.ui.titleBarStyle.hasTrafficLights && !sidebarVisible) ? 72 : 0
+                    (config.ui.titleBarStyle.hasTrafficLights && !state.sidebarVisible) ? 72 : 0
                 )
                 Divider()
               }
@@ -426,7 +425,7 @@ struct ContentView: View {
   private func configuredTabBarShow() -> Bool {
     let tabCount = state.activeSession?.tabs.count ?? 1
     return config.ui.tabBarMode.shouldShow(
-      sidebarVisible: sidebarVisible, tabCount: tabCount)
+      sidebarVisible: state.sidebarVisible, tabCount: tabCount)
   }
 
   private func shouldShowTabBar() -> Bool {

@@ -9,11 +9,6 @@ import XCTest
 @MainActor
 final class ChromePolishSnapshotTests: XCTestCase {
 
-  /// AppStorage keys these snapshot tests touch on UserDefaults.standard.
-  /// Cleared in `tearDown` so writes don't leak into the host user's
-  /// preferences or cross-contaminate between tests.
-  private static let pollutedDefaultsKeys = ["sidebarVisible"]
-
   /// Register the bundled Nerd Font so `ProcessIcon` glyphs render in
   /// snapshots instead of the missing-glyph box. Matches the registration
   /// `MisttyApp` does on launch.
@@ -102,10 +97,6 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
   override func tearDown() {
     TerminalSurfaceView.skipSurfaceCreation = false
-    // Don't leak AppStorage writes into the host user's preferences.
-    for key in Self.pollutedDefaultsKeys {
-      UserDefaults.standard.removeObject(forKey: key)
-    }
     super.tearDown()
   }
 
@@ -233,10 +224,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
   // MARK: - Full window
 
   func test_contentView_fullWindow() {
-    UserDefaults.standard.set(true, forKey: "sidebarVisible")
-
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
+    store.sidebarVisible = true
 
     // First session: two tabs so the tab bar is visible.
     let s1 = store.createSession(
@@ -269,10 +259,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
   }
 
   func test_contentView_sidebarOpen_singleTab() {
-    UserDefaults.standard.set(true, forKey: "sidebarVisible")
-
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
+    store.sidebarVisible = true
     let s1 = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -297,10 +286,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
   }
 
   func test_contentView_sidebarClosed_singleTab() {
-    UserDefaults.standard.set(false, forKey: "sidebarVisible")
-
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
+    store.sidebarVisible = false
     let s1 = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -330,10 +318,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
   // whole window. This snapshot will diff loudly if anyone moves the
   // backdrop back inside the popup view.
   func test_contentView_popupActive() {
-    UserDefaults.standard.set(true, forKey: "sidebarVisible")
-
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
+    store.sidebarVisible = true
     let session = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -355,10 +342,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
   }
 
   func test_contentView_sidebarClosed_multipleTabs() {
-    UserDefaults.standard.set(false, forKey: "sidebarVisible")
-
     let windowsStore = WindowsStore()
     let store = windowsStore.createWindow()
+    store.sidebarVisible = false
     let s1 = store.createSession(
       name: "mistty",
       directory: URL(fileURLWithPath: "/Users/me/Developer/mistty"))
@@ -451,10 +437,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
     filePath: StaticString = #filePath,
     line: UInt = #line
   ) {
-    UserDefaults.standard.set(true, forKey: "sidebarVisible")
-
     let windowsStore = WindowsStore()
     let winState = windowsStore.createWindow()
+    winState.sidebarVisible = true
 
     let s1 = winState.createSession(
       name: "mistty",

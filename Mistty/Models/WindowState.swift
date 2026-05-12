@@ -12,10 +12,18 @@ final class WindowState {
       activeSession?.lastActivatedAt = Date()
     }
   }
+  /// Per-window sidebar visibility. Seeded from `config.sidebarVisible`
+  /// (Settings → "Show Sidebar by Default") at construction and toggled by
+  /// the `misttyToggleSidebar` notification handler in `WindowRootView`.
+  /// Previously a shared `@AppStorage("sidebarVisible")` — moving it onto
+  /// `WindowState` is what makes multiple windows show/hide their sidebars
+  /// independently.
+  var sidebarVisible: Bool
 
-  init(id: Int, store: WindowsStore) {
+  init(id: Int, store: WindowsStore, sidebarVisible: Bool? = nil) {
     self.id = id
     self.store = store
+    self.sidebarVisible = sidebarVisible ?? MisttyConfig.current.sidebarVisible
   }
 
   // MARK: - Session lifecycle

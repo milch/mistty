@@ -6,7 +6,6 @@ struct WindowRootView: View {
   let windowsStore: WindowsStore
   let config: MisttyConfig
   @State private var state: WindowState?
-  @AppStorage("sidebarVisible") var sidebarVisible = true
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
@@ -60,7 +59,7 @@ struct WindowRootView: View {
       guard let state else { return }
       guard windowsStore.isActiveTerminalWindow(state: state) else { return }
       withAnimation(.easeInOut(duration: 0.18)) {
-        sidebarVisible.toggle()
+        state.sidebarVisible.toggle()
       }
     }
   }
