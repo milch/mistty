@@ -72,7 +72,21 @@ final class ShortcutMonitor {
     }
     let policy = action.policy
     if policy.passThroughWhenTextResponder, context.firstResponderIsTextField() {
-      return HandleResult(consumed: false, action: nil, indexedAction: nil)
+      // The action collides with a system text-editing chord (today: Cmd+X
+      // for windowMode vs system Cut). Returning the event for pass-through
+      // would let SwiftUI's menu fire windowMode anyway, since the Window
+      // Mode menu item also binds Cmd+X. Instead: best-effort dispatch the
+      // system Cut action via NSApp.sendAction (walks the responder chain;
+      // works for AppKit text responders, no-op for SwiftUI-only TextFields
+      // whose responder chain doesn't expose cut:), then consume the event
+      // so the menu doesn't fire.
+      //
+      // The optional bind guards unit tests where NSApplication isn't
+      // initialized (NSApp is an implicitly unwrapped optional).
+      if let app = NSApp {
+        _ = app.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil)
+      }
+      return HandleResult(consumed: true, action: nil, indexedAction: nil)
     }
     if policy.disabledInModalModes, context.inModalMode() {
       return HandleResult(consumed: false, action: nil, indexedAction: nil)

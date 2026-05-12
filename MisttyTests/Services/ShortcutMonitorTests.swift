@@ -63,13 +63,18 @@ struct ShortcutMonitorTests {
     #expect(!result.consumed)
   }
 
-  @Test func windowModePassesThroughTextResponder() {
+  @Test func windowModeConsumesEventWhenTextResponder() {
+    // When focus is in a text responder, windowMode must NOT fire (it would
+    // collide with SwiftUI's Cmd+X menu shortcut on pass-through). We consume
+    // the event with no action; the policy implementation dispatches cut:
+    // best-effort.
     let cfg = ShortcutsConfig.default
     let monitor = ShortcutMonitor(
       config: cfg, context: makeContext(firstResponderIsText: true))
     let event = makeEvent(Chord("cmd+x")!)
     let result = monitor.handle(event: event)
-    #expect(!result.consumed)
+    #expect(result.consumed)
+    #expect(result.action == nil)
   }
 
   @Test func nextTabDisabledInModalMode() {
