@@ -69,6 +69,7 @@ Once v1 ships:
 - Cross-window session/tab/pane moves (Arc-style drag/drop). Requires NSView reparenting coordination for `TerminalSurfaceView`.
 - Window menu listing all open windows for jump-to-window navigation.
 - Per-window custom names/titles.
+- Persist `WindowState.sidebarVisible` into `WindowSnapshot` so the per-window visibility survives an app restart (additive optional field; restored windows currently fall back to `MisttyConfig.current.sidebarVisible`). Symmetric with `sidebarWidth`, which is already `@SceneStorage` and persists today.
 
 ## Future
 

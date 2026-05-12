@@ -98,4 +98,45 @@ struct WindowStateTests {
     session.addTab(exec: "top")
     #expect(session.tabs.last?.panes.first?.command == "top")
   }
+
+  // Regression guard for the `@AppStorage("sidebarVisible")` bug — two
+  // windows used to share a single UserDefaults-backed bool, so toggling
+  // one flipped the other. Each `WindowState` now owns its own value.
+  @Test
+  func sidebarVisibleIsIndependentPerWindow() {
+    let store = WindowsStore()
+    let a = store.createWindow()
+    let b = store.createWindow()
+    a.sidebarVisible = true
+    b.sidebarVisible = false
+    #expect(a.sidebarVisible == true)
+    #expect(b.sidebarVisible == false)
+    a.sidebarVisible.toggle()
+    #expect(a.sidebarVisible == false)
+    #expect(b.sidebarVisible == false)
+  }
+
+  @Test
+  func sidebarVisibleSeedsFromConfigByDefault() {
+    let original = MisttyConfig.current
+    defer { MisttyConfig.current = original }
+    var cfg = MisttyConfig.default
+    cfg.sidebarVisible = false
+    MisttyConfig.current = cfg
+    let store = WindowsStore()
+    let w = store.createWindow()
+    #expect(w.sidebarVisible == false)
+  }
+
+  @Test
+  func sidebarVisibleExplicitInitOverridesConfig() {
+    let original = MisttyConfig.current
+    defer { MisttyConfig.current = original }
+    var cfg = MisttyConfig.default
+    cfg.sidebarVisible = false
+    MisttyConfig.current = cfg
+    let store = WindowsStore()
+    let w = WindowState(id: 1, store: store, sidebarVisible: true)
+    #expect(w.sidebarVisible == true)
+  }
 }
