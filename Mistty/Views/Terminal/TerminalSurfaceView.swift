@@ -287,6 +287,11 @@ final class TerminalSurfaceView: NSView {
     if isActive {
       window?.makeFirstResponder(self)
     }
+    // Register drag types only once the view is attached to a window.
+    // Calling this from `init` deadlocks unit tests by waking AppKit's
+    // global pasteboard / drag machinery before the test runloop is ready;
+    // doing it here defers it until the surface is actually live.
+    registerForDraggedTypes(Self.acceptedDragTypes)
   }
 
   /// Propagate system light/dark switches to libghostty. The app-level
@@ -750,4 +755,58 @@ extension TerminalSurfaceView: @preconcurrency NSTextInputClient {
   }
 
   func characterIndex(for point: NSPoint) -> Int { 0 }
+}
+
+// MARK: - Drag & Drop
+
+extension TerminalSurfaceView {
+  static let acceptedDragTypes: [NSPasteboard.PasteboardType] = [.fileURL, .URL, .string]
+
+  override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+    let types = sender.draggingPasteboard.types ?? []
+    return types.contains(where: { Self.acceptedDragTypes.contains($0) }) ? .copy : []
+  }
+
+  override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+    let pb = sender.draggingPasteboard
+
+    // File URLs from Finder, mail, etc. POSIX-quote each path and join with
+    // spaces so multiple drops appear as separate argv tokens.
+    if let urls = pb.readObjects(forClasses: [NSURL.self]) as? [URL], !urls.isEmpty {
+      let fileURLs = urls.filter { $0.isFileURL }
+      if !fileURLs.isEmpty {
+        let text = fileURLs.map { Self.posixQuote($0.path) }.joined(separator: " ")
+        sendText(text)
+        return true
+      }
+      // Non-file URLs (http://, mailto://, etc.) — paste the full URL string.
+      let text = urls.map { Self.posixQuote($0.absoluteString) }.joined(separator: " ")
+      sendText(text)
+      return true
+    }
+
+    if let str = pb.string(forType: .string) {
+      sendText(str)
+      return true
+    }
+
+    return false
+  }
+
+  func sendText(_ str: String) {
+    guard let surface else { return }
+    str.withCString { ptr in
+      ghostty_surface_text(surface, ptr, UInt(str.utf8.count))
+    }
+  }
+
+  private static func posixQuote(_ s: String) -> String {
+    if !s.isEmpty, s.allSatisfy(isSafeShellChar) { return s }
+    let escaped = s.replacingOccurrences(of: "'", with: #"'\''"#)
+    return "'\(escaped)'"
+  }
+
+  private static func isSafeShellChar(_ c: Character) -> Bool {
+    c.isLetter || c.isNumber || "_-./:@,+=".contains(c)
+  }
 }
