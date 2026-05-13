@@ -108,6 +108,110 @@ final class CopyModeHintIntegrationTests: XCTestCase {
     }), "should have copied last match (\(expected))")
   }
 
+  func test_c_enters_hint_mode_cursor() {
+    var (state, reader) = makeState(lines: ["see https://example.com"])
+    let actions = simulate(&state, reader: reader, keys: "c")
+    XCTAssertTrue(actions.contains(.enterHintMode(.cursor, .patterns)))
+    XCTAssertTrue(actions.contains(.requestHintScan))
+  }
+
+  func test_cursor_action_moves_cursor_and_stays_in_copy_mode() {
+    var (state, reader) = makeState(lines: ["see https://example.com"])
+    _ = simulate(&state, reader: reader, keys: "c")
+    state.applyHintEntry(action: .cursor, source: .patterns)
+    state.setHintMatches(
+      HintDetector.detect(lines: ["see https://example.com"], source: .patterns)
+    )
+    let expectedCol = state.hint?.matches.first?.range.startCol ?? -1
+    let actions = simulate(&state, reader: reader, keys: "a")
+    XCTAssertTrue(actions.contains(.cursorMoved))
+    XCTAssertTrue(actions.contains(.exitHintMode))
+    XCTAssertFalse(actions.contains(where: {
+      if case .exitCopyMode = $0 { return true } else { return false }
+    }), "cursor action must stay in copy mode")
+    XCTAssertEqual(state.subMode, .normal)
+    XCTAssertEqual(state.cursorCol, expectedCol)
+  }
+
+  func test_cursor_action_skips_when_selecting() {
+    var (state, reader) = makeState(lines: ["see https://example.com"])
+    _ = state.handleKey(key: "v", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertTrue(state.isSelecting)
+    let actions = simulate(&state, reader: reader, keys: "c")
+    XCTAssertFalse(actions.contains(.enterHintMode(.cursor, .patterns)),
+                   "c shouldn't blow away an in-progress visual selection")
+  }
+
+  func test_digitKeysSwitchHintActionDirectly() {
+    var (state, reader) = makeState(lines: ["see https://example.com"])
+    _ = simulate(&state, reader: reader, keys: "y")
+    state.applyHintEntry(action: .copy, source: .patterns)
+    state.setHintMatches(
+      HintDetector.detect(lines: ["see https://example.com"], source: .patterns)
+    )
+    XCTAssertEqual(state.hint?.action, .copy)
+    _ = state.handleKey(key: "2", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.hint?.action, .open)
+    _ = state.handleKey(key: "3", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.hint?.action, .cursor)
+    _ = state.handleKey(key: "1", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.hint?.action, .copy)
+  }
+
+  func test_digitKeysStayInHintMode() {
+    var (state, reader) = makeState(lines: ["see https://example.com"])
+    _ = simulate(&state, reader: reader, keys: "y")
+    state.applyHintEntry(action: .copy, source: .patterns)
+    state.setHintMatches(
+      HintDetector.detect(lines: ["see https://example.com"], source: .patterns)
+    )
+    _ = state.handleKey(key: "2", keyCode: 0, modifiers: [], lineReader: reader)
+    XCTAssertEqual(state.subMode, .hint, "digit selectors must not leave hint mode")
+    XCTAssertNotNil(state.hint)
+  }
+
+  func test_plainTab_cyclesKindFilterNotAction() {
+    let lines = ["see https://example.com and /etc/passwd"]
+    var (state, reader) = makeState(lines: lines)
+    _ = simulate(&state, reader: reader, keys: "y")
+    state.applyHintEntry(action: .copy, source: .patterns)
+    state.setHintMatches(HintDetector.detect(lines: lines, source: .patterns))
+    let initialFilter = state.hint?.filter
+    _ = state.handleKey(key: "\t", keyCode: 48, modifiers: [], lineReader: reader)
+    XCTAssertNotEqual(state.hint?.filter, initialFilter,
+                      "plain Tab should cycle the kind filter")
+    XCTAssertEqual(state.hint?.action, .copy,
+                   "Tab must not touch the action — 1/2/3 are the action selectors")
+  }
+
+  func test_effectiveAction_reflectsShiftHeld() {
+    var (state, reader) = makeState(lines: ["see https://example.com"])
+    _ = simulate(&state, reader: reader, keys: "y")
+    state.applyHintEntry(action: .copy, source: .patterns, uppercaseAction: .open)
+    XCTAssertEqual(state.hint?.effectiveAction, .copy)
+    state.hint?.shiftHeld = true
+    XCTAssertEqual(state.hint?.effectiveAction, .open,
+                   "shift-held preview should swap to uppercase_action")
+    state.hint?.shiftHeld = false
+    XCTAssertEqual(state.hint?.effectiveAction, .copy)
+  }
+
+  func test_uppercase_cursor_jumps_when_configured() {
+    var (state, reader) = makeState(lines: ["see https://example.com"])
+    _ = simulate(&state, reader: reader, keys: "y")
+    state.applyHintEntry(action: .copy, source: .patterns, uppercaseAction: .cursor)
+    state.setHintMatches(
+      HintDetector.detect(lines: ["see https://example.com"], source: .patterns)
+    )
+    let expectedCol = state.hint?.matches.first?.range.startCol ?? -1
+    let actions = simulate(&state, reader: reader, keys: "A")
+    XCTAssertTrue(actions.contains(.cursorMoved))
+    XCTAssertFalse(actions.contains(where: {
+      if case .exitCopyMode = $0 { return true } else { return false }
+    }))
+    XCTAssertEqual(state.cursorCol, expectedCol)
+  }
+
   func test_line_mode_yanks_whole_line() {
     var (state, reader) = makeState(lines: ["first line", "", "  second  "])
     _ = simulate(&state, reader: reader, keys: "Y")

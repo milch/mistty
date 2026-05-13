@@ -288,6 +288,7 @@ struct MisttyConfig: Sendable, Equatable {
           switch ua {
           case "open": config.copyModeHints.uppercaseAction = .open
           case "copy": config.copyModeHints.uppercaseAction = .copy
+          case "cursor": config.copyModeHints.uppercaseAction = .cursor
           default: break
           }
         }
@@ -530,7 +531,12 @@ struct MisttyConfig: Sendable, Equatable {
       lines.append("")
       lines.append("[copy_mode.hints]")
       lines.append("alphabet = \"\(tomlEscape(copyModeHints.alphabet))\"")
-      let ua = copyModeHints.uppercaseAction == .open ? "open" : "copy"
+      let ua: String
+      switch copyModeHints.uppercaseAction {
+      case .open: ua = "open"
+      case .copy: ua = "copy"
+      case .cursor: ua = "cursor"
+      }
       lines.append("uppercase_action = \"\(ua)\"")
     }
     if ui != UIConfig() {

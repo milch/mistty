@@ -106,7 +106,7 @@ struct CopyModeState {
         // viewport scrolls and the hint overlay re-scans.
         return handleNormalKey(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
       }
-      return handleHintKey(key: key)
+      return handleHintKey(key: key, keyCode: keyCode, modifiers: modifiers)
     }
 
     // Escape
@@ -374,6 +374,13 @@ struct CopyModeState {
     case "Y":
       if isSelecting { return [] }
       return [.enterHintMode(.copy, .lines), .requestHintScan]
+    // `c` jumps the cursor to a hinted label without copying or opening,
+    // staying in copy mode so the user can start a visual selection from
+    // the new position. Skipped while a selection is live so the key
+    // doesn't blow away an in-progress visual.
+    case "c":
+      if isSelecting { return [] }
+      return [.enterHintMode(.cursor, .patterns), .requestHintScan]
 
     default:
       return []
@@ -634,6 +641,15 @@ struct CopyModeState {
     hint = h
   }
 
+  /// Switch the hint action without leaving hint mode. Bound to the
+  /// digit keys (1 / 2 / 3) inside hint mode so the user can flip from
+  /// the entry-key default without re-entering.
+  mutating func setHintAction(_ action: HintAction) {
+    guard var h = hint else { return }
+    h.action = action
+    hint = h
+  }
+
   /// Cycle hint filter in priority order (highest first), skipping kinds with zero matches.
   mutating func cycleHintFilter() {
     guard var h = hint, h.source == .patterns else { return }
@@ -652,8 +668,30 @@ struct CopyModeState {
     }
   }
 
-  private mutating func handleHintKey(key: Character) -> [CopyModeAction] {
-    // Tab cycles filter (patterns source only).
+  private mutating func handleHintKey(
+    key: Character,
+    keyCode: UInt16 = 0,
+    modifiers: NSEvent.ModifierFlags = []
+  ) -> [CopyModeAction] {
+    // Direct action selectors. A shift-based cycle would fight the toast's
+    // shift-held preview ("HINT (open · all)" while shift is down), so the
+    // user gets explicit number keys instead. Digits aren't part of the
+    // default hint alphabet so they can't collide with labels.
+    switch key {
+    case "1":
+      setHintAction(.copy)
+      return [.cursorMoved]
+    case "2":
+      setHintAction(.open)
+      return [.cursorMoved]
+    case "3":
+      setHintAction(.cursor)
+      return [.cursorMoved]
+    default:
+      break
+    }
+
+    // Tab cycles match-kind filter (patterns source only).
     if key == "\t" {
       guard hint?.source == .patterns else { return [] }
       cycleHintFilter()
@@ -697,12 +735,25 @@ struct CopyModeState {
     subMode = .normal
     hint = nil
 
-    let emitted: CopyModeAction
     switch action {
-    case .copy: emitted = .copyText(match.text)
-    case .open: emitted = .openItem(match.text)
+    case .copy:
+      return [.copyText(match.text), .exitHintMode, .exitCopyMode]
+    case .open:
+      return [.openItem(match.text), .exitHintMode, .exitCopyMode]
+    case .cursor:
+      cursorRow = clampRow(match.range.startRow)
+      cursorCol = clampCol(match.range.startCol)
+      desiredCol = cursorCol
+      return [.cursorMoved, .exitHintMode]
     }
-    return [emitted, .exitHintMode, .exitCopyMode]
+  }
+
+  private func clampRow(_ row: Int) -> Int {
+    min(max(row, 0), max(rows - 1, 0))
+  }
+
+  private func clampCol(_ col: Int) -> Int {
+    min(max(col, 0), max(cols - 1, 0))
   }
 
   private mutating func exitHintCleanly() -> [CopyModeAction] {

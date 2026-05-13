@@ -86,9 +86,13 @@ default_command = "ssh"
 alphabet = "asdfghjkl"
 
 # Action triggered by uppercase hint letters. Lowercase triggers the other.
-# Options: "open" | "copy"
-#   "open" → uppercase opens URL/file, lowercase copies to clipboard
-#   "copy" → uppercase copies, lowercase opens
+# Options: "open" | "copy" | "cursor"
+#   "open"   → uppercase opens URL/file, lowercase copies to clipboard
+#   "copy"   → uppercase copies, lowercase opens
+#   "cursor" → uppercase jumps the copy-mode cursor to the label and stays
+#              in copy mode (handy as a tmux-thumbs-style jump primitive).
+#              From copy mode, `c` enters cursor-hint mode directly without
+#              having to swap via uppercase.
 uppercase_action = "open"
 
 # ─── Window chrome ───────────────────────────────────────────────────────────

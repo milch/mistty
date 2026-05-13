@@ -9,6 +9,8 @@ enum ShortcutAction: String, CaseIterable, Hashable {
   case windowMode           = "window_mode"
   case copyMode             = "copy_mode"
   case yankHints            = "yank_hints"
+  case yankHintsOpen        = "yank_hints_open"
+  case yankHintsCursor      = "yank_hints_cursor"
   case sessionManager       = "session_manager"
   case toggleSidebar        = "toggle_sidebar"
   case toggleTabBar         = "toggle_tab_bar"
@@ -38,6 +40,8 @@ extension ShortcutAction {
     .windowMode:           [Chord("cmd+x")!],
     .copyMode:             [Chord("cmd+shift+c")!],
     .yankHints:            [Chord("cmd+shift+y")!],
+    .yankHintsOpen:        [Chord("cmd+shift+o")!],
+    .yankHintsCursor:      [Chord("cmd+ctrl+y")!],
     .sessionManager:       [Chord("cmd+j")!],
     .toggleSidebar:        [Chord("cmd+s")!],
     .toggleTabBar:         [Chord("cmd+shift+b")!],
@@ -92,6 +96,8 @@ extension ShortcutAction {
     case .windowMode:           return .misttyWindowMode
     case .copyMode:             return .misttyCopyMode
     case .yankHints:            return .misttyYankHints
+    case .yankHintsOpen:        return .misttyYankHintsOpen
+    case .yankHintsCursor:      return .misttyYankHintsCursor
     case .sessionManager:       return .misttySessionManager
     case .toggleSidebar:        return .misttyToggleSidebar
     case .toggleTabBar:         return .misttyToggleTabBar

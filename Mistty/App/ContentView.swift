@@ -15,6 +15,7 @@ struct ContentView: View {
   @State private var windowModeMonitor: Any?
   @State private var previousActiveTab: MisttyTab?
   @State private var copyModeMonitor: Any?
+  @State private var hintModifierMonitor: Any?
   @State private var ctrlNavMonitor: Any?
   @State private var shortcutMonitor: ShortcutMonitor?
 
@@ -67,7 +68,7 @@ struct ContentView: View {
   }
 
   private var contentWithNotifications: some View {
-    contentWithOverlays
+    contentWithYankNotifications
       .onReceive(NotificationCenter.default.publisher(for: .misttyPopupToggle)) { notification in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handlePopupToggle(notification)
@@ -83,10 +84,6 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .misttyCopyMode)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handleCopyMode()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHints)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleYankHints()
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyScrollChanged)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
@@ -166,6 +163,24 @@ struct ContentView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .ghosttyCloseSurface)) { notification in
         handleCloseSurface(notification)
+      }
+  }
+
+  /// Three closely-related notifications, split out so the type-checker
+  /// doesn't choke on the parent's `.onReceive` chain.
+  private var contentWithYankNotifications: some View {
+    contentWithOverlays
+      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHints)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+        handleYankHints(action: .copy)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHintsOpen)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+        handleYankHints(action: .open)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHintsCursor)) { _ in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+        handleYankHints(action: .cursor)
       }
   }
 
@@ -339,6 +354,9 @@ struct ContentView: View {
       if copyModeMonitor == nil {
         installCopyModeMonitor()
       }
+      if hintModifierMonitor == nil {
+        installHintModifierMonitor()
+      }
     }
     .onDisappear {
       DebugLog.shared.log(
@@ -357,6 +375,7 @@ struct ContentView: View {
       removeKeyMonitor()
       removeWindowModeMonitor()
       removeCopyModeMonitor()
+      removeHintModifierMonitor()
       removeCtrlNavMonitor()
       removeShortcutMonitor()
       state.activeSession?.activeTab?.windowModeState = .inactive
@@ -552,7 +571,7 @@ struct ContentView: View {
     }
   }
 
-  private func handleYankHints() {
+  private func handleYankHints(action: HintAction = .copy) {
     if state.activeSession?.activeTab?.copyModeState?.isHinting == true { return }
     guard let tab = state.activeSession?.activeTab else { return }
     if !tab.isCopyModeActive {
@@ -561,7 +580,7 @@ struct ContentView: View {
     guard var copyState = state.activeSession?.activeTab?.copyModeState else { return }
     let config = MisttyConfig.load()
     copyState.applyHintEntry(
-      action: .copy,
+      action: action,
       source: .patterns,
       uppercaseAction: config.copyModeHints.uppercaseAction,
       alphabet: config.copyModeHints.alphabet,
@@ -1033,6 +1052,36 @@ struct ContentView: View {
       _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
     }
     active?.copyModeState = nil
+  }
+
+  /// Tracks the physical shift key while hint mode is active so the toast
+  /// can preview the swapped action (uppercase_action) before the user
+  /// types a label. Doesn't affect `executeHint`'s action selection — that
+  /// still keys off the typed letter's case.
+  private func installHintModifierMonitor() {
+    hintModifierMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) {
+      [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
+      guard let pane = state.activeSession?.activeTab?.activePane,
+            var copyState = pane.copyModeState,
+            copyState.isHinting,
+            var hint = copyState.hint
+      else { return event }
+      let shiftHeld = event.modifierFlags.contains(.shift)
+      if hint.shiftHeld != shiftHeld {
+        hint.shiftHeld = shiftHeld
+        copyState.hint = hint
+        pane.copyModeState = copyState
+      }
+      return event
+    }
+  }
+
+  private func removeHintModifierMonitor() {
+    if let monitor = hintModifierMonitor {
+      NSEvent.removeMonitor(monitor)
+      hintModifierMonitor = nil
+    }
   }
 
   private func installCopyModeMonitor() {

@@ -233,8 +233,22 @@ struct MisttyApp: App {
 
         kbShortcut(
           .yankHints,
-          on: Button("Yank Hints") {
+          on: Button("Yank Hints (Copy)") {
             NotificationCenter.default.post(name: .misttyYankHints, object: nil)
+          }
+        )
+
+        kbShortcut(
+          .yankHintsOpen,
+          on: Button("Yank Hints (Open)") {
+            NotificationCenter.default.post(name: .misttyYankHintsOpen, object: nil)
+          }
+        )
+
+        kbShortcut(
+          .yankHintsCursor,
+          on: Button("Yank Hints (Cursor)") {
+            NotificationCenter.default.post(name: .misttyYankHintsCursor, object: nil)
           }
         )
 
@@ -427,6 +441,8 @@ extension Notification.Name {
   static let misttyWindowMode = Notification.Name("misttyWindowMode")
   static let misttyCopyMode = Notification.Name("misttyCopyMode")
   static let misttyYankHints = Notification.Name("misttyYankHints")
+  static let misttyYankHintsOpen = Notification.Name("misttyYankHintsOpen")
+  static let misttyYankHintsCursor = Notification.Name("misttyYankHintsCursor")
   static let misttyPopupToggle = Notification.Name("misttyPopupToggle")
   static let misttyFocusTabByIndex = Notification.Name("misttyFocusTabByIndex")
   static let misttyFocusSessionByIndex = Notification.Name("misttyFocusSessionByIndex")

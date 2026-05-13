@@ -54,6 +54,10 @@ struct ContinuationState: Equatable {
 enum HintAction: Equatable, Sendable {
   case copy
   case open
+  /// Move the copy-mode cursor to the picked label and stay in copy mode.
+  /// Useful as a jump primitive — pick a label, then start a visual
+  /// selection from there with `v`/`V`/`Ctrl-v`.
+  case cursor
 }
 
 enum HintSource: Equatable, Sendable {
@@ -92,7 +96,7 @@ struct HintMatch: Equatable {
 }
 
 struct HintState: Equatable {
-  let action: HintAction           // default action from entry key
+  var action: HintAction           // default action; mutable so shift+tab can cycle it
   let source: HintSource
   var allMatches: [HintMatch] = [] // unfiltered detector output
   var matches: [HintMatch]         // filtered & labeled subset (bottom→top, left→right)
@@ -105,6 +109,18 @@ struct HintState: Equatable {
   var enteredDirectly: Bool = false
   /// Active filter. nil = all kinds shown. Tab cycles.
   var filter: HintKind? = nil
+  /// View-state flag set by the host (ContentView's flagsChanged monitor)
+  /// while shift is physically down. Lets the toast/overlay preview the
+  /// swapped action *before* the user picks a label. Has no effect on
+  /// `executeHint` — actual action selection still keys off whether the
+  /// *typed* label letter was uppercase.
+  var shiftHeld: Bool = false
+
+  /// What the user would get if they picked a label right now. Mirrors
+  /// `executeHint`'s `typedUppercase ? uppercaseAction : action` rule.
+  var effectiveAction: HintAction {
+    shiftHeld ? uppercaseAction : action
+  }
 }
 
 enum CopyModeAction: Equatable {

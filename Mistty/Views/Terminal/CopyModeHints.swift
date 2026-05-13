@@ -40,7 +40,13 @@ struct CopyModeHints: View {
     case .visualBlock: return "VISUAL BLOCK"
     case .hint:
       if state.hint?.source == .lines { return "HINT (line)" }
-      let mode = state.hint?.action == .open ? "open" : "copy"
+      let mode: String
+      switch state.hint?.effectiveAction {
+      case .open: mode = "open"
+      case .copy: mode = "copy"
+      case .cursor: mode = "cursor"
+      case .none: mode = "copy"
+      }
       let filter = filterLabel(state.hint?.filter)
       return "HINT (\(mode) · \(filter))"
     case .searchForward, .searchReverse: return "SEARCH"
@@ -53,7 +59,7 @@ struct CopyModeHints: View {
       return [
         ("v/V", "visual"),
         ("/", "search"),
-        ("y/o", "hints"),
+        ("y/o/c", "hints"),
         ("Y", "line hints"),
         ("g?", "help"),
         ("esc", "exit"),
@@ -66,7 +72,8 @@ struct CopyModeHints: View {
     case .hint:
       var rows: [(key: String, label: String)] = [
         ("a-z", "pick hint"),
-        ("A-Z", "swap copy/open"),
+        ("A-Z", "swap action"),
+        ("1/2/3", "copy/open/cursor"),
       ]
       if state.hint?.source == .patterns {
         rows.append(("tab", "filter kind"))

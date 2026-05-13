@@ -50,7 +50,9 @@ struct CopyModeHelpOverlay: View {
     ("y", "yank hints (copy)"),
     ("o", "yank hints (open)"),
     ("Y", "line hints"),
-    ("A-Z", "swap copy/open"),
+    ("c", "cursor to hint"),
+    ("A-Z", "swap action"),
+    ("1/2/3", "copy/open/cursor"),
     ("Esc/misc", "exit hints"),
   ]
 
