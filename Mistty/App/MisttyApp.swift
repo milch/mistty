@@ -268,6 +268,13 @@ struct MisttyApp: App {
           }
         )
 
+        kbShortcut(
+          .reparentSession,
+          on: Button("Change Session Directory…") {
+            NotificationCenter.default.post(name: .misttyReparentSession, object: nil)
+          }
+        )
+
         Divider()
 
         ForEach(1...9, id: \.self) { index in
@@ -438,6 +445,7 @@ extension Notification.Name {
   static let misttyToggleTabBar = Notification.Name("misttyToggleTabBar")
   static let misttyRenameTab = Notification.Name("misttyRenameTab")
   static let misttyRenameSession = Notification.Name("misttyRenameSession")
+  static let misttyReparentSession = Notification.Name("misttyReparentSession")
   static let misttyWindowMode = Notification.Name("misttyWindowMode")
   static let misttyCopyMode = Notification.Name("misttyCopyMode")
   static let misttyYankHints = Notification.Name("misttyYankHints")

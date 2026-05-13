@@ -22,6 +22,7 @@ enum ShortcutAction: String, CaseIterable, Hashable {
   case reopenClosedWindow   = "reopen_closed_window"
   case renameTab            = "rename_tab"
   case renameSession        = "rename_session"
+  case reparentSession      = "reparent_session"
   case nextTab              = "next_tab"
   case prevTab              = "prev_tab"
   case nextSession          = "next_session"
@@ -53,6 +54,7 @@ extension ShortcutAction {
     .reopenClosedWindow:   [Chord("cmd+shift+t")!],
     .renameTab:            [Chord("cmd+shift+r")!],
     .renameSession:        [Chord("cmd+opt+r")!],
+    .reparentSession:      [Chord("cmd+ctrl+r")!],
     .nextTab:              [Chord("cmd+]")!, Chord("cmd+down")!],
     .prevTab:              [Chord("cmd+[")!, Chord("cmd+up")!],
     .nextSession:          [Chord("cmd+opt+down")!, Chord("cmd+shift+]")!],
@@ -109,6 +111,7 @@ extension ShortcutAction {
     case .reopenClosedWindow:   return .misttyReopenClosedWindow
     case .renameTab:            return .misttyRenameTab
     case .renameSession:        return .misttyRenameSession
+    case .reparentSession:      return .misttyReparentSession
     case .nextTab:              return .misttyNextTab
     case .prevTab:              return .misttyPrevTab
     case .nextSession:          return .misttyNextSession

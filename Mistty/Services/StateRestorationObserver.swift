@@ -43,6 +43,7 @@ final class StateRestorationObserver {
         h ^= session.id ^ session.name.hashValue
         h ^= session.customName?.hashValue ?? 0
         h ^= session.sshCommand?.hashValue ?? 0
+        h ^= session.directory.absoluteString.hashValue
         h ^= session.tabs.count
         if let activeTab = session.activeTab { h ^= activeTab.id }
         for tab in session.tabs {

@@ -121,6 +121,17 @@ struct SessionRowView: View {
         if isEditing { return }
         state.activeSession = session
       }
+      .contextMenu {
+        Button("Rename…") { beginEditing() }
+        Button("Change Directory…") {
+          state.activeSession = session
+          NotificationCenter.default.post(
+            name: .misttyReparentSession,
+            object: nil,
+            userInfo: ["sessionID": session.id]
+          )
+        }
+      }
       .onReceive(NotificationCenter.default.publisher(for: .misttyRenameSession)) { _ in
         // Only the active session opens its inline editor on the shortcut.
         guard isActive else { return }

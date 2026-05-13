@@ -242,6 +242,8 @@ final class IPCListener {
       service.getSession(id: int("id"), reply: reply)
     case "closeSession":
       service.closeSession(id: int("id"), reply: reply)
+    case "reparentSession":
+      service.reparentSession(id: int("id"), directory: str("directory") ?? "", reply: reply)
 
     // Tabs
     case "createTab":

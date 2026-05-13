@@ -12,6 +12,9 @@ struct ContentView: View {
   @State var showingSessionManager = false
   @State private var sessionManagerVM: SessionManagerViewModel?
   @State private var eventMonitor: Any?
+  @State private var directoryPickerVM: DirectoryPickerViewModel?
+  @State private var directoryPickerMonitor: Any?
+  @State private var reparentTargetSessionID: Int?
   @State private var windowModeMonitor: Any?
   @State private var previousActiveTab: MisttyTab?
   @State private var copyModeMonitor: Any?
@@ -200,6 +203,7 @@ struct ContentView: View {
   private var contentWithOverlays: some View {
     mainContent
       .overlay { sessionManagerOverlay }
+      .overlay { directoryPickerOverlay }
       .overlay { popupOverlay }
       .onChange(of: showingSessionManager) { _, isShowing in
         if isShowing {
@@ -246,6 +250,16 @@ struct ContentView: View {
       .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         showingSessionManager = true
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .misttyReparentSession)) { notification in
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+        let explicitID = (notification.userInfo?["sessionID"] as? Int)
+        let targetID = explicitID ?? state.activeSession?.id
+        guard let targetID,
+              let session = state.sessions.first(where: { $0.id == targetID })
+        else { return }
+        reparentTargetSessionID = targetID
+        directoryPickerVM = DirectoryPickerViewModel(excluding: [session.directory])
       }
       .onReceive(NotificationCenter.default.publisher(for: .misttyToggleTabBar)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
@@ -410,6 +424,76 @@ struct ContentView: View {
         vm: vm,
         isPresented: $showingSessionManager
       )
+    }
+  }
+
+  @ViewBuilder
+  private var directoryPickerOverlay: some View {
+    if let vm = directoryPickerVM, let targetID = reparentTargetSessionID,
+       let session = state.sessions.first(where: { $0.id == targetID })
+    {
+      Color.black.opacity(0.3)
+        .ignoresSafeArea()
+        .onTapGesture { dismissDirectoryPicker() }
+
+      DirectoryPickerView(
+        vm: vm,
+        title: "REPARENT SESSION · \(session.sidebarLabel)",
+        isPresented: Binding(
+          get: { directoryPickerVM != nil },
+          set: { isPresented in if !isPresented { dismissDirectoryPicker() } }
+        ),
+        onConfirm: { url in
+          session.setDirectory(url)
+        }
+      )
+      .onAppear { installDirectoryPickerMonitor(vm: vm, session: session) }
+      .onDisappear { removeDirectoryPickerMonitor() }
+    }
+  }
+
+  private func dismissDirectoryPicker() {
+    directoryPickerVM = nil
+    reparentTargetSessionID = nil
+    removeDirectoryPickerMonitor()
+    returnFocusToActivePane()
+  }
+
+  private func installDirectoryPickerMonitor(vm: DirectoryPickerViewModel, session: MisttySession) {
+    directoryPickerMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+      [windowsStore, state] event in
+      guard windowsStore.isActiveTerminalWindow(state: state) else { return event }
+      switch event.keyCode {
+      case 53:  // Escape
+        dismissDirectoryPicker()
+        return nil
+      case 36:  // Return
+        if let url = vm.confirmSelection() {
+          session.setDirectory(url)
+        }
+        dismissDirectoryPicker()
+        return nil
+      case 126:  // Up
+        vm.moveUp()
+        return nil
+      case 125:  // Down
+        vm.moveDown()
+        return nil
+      default:
+        break
+      }
+      if event.modifierFlags.contains(.control) {
+        if event.charactersIgnoringModifiers == "j" { vm.moveDown(); return nil }
+        if event.charactersIgnoringModifiers == "k" { vm.moveUp(); return nil }
+      }
+      return event
+    }
+  }
+
+  private func removeDirectoryPickerMonitor() {
+    if let monitor = directoryPickerMonitor {
+      NSEvent.removeMonitor(monitor)
+      directoryPickerMonitor = nil
     }
   }
 

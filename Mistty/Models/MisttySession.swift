@@ -6,7 +6,12 @@ final class MisttySession: Identifiable {
   let id: Int
   var name: String
   var customName: String?
-  let directory: URL
+  /// New tabs/panes inherit this. Mutable so users can "reparent" the
+  /// session (CLI `session reparent`, sidebar context menu → Change
+  /// Directory…). When `customName` is nil and `name` still matches the
+  /// previous directory's basename, `setDirectory(_:)` also re-syncs
+  /// `name` so the sidebar label tracks the new location.
+  private(set) var directory: URL
   var sshCommand: String?
   /// Set by `WindowState.activeSession.didSet`; only read at sort time in the
   /// session manager. No SwiftUI view observes it, so opt out of
@@ -49,6 +54,18 @@ final class MisttySession: Identifiable {
       id: tabIDGenerator(), directory: directory, exec: exec, paneIDGenerator: paneIDGenerator)
     tabs.append(tab)
     activeTab = tab
+  }
+
+  /// Change the session's directory. Only the session's own field and
+  /// (when it was tracking the basename) `name` move — existing panes
+  /// keep their live CWD. Subsequent `addTab` calls pick up the new
+  /// directory.
+  func setDirectory(_ newDirectory: URL) {
+    let oldBasename = directory.lastPathComponent
+    directory = newDirectory
+    if customName == nil && name == oldBasename {
+      name = newDirectory.lastPathComponent
+    }
   }
 
   func addTabWithPane(_ pane: MisttyPane) {

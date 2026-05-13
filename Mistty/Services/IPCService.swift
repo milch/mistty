@@ -129,6 +129,28 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
     }
   }
 
+  func reparentSession(
+    id: Int, directory: String, reply: @escaping (Data?, Error?) -> Void
+  ) {
+    let reply = Reply(handler: reply)
+    Task { @MainActor in
+      guard let resolved = self.windowsStore.session(byId: id) else {
+        reply(nil, MisttyIPC.error(.entityNotFound, "Session \(id) not found"))
+        return
+      }
+      let url = URL(fileURLWithPath: (directory as NSString).expandingTildeInPath)
+      var isDir: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+        isDir.boolValue
+      else {
+        reply(nil, MisttyIPC.error(.invalidArgument, "Directory does not exist: \(url.path)"))
+        return
+      }
+      resolved.session.setDirectory(url)
+      reply(self.encode(self.sessionResponse(resolved.session, windowID: resolved.window.id)), nil)
+    }
+  }
+
   // MARK: - Tabs
 
   func createTab(

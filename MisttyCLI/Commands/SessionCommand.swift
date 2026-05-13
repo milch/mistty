@@ -11,6 +11,7 @@ struct SessionCommand: ParsableCommand {
             List.self,
             Get.self,
             Close.self,
+            Reparent.self,
         ]
     )
 
@@ -97,6 +98,37 @@ struct SessionCommand: ParsableCommand {
             let data: Data
             do {
                 data = try client.call("getSession", ["id": id])
+            } catch {
+                formatter.printError(error.localizedDescription)
+                Foundation.exit(1)
+            }
+
+            let session = try JSONDecoder().decode(SessionResponse.self, from: data)
+            formatter.print(session)
+        }
+    }
+
+    struct Reparent: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Change the session's working directory. New tabs inherit it; existing panes keep their live CWD.")
+
+        @Argument(help: "Session ID")
+        var id: Int
+
+        @Option(name: .long, help: "New working directory")
+        var directory: String
+
+        @Option(name: .long, help: "Choose the output format")
+        var format: OutputFormat = .auto
+
+        func run() throws {
+            let formatter = OutputFormatter(format: format)
+            let client = IPCClient()
+            try client.ensureReachable()
+
+            let data: Data
+            do {
+                data = try client.call("reparentSession", ["id": id, "directory": directory])
             } catch {
                 formatter.printError(error.localizedDescription)
                 Foundation.exit(1)

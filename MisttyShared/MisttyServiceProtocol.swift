@@ -7,6 +7,7 @@ public protocol MisttyServiceProtocol {
     func listSessions(reply: @escaping (Data?, Error?) -> Void)
     func getSession(id: Int, reply: @escaping (Data?, Error?) -> Void)
     func closeSession(id: Int, reply: @escaping (Data?, Error?) -> Void)
+    func reparentSession(id: Int, directory: String, reply: @escaping (Data?, Error?) -> Void)
 
     // MARK: - Tabs
 
