@@ -49,6 +49,15 @@ enum ForegroundProcessResolver {
     "bash", "dash", "fish", "ksh", "login", "nu", "sh", "tcsh", "zsh",
   ]
 
+  /// Network-shell wrappers. When one of these owns the foreground pgroup
+  /// the user is in a remote session; any OSC-title-based detection of a
+  /// remote program (e.g. nvim) tells us nothing about what's running
+  /// locally, and features that assume local control (smart-splits
+  /// Ctrl-hjkl passthrough) should be skipped.
+  static let remoteShellExecutables: Set<String> = [
+    "ssh", "mosh-client", "et",
+  ]
+
   /// Pure dispatch logic; all I/O lives in the probe closures.
   ///
   /// Strategy: ask the tty which *process group* has the foreground

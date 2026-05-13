@@ -1347,8 +1347,11 @@ struct ContentView: View {
         let pane = tab.activePane
       else { return event }
 
-      // If running neovim, let the keypress through for smart-splits
-      if pane.isRunningNeovim { return event }
+      // If running neovim locally, let the keypress through for smart-splits.
+      // Over ssh/et/mosh the OSC title can read "nvim" even though we can't
+      // know whether the remote has vim-tmux-navigator wired up, so we'd
+      // rather keep local pane navigation working there.
+      if pane.isRunningNeovim && !pane.isInRemoteShell { return event }
 
       // Navigate between MistTY panes — only consume if navigation succeeds
       if let target = tab.layout.adjacentPane(from: pane, direction: direction) {

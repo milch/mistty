@@ -65,6 +65,18 @@ final class MisttyPane: Identifiable {
     return neovimNames.contains(where: { title == $0 || title.hasPrefix($0 + " ") })
   }
 
+  /// True when the local foreground process is a network-shell wrapper
+  /// (ssh / et / mosh-client). The OSC-driven `processTitle` field can
+  /// reflect a remote program's title — a remote nvim shows up as
+  /// `processTitle = "nvim"` locally, which would make smart-splits
+  /// pass Ctrl-hjkl through to ssh blindly. Gating the passthrough on
+  /// this property keeps remote nvim sessions navigating Mistty's local
+  /// panes instead.
+  var isInRemoteShell: Bool {
+    guard let fp = ForegroundProcessResolver.current(for: self) else { return false }
+    return ForegroundProcessResolver.remoteShellExecutables.contains(fp.executable)
+  }
+
   init(id: Int) {
     self.id = id
   }
