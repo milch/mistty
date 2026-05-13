@@ -82,7 +82,8 @@ default_command = "ssh"
 # ─── Copy mode hints ─────────────────────────────────────────────────────────
 [copy_mode.hints]
 # Letters used to label hints. Order matters — earlier letters are assigned first.
-# Pick keys that are easy to reach on your layout.
+# Pick keys that are easy to reach on your layout. Avoid digits 1/2/3 in
+# the alphabet — those swap the active hint action while hint mode is open.
 alphabet = "asdfghjkl"
 
 # Action triggered by uppercase hint letters. Lowercase triggers the other.

@@ -106,7 +106,7 @@ struct CopyModeState {
         // viewport scrolls and the hint overlay re-scans.
         return handleNormalKey(key: key, keyCode: keyCode, modifiers: modifiers, lineReader: lineReader)
       }
-      return handleHintKey(key: key, keyCode: keyCode, modifiers: modifiers)
+      return handleHintKey(key: key, modifiers: modifiers)
     }
 
     // Escape
@@ -670,25 +670,28 @@ struct CopyModeState {
 
   private mutating func handleHintKey(
     key: Character,
-    keyCode: UInt16 = 0,
     modifiers: NSEvent.ModifierFlags = []
   ) -> [CopyModeAction] {
     // Direct action selectors. A shift-based cycle would fight the toast's
     // shift-held preview ("HINT (open · all)" while shift is down), so the
     // user gets explicit number keys instead. Digits aren't part of the
-    // default hint alphabet so they can't collide with labels.
-    switch key {
-    case "1":
-      setHintAction(.copy)
-      return [.cursorMoved]
-    case "2":
-      setHintAction(.open)
-      return [.cursorMoved]
-    case "3":
-      setHintAction(.cursor)
-      return [.cursorMoved]
-    default:
-      break
+    // default hint alphabet so they can't collide with labels. Require
+    // an unmodified press so Shift+1 (which produces "!" on a US layout
+    // via `charactersIgnoringModifiers`) doesn't accidentally swap.
+    if modifiers.isEmpty {
+      switch key {
+      case "1":
+        setHintAction(.copy)
+        return [.cursorMoved]
+      case "2":
+        setHintAction(.open)
+        return [.cursorMoved]
+      case "3":
+        setHintAction(.cursor)
+        return [.cursorMoved]
+      default:
+        break
+      }
     }
 
     // Tab cycles match-kind filter (patterns source only).

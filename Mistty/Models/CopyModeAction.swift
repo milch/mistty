@@ -96,7 +96,7 @@ struct HintMatch: Equatable {
 }
 
 struct HintState: Equatable {
-  var action: HintAction           // default action; mutable so shift+tab can cycle it
+  var action: HintAction
   let source: HintSource
   var allMatches: [HintMatch] = [] // unfiltered detector output
   var matches: [HintMatch]         // filtered & labeled subset (bottom→top, left→right)

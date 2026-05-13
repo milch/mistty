@@ -68,7 +68,7 @@ struct ContentView: View {
   }
 
   private var contentWithNotifications: some View {
-    contentWithYankNotifications
+    contentWithHintEntryNotifications
       .onReceive(NotificationCenter.default.publisher(for: .misttyPopupToggle)) { notification in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         handlePopupToggle(notification)
@@ -143,6 +143,19 @@ struct ContentView: View {
         if let popup = state.activeSession?.activePopup, popup.isVisible {
           popup.pane.focusKeyboardInput()
         }
+        // Local NSEvent monitors don't fire while Mistty is in the
+        // background, so a shift release outside the app would otherwise
+        // leave `hint.shiftHeld == true` and freeze the toast preview on
+        // the uppercase action. Reconcile from `NSEvent.modifierFlags`
+        // (class property — reports the live OS state regardless of focus).
+        reconcileHintShiftHeld()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+        // We can't observe key state while in the background; assume the
+        // user will have released shift by the time they come back, and
+        // reconcile for sure on the next didBecomeActive.
+        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
+        clearHintShiftHeld()
       }
       .onChange(of: state.activeSession?.activeTab?.id) { _, _ in
         state.activeSession?.activeTab?.hasBell = false
@@ -168,7 +181,7 @@ struct ContentView: View {
 
   /// Three closely-related notifications, split out so the type-checker
   /// doesn't choke on the parent's `.onReceive` chain.
-  private var contentWithYankNotifications: some View {
+  private var contentWithHintEntryNotifications: some View {
     contentWithOverlays
       .onReceive(NotificationCenter.default.publisher(for: .misttyYankHints)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
@@ -584,7 +597,11 @@ struct ContentView: View {
       source: .patterns,
       uppercaseAction: config.copyModeHints.uppercaseAction,
       alphabet: config.copyModeHints.alphabet,
-      enteredDirectly: true
+      // Cursor's whole point is "land at a label, then keep working in
+      // copy mode" — kicking the user out on Escape would defeat that.
+      // Copy/open finish by yanking or opening anyway, so the old
+      // exit-on-cancel behaviour stays for those.
+      enteredDirectly: action != .cursor
     )
     populateHintMatches(&copyState, source: .patterns)
     state.activeSession?.activeTab?.copyModeState = copyState
@@ -1082,6 +1099,35 @@ struct ContentView: View {
       NSEvent.removeMonitor(monitor)
       hintModifierMonitor = nil
     }
+  }
+
+  /// Sync `hint.shiftHeld` to the live OS modifier state. Used on
+  /// app-activation transitions where the local flagsChanged monitor
+  /// would have missed a shift release that happened in the background.
+  private func reconcileHintShiftHeld() {
+    guard let pane = state.activeSession?.activeTab?.activePane,
+          var copyState = pane.copyModeState,
+          copyState.isHinting,
+          var hint = copyState.hint
+    else { return }
+    let shiftHeld = NSEvent.modifierFlags.contains(.shift)
+    if hint.shiftHeld != shiftHeld {
+      hint.shiftHeld = shiftHeld
+      copyState.hint = hint
+      pane.copyModeState = copyState
+    }
+  }
+
+  private func clearHintShiftHeld() {
+    guard let pane = state.activeSession?.activeTab?.activePane,
+          var copyState = pane.copyModeState,
+          copyState.isHinting,
+          var hint = copyState.hint,
+          hint.shiftHeld
+    else { return }
+    hint.shiftHeld = false
+    copyState.hint = hint
+    pane.copyModeState = copyState
   }
 
   private func installCopyModeMonitor() {
