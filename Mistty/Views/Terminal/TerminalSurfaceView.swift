@@ -73,6 +73,18 @@ final class TerminalSurfaceView: NSView {
     super.init(frame: frame)
     wantsLayer = true
 
+    // Catch screen changes that don't fire `viewDidChangeBackingProperties`.
+    // AppKit can miss the latter on sleep/wake with a display swap, or when a
+    // window migrates between monitors with the same point dimensions but a
+    // different backing scale. See ghostty-org/ghostty#2731. The handler
+    // re-runs the backing-properties path which is what actually pushes the
+    // new scale to libghostty and the CA layer.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(windowDidChangeScreen(_:)),
+      name: NSWindow.didChangeScreenNotification,
+      object: nil)
+
     if Self.skipSurfaceCreation {
       return
     }
@@ -192,6 +204,7 @@ final class TerminalSurfaceView: NSView {
   required init?(coder: NSCoder) { fatalError("Not implemented") }
 
   deinit {
+    NotificationCenter.default.removeObserver(self)
     if let surface { ghostty_surface_free(surface) }
   }
 
@@ -317,8 +330,21 @@ final class TerminalSurfaceView: NSView {
   /// screen moves with identical point dimensions don't resize.
   override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
-    guard let surface, let window else { return }
+    guard let window else { return }
     let scale = window.backingScaleFactor
+
+    // Sync the CA layer's contentsScale to the new backing scale. Without
+    // this, the compositor scales the libghostty-rendered Metal contents on
+    // top of our own scaling, producing wrong-sized / blurry output after a
+    // display change (most visibly after sleep+monitor-unplug). Per Apple's
+    // HiDPI guidelines we wrap it in a CATransaction with actions disabled
+    // so AppKit doesn't animate the resulting layer-scale jump.
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    layer?.contentsScale = scale
+    CATransaction.commit()
+
+    guard let surface else { return }
     let w = UInt32(bounds.width * scale)
     let h = UInt32(bounds.height * scale)
     ghostty_surface_set_size(surface, w, h)
@@ -327,6 +353,20 @@ final class TerminalSurfaceView: NSView {
       "scale",
       "viewDidChangeBackingProperties: scale=\(scale) size=\(w)x\(h)px bounds=\(bounds.size)"
     )
+  }
+
+  /// `viewDidChangeBackingProperties` is unreliable across sleep/wake and
+  /// some monitor-swap paths — AppKit can skip it when the window's screen
+  /// changes without its point dimensions changing. The screen-change
+  /// notification fires in those cases, so re-run the backing-properties
+  /// path async (the dispatch gives AppKit time to settle the new screen on
+  /// the window before we read `backingScaleFactor`).
+  @objc private func windowDidChangeScreen(_ notification: Notification) {
+    guard let window = self.window else { return }
+    guard let object = notification.object as? NSWindow, object == window else { return }
+    DispatchQueue.main.async { [weak self] in
+      self?.viewDidChangeBackingProperties()
+    }
   }
 
   // MARK: - Keyboard Input
