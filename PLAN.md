@@ -49,7 +49,7 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 ### Misc & Bugs
 
-- Tabs need to be movable too (both in session & move between sessions?) + Drag & Drop
+- Cross-session tab move (drag a tab from session A into session B's tab list). Intra-session reorder shipped in the tab DnD work — the cross-session case is deferred because it needs the source tab to be detached from session A's `tabs` array and re-inserted into B's, with the pane(s) underneath kept alive. The drop indicator is intentionally suppressed today when hovering over a different session's tabs so the UI doesn't promise something that won't happen.
 - “reparent session” aka set CWD for the session (= new tabs)
 - nvim sessions over SSH/et -> skip for smart-splits navigation
 - Yank mode: we need a way to just put the cursor on a label too

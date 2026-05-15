@@ -87,6 +87,12 @@ final class MisttySession: Identifiable {
     if activeTab?.id == tab.id { activeTab = tabs.last }
   }
 
+  /// Reorder tabs in place. Mirrors `WindowState.moveSessions` and is the
+  /// hook `.onMove` calls when the user drags a sidebar tab row.
+  func moveTabs(from source: IndexSet, to destination: Int) {
+    tabs.move(fromOffsets: source, toOffset: destination)
+  }
+
   func togglePopup(definition: PopupDefinition) {
     // If popup already exists for this definition, toggle visibility
     if let existing = popups.first(where: { $0.definition.name == definition.name }) {
