@@ -362,9 +362,18 @@ run-release worktree="":
       open "$APP"
     fi
 
-# Run tests
+# Run tests. Skips `*BenchmarkTests` suites — those run debug-slow, are
+# high-variance, and the numbers don't reflect release performance.
+# Use `just bench` for those.
 test:
-    swift test
+    swift test --skip Benchmark
+
+# Run benchmarks in release config. Debug numbers are dominated by
+# overflow checks / ARC traffic / no-inlining and don't reflect production
+# performance, so always benchmark in release. Pass a filter to scope to
+# one suite, e.g. `just bench SessionManagerViewModelBenchmarkTests`.
+bench filter="Benchmark":
+    swift test -c release --filter {{filter}}
 
 # Clean build artifacts
 clean:
