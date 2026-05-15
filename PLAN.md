@@ -50,9 +50,6 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 ### Misc & Bugs
 
 - Cross-session tab move (drag a tab from session A into session B's tab list). Intra-session reorder shipped in the tab DnD work — the cross-session case is deferred because it needs the source tab to be detached from session A's `tabs` array and re-inserted into B's, with the pane(s) underneath kept alive. The drop indicator is intentionally suppressed today when hovering over a different session's tabs so the UI doesn't promise something that won't happen.
-- “reparent session” aka set CWD for the session (= new tabs)
-- nvim sessions over SSH/et -> skip for smart-splits navigation
-- Yank mode: we need a way to just put the cursor on a label too
 
 Larger:
 
@@ -122,6 +119,13 @@ Spec: `docs/superpowers/specs/2026-04-27-multi-window-v1-design.md`. Plan: `docs
 - Frecency-based sorting (FrecencyService with time-weighted scoring)
 - Current session hidden in session manager
 
+### Reparent session — change a session's working directory
+
+- `MisttySession.directory` flipped from `let` to `private(set) var` plus a `setDirectory(_:)` method. New tabs/panes inherit the new dir; existing panes keep their live CWD. `setDirectory` also re-syncs `name` when it was tracking the previous directory's basename so the sidebar label tracks the move (customName always wins). `StateRestorationObserver` picks up the new observable read so reparented dirs survive restart
+- Triggers: `cmd+ctrl+r` shortcut, View → Change Session Directory…, sidebar context menu → Change Directory…, CLI `mistty-cli session reparent <id> --directory <path>` (new IPC method `reparentSession`). Context menu carries the target session id via `userInfo["sessionID"]` so right-clicking a non-active row can reparent that specific session
+- UI is a fuzzy-search overlay (`DirectoryPickerView` / `DirectoryPickerViewModel`) instead of a stock `NSOpenPanel`. Same UX as Cmd+J's session manager but filtered to zoxide directories (excluding the session's current dir) plus a synthetic "Create + reparent to …" entry for path-like queries whose parent exists. ↑/↓ + Ctrl-j/k navigate, Tab autocompletes, Enter confirms, Esc cancels. Reuses `FuzzyMatcher`, `FrecencyService`, `HighlightedText`, `FocusableTextField`
+- CLI rejects non-directories and expands `~`
+
 ### Standard terminal functions
 
 - New tab (cmd+t)
@@ -134,6 +138,11 @@ Spec: `docs/superpowers/specs/2026-04-27-multi-window-v1-design.md`. Plan: `docs
 - Collapsible sidebar (cmd+s) with resizable drag handle
 - Bell activity indicator (orange dot) on tabs with background bell
 - Highlights current session and current tab
+- Reorder tabs within a session by dragging in the sidebar. Final wiring is `.onDrag { NSItemProvider(object: NSString) }` + `.onDrop(of: [.utf8PlainText], delegate:)` — `.onMove` / `.draggable` / `.dropDestination` all failed inside the List row (the row's `.onTapGesture` claims the initial touch). Payload is a plain UTF-8 string prefixed `mistty-sidebar-tab:`; a custom UTI got rewritten to `dyn.XXX` through the pasteboard layer and the filter stopped matching
+- Insertion bar (2pt accent) renders at the top or bottom edge of the targeted row based on `DropInfo.location.y` against the row's captured height (via `GeometryReader`). Drop on the lower half of the last row maps to `toOffset == tabs.count`, the SwiftUI-canonical "insert at end" boundary — the older `src < dst ? dst+1 : dst` formula couldn't reach it
+- Indicator state lives on a session-scoped `@Observable SidebarTabDropTracker` rather than per-row `@State`. Hoisting it out makes cleanup reliable: after `performDrop` clears `hoveredTabID`, a trailing `dropUpdated` tick gets short-circuited by an "only mutate if we're already the hovered row" check (impossible with per-row state, which is why the previous attempts left a sticky bar)
+- Cross-session drags suppress the indicator and refuse the drop. `.onDrag` stamps `sidebarDragSourceSessionID` (fileprivate `@MainActor` var) before returning the provider; the drop delegate's `dropEntered`/`dropUpdated`/`performDrop` short-circuit when the source doesn't match the owner session id, with `dropUpdated` returning `DropProposal(operation: .forbidden)`. Cross-session moves themselves are deferred — see PLAN.md
+- Rename / Change Directory… context menu on session rows in the sidebar (right-click)
 
 ### Window mode (cmd+x)
 
@@ -207,6 +216,14 @@ Spec: `docs/superpowers/specs/2026-04-25-copy-mode-yank-and-config-reload-design
 - Tab cycles filter by kind (url, email, uuid, path, hash, ipv4, ipv6, envVar, number, quoted, codeSpan, all), skipping kinds with no matches
 - Re-scans on keyboard paging (Ctrl-U/D/F/B) and mousewheel scroll
 - Config: `[copy_mode.hints]` alphabet (default `asdfghjkl`) and uppercase_action (default `open`)
+
+### Copy mode — cursor hint action + per-action shortcuts
+
+- New `HintAction.cursor` plus `c` entry key in copy-mode normal. Picking a label jumps the copy-mode cursor to the match's start and stays in copy mode (no copy, no open), so the user can start a visual selection from there. `uppercase_action = "cursor"` is now a third valid value
+- Direct shortcuts: `cmd+shift+y` (yank-copy, existing), `cmd+shift+o` (yank-open, new `yank_hints_open`), `cmd+ctrl+y` (yank-cursor, new `yank_hints_cursor`). `handleYankHints` takes the action as a parameter and the three notification handlers are factored into `contentWithHintEntryNotifications` so SwiftUI's type-checker on the parent `.onReceive` chain stays inside budget
+- Shift-held toast preview: a `flagsChanged` `NSEvent` monitor on `ContentView` sets a UI-only `HintState.shiftHeld` flag while hint mode is active; the toast title renders `effectiveAction (= shiftHeld ? uppercaseAction : action)`. Reconciled on `didBecomeActive` from `NSEvent.modifierFlags` (class property — live OS state regardless of focus) and cleared on `didResignActive` so a shift release outside the app can't freeze the preview. No effect on `executeHint`'s action selection, which still keys off the typed letter's case
+- 1 / 2 / 3 inside hint mode switch action directly (copy / open / cursor). Gated on `modifiers.isEmpty` so a future Shift+1 = "!" path can't accidentally swap. Digits aren't in the default hint alphabet `asdfghjkl`; users who put digits in `[copy_mode.hints].alphabet` will collide and the docs warn about it
+- `cmd+ctrl+y` enters with `enteredDirectly: action != .cursor`. Escape after a cursor-action entry falls back to copy-mode-normal (kicking the user out of copy mode would defeat "land at a label and keep working"); copy/open still exit on cancel
 
 ### CLI control (mistty-cli via XPC/Mach service)
 
@@ -351,3 +368,4 @@ Spec: `docs/superpowers/specs/2026-04-25-copy-mode-yank-and-config-reload-design
 - Copy mode scrolloff: new `[copy_mode] scrolloff = N` config (default 0). After every key handled by the copy-mode monitor, if vertical motion landed the cursor within `N` rows of an edge AND we still have scrollable area in that direction, `scrollViewport` (now returns the actual delta after clamping) advances the viewport and the cursor is shifted back so the content position is preserved. Skipped during hint/search submodes, and only triggers on rows that actually moved this keystroke (so plain entry doesn't shift the view). Mirrors vim's `scrolloff`
 - Per-window sidebar visibility: `sidebarVisible` lived on `@AppStorage("sidebarVisible")`, so toggling it in one window flipped every other open window's sidebar via the shared UserDefaults backing. Moved onto `WindowState` (`@Observable`) so each window owns its own state. `WindowState.init` seeds the value from `MisttyConfig.current.sidebarVisible` — same `[appearance] sidebar_visible` config key, but it now actually drives initial visibility for new windows (previously the Settings toggle wrote to config.toml but no view read it, so "Show Sidebar by Default" was a no-op). `WindowRootView` toggles `state.sidebarVisible` directly on the `misttyToggleSidebar` notification; `ContentView` reads `state.sidebarVisible` for layout / TabBarMode / traffic-light inset
 - Drag-and-drop file paths onto a pane: `TerminalSurfaceView` registers for `.fileURL`, `.URL`, `.string` pasteboard types from `viewDidMoveToWindow` — NOT `init`. Calling `registerForDraggedTypes` from init wakes AppKit's pasteboard / NSWorkspace machinery before the view is attached to a window, which in headless unit tests (e.g. `IPCServiceTests`) queues a `DispatchQueue.main.async` block that eventually fires `GhosttyAppManager`'s `lastParseError` modal on the test main thread, deadlocking the suite. Deferring the call to `viewDidMoveToWindow` keeps the registration but only after a real window exists. The drag-handling extension at the bottom of the file implements `draggingEntered` / `performDragOperation`: file URLs are POSIX-quoted (single-quote escape) and space-joined; non-file URLs paste their absoluteString; plain strings paste verbatim. Path injection goes through `ghostty_surface_text` directly (bypasses the `NSTextInputClient` keyTextAccumulator path since there's no in-flight keyDown to ride)
+- Smart-splits passthrough over SSH/et/mosh: `MisttyPane.isRunningNeovim` reads `processTitle`, which the OSC layer copies verbatim from whatever foreground program set it — including a remote nvim running inside an ssh session. Ctrl-hjkl was passing straight through to ssh on the assumption that the remote nvim had vim-tmux-navigator wired up, which is unreliable. New `MisttyPane.isInRemoteShell` resolves the local foreground process via `ForegroundProcessResolver` and returns true for `{ssh, mosh-client, et}`; the smart-splits gate in `ContentView.installCtrlNavMonitor` is now `isRunningNeovim && !isInRemoteShell` so remote sessions navigate local Mistty panes instead
