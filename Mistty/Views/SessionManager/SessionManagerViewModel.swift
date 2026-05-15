@@ -192,6 +192,11 @@ final class SessionManagerViewModel {
 
     let isSSHQuery = tokens.first?.lowercased() == "ssh"
 
+    // Prepare once per token — without this, every (item, field) call would
+    // re-lowercase + re-arrayify the same token strings (4k+ wasted ops on
+    // a 1k-item filter pass).
+    let preparedTokens = tokens.compactMap { FuzzyMatcher.prepare(query: $0) }
+
     struct ScoredItem {
       let item: SessionManagerItem
       let result: ItemMatchResult
@@ -202,14 +207,18 @@ final class SessionManagerViewModel {
     for item in allItems {
       let fields = matchableFields(for: item)
 
+      // Prepare each target once per item and reuse across all tokens.
+      let prepDisplay = FuzzyMatcher.prepare(target: fields.rawName)
+      let prepSubtitle = fields.subtitle.flatMap { FuzzyMatcher.prepare(target: $0) }
+
       var allTokensMatch = true
       var minScore = Double.infinity
       var displayIndices: [Int] = []
       var subtitleIndices: [Int] = []
 
-      for token in tokens {
-        let displayMatch = FuzzyMatcher.match(query: token, target: fields.rawName)
-        let subtitleMatch = fields.subtitle.flatMap { FuzzyMatcher.match(query: token, target: $0) }
+      for token in preparedTokens {
+        let displayMatch = prepDisplay.flatMap { FuzzyMatcher.match(query: token, target: $0) }
+        let subtitleMatch = prepSubtitle.flatMap { FuzzyMatcher.match(query: token, target: $0) }
 
         // Subtitle matches are penalized so a clean displayName hit beats a
         // scattered match across a long path. Without this, a query like

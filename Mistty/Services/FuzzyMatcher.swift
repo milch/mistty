@@ -12,36 +12,73 @@ struct FuzzyMatcher {
   private static let prefixBonus: Double = 12.0
   private static let boundaryChars: Set<Character> = ["/", "-", "_", ".", " "]
 
-  static func match(query: String, target: String) -> FuzzyMatch? {
-    guard !query.isEmpty, !target.isEmpty else { return nil }
+  /// Pre-lowercased query plus its character multiset. Build once per typed
+  /// token and reuse across every candidate target — without this, each
+  /// `match` call repeats the same `lowercased()` + `Array(...)` +
+  /// `[Character: Int]` build on the same string thousands of times.
+  struct PreparedQuery {
+    let chars: [Character]
+    fileprivate let charCounts: [Character: Int]
+    fileprivate let maxEdits: Int
+  }
 
-    let queryLower = Array(query.lowercased())
-    let targetLower = Array(target.lowercased())
+  /// Pre-lowercased target plus its character multiset. Build once per
+  /// candidate string and reuse across every token in a multi-token query.
+  struct PreparedTarget {
+    let chars: [Character]
+    fileprivate let charCounts: [Character: Int]
+  }
 
-    guard queryLower.count <= targetLower.count + maxAllowedEdits(queryLength: queryLower.count)
-    else { return nil }
+  static func prepare(query: String) -> PreparedQuery? {
+    guard !query.isEmpty else { return nil }
+    let lower = Array(query.lowercased())
+    var counts: [Character: Int] = [:]
+    counts.reserveCapacity(lower.count)
+    for c in lower { counts[c, default: 0] += 1 }
+    return PreparedQuery(
+      chars: lower,
+      charCounts: counts,
+      maxEdits: maxAllowedEdits(queryLength: lower.count)
+    )
+  }
 
-    // Prefilter: check all query chars exist in target (fast reject)
-    var charCounts: [Character: Int] = [:]
-    for c in targetLower { charCounts[c, default: 0] += 1 }
-    for c in queryLower {
-      if let count = charCounts[c], count > 0 {
-        charCounts[c] = count - 1
-      } else {
-        // Missing character — strict match impossible, try typo fallback
-        return typoMatch(query: queryLower, target: targetLower, targetLength: targetLower.count)
+  static func prepare(target: String) -> PreparedTarget? {
+    guard !target.isEmpty else { return nil }
+    let lower = Array(target.lowercased())
+    var counts: [Character: Int] = [:]
+    counts.reserveCapacity(min(lower.count, 32))
+    for c in lower { counts[c, default: 0] += 1 }
+    return PreparedTarget(chars: lower, charCounts: counts)
+  }
+
+  static func match(query: PreparedQuery, target: PreparedTarget) -> FuzzyMatch? {
+    guard query.chars.count <= target.chars.count + query.maxEdits else { return nil }
+
+    // Prefilter: every char the query needs must appear in target with at
+    // least the required multiplicity. Comparing precomputed multisets means
+    // no per-call dict mutation — just a small read-only loop over the
+    // (usually short) distinct query chars.
+    for (c, needed) in query.charCounts {
+      if (target.charCounts[c] ?? 0) < needed {
+        return typoMatch(
+          query: query.chars, target: target.chars, targetLength: target.chars.count)
       }
     }
 
-    // Try strict ordered match
     if let result = strictMatch(
-      query: queryLower, target: targetLower, targetLength: targetLower.count)
+      query: query.chars, target: target.chars, targetLength: target.chars.count)
     {
       return result
     }
+    return typoMatch(query: query.chars, target: target.chars, targetLength: target.chars.count)
+  }
 
-    // Try typo-tolerant fallback
-    return typoMatch(query: queryLower, target: targetLower, targetLength: targetLower.count)
+  /// String convenience for callers matching a single (query, target) pair.
+  /// Hot-loop callers should use `prepare(query:)` / `prepare(target:)` and
+  /// call the `PreparedQuery`/`PreparedTarget` overload directly.
+  static func match(query: String, target: String) -> FuzzyMatch? {
+    guard let pq = prepare(query: query), let pt = prepare(target: target) else { return nil }
+    return match(query: pq, target: pt)
   }
 
   /// Two-pass greedy algorithm (like fzf):
