@@ -126,6 +126,9 @@ struct WindowsStoreRecentlyClosedTests {
     let store = WindowsStore()
     for _ in 0..<15 {
       let state = store.createWindow()
+      // `closeWindow` skips empty windows, so seed each with a session
+      // before closing — otherwise nothing reaches `recentlyClosed`.
+      _ = state.createSession(name: "demo", directory: URL(fileURLWithPath: "/tmp"))
       store.closeWindow(state)
     }
     #expect(store.recentlyClosed.count == 10)
