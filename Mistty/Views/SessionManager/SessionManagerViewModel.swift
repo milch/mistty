@@ -109,16 +109,26 @@ final class SessionManagerViewModel {
   let state: WindowState
   let windowsStore: WindowsStore
   private let frecencyService: FrecencyService
+  private let recentDirectoriesProvider: @MainActor () async -> [URL]
+  private let sshHostsProvider: @MainActor () -> [SSHHost]
 
-  init(state: WindowState, windowsStore: WindowsStore, frecencyService: FrecencyService = FrecencyService()) {
+  init(
+    state: WindowState,
+    windowsStore: WindowsStore,
+    frecencyService: FrecencyService = FrecencyService(),
+    recentDirectories: @MainActor @escaping () async -> [URL] = ZoxideService.recentDirectories,
+    sshHosts: @MainActor @escaping () -> [SSHHost] = SSHConfigService.loadHosts
+  ) {
     self.state = state
     self.windowsStore = windowsStore
     self.frecencyService = frecencyService
+    self.recentDirectoriesProvider = recentDirectories
+    self.sshHostsProvider = sshHosts
   }
 
   func load() async {
-    let dirs = await ZoxideService.recentDirectories()
-    let sshHosts = SSHConfigService.loadHosts()
+    let dirs = await recentDirectoriesProvider()
+    let sshHosts = sshHostsProvider()
 
     let activeDirectories = Set(state.sessions.map { $0.directory.standardizedFileURL })
 

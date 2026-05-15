@@ -200,7 +200,32 @@ final class ChromePolishSnapshotTests: XCTestCase {
     store.activeSession = s2  // hides s2 from the session manager
     _ = s1
 
-    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
+    // Inject deterministic fixtures so the snapshot doesn't depend on the
+    // current user's zoxide DB, ~/.ssh/config, or frecency.json. Frecency
+    // gets a non-existent storage URL so load() no-ops; with zero scores
+    // everywhere, items sort by category (running → dir → ssh) in input
+    // order (Swift's `sorted` is stable since 5.0).
+    let testDirs: [URL] = [
+      URL(fileURLWithPath: "/Users/me/Developer/mistty"),
+      URL(fileURLWithPath: "/Users/me/Developer"),
+      URL(fileURLWithPath: "/Users/me/dotfiles"),
+      URL(fileURLWithPath: "/Users/me/Notes"),
+    ]
+    let testHosts: [SSHHost] = [
+      SSHHost(alias: "isengard", hostname: "10.99.218.210"),
+      SSHHost(alias: "homeassistant", hostname: "homeassistant.lan"),
+    ]
+    let frecencyURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mistty-test-frecency-\(UUID().uuidString).json")
+    let frecency = FrecencyService(storageURL: frecencyURL)
+
+    let vm = SessionManagerViewModel(
+      state: store,
+      windowsStore: windowsStore,
+      frecencyService: frecency,
+      recentDirectories: { testDirs },
+      sshHosts: { testHosts }
+    )
     await vm.load()
 
     let view = SessionManagerView(
