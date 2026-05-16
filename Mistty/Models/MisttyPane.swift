@@ -129,6 +129,17 @@ final class MisttyPane: Identifiable {
   /// nothing has called `surfaceView` yet.
   var surfaceViewIfLoaded: TerminalSurfaceView? { _surfaceView }
 
+  /// Eagerly tear down the libghostty surface + drop our reference to
+  /// the `TerminalSurfaceView`. Idempotent. Called from `closePane` so
+  /// the heavy resources (renderer + io threads, IOSurface textures)
+  /// are released immediately even if SwiftUI's view-tree cache keeps
+  /// this `MisttyPane` instance alive — the 17-day-old `~9GB` scenario
+  /// was driven by those resources accumulating after every close.
+  func releaseResources() {
+    _surfaceView?.tearDownSurface()
+    _surfaceView = nil
+  }
+
   /// Route keyboard input to this pane's surface. Safe to call on the
   /// next runloop tick so the view has a chance to be hosted in a window
   /// (e.g. after a tab switch).

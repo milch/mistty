@@ -238,6 +238,22 @@ final class TerminalSurfaceView: NSView {
     if let surface { ghostty_surface_free(surface) }
   }
 
+  /// Release the heavy libghostty surface (renderer + io threads +
+  /// IOSurface textures) eagerly, without waiting for the NSView itself
+  /// to deinit. Necessary because SwiftUI's view-tree cache (via the
+  /// `_commonAwake` AppKit notification observer chain + SidebarTabRow's
+  /// `@Bindable tab` retention) can keep `MisttyPane` + `TerminalSurfaceView`
+  /// instances alive past `closePane`. Releasing the surface here drops
+  /// the multi-MB-per-pane resources that drove the 9GB / 17-day
+  /// scenario, even when the Swift object graph stays leaked. Idempotent.
+  func tearDownSurface() {
+    if let surface {
+      ghostty_surface_free(surface)
+      self.surface = nil
+    }
+    removeFromSuperview()
+  }
+
   // MARK: - Responder
 
   override var acceptsFirstResponder: Bool { true }

@@ -118,10 +118,6 @@ final class MisttyTab: Identifiable {
     let wasActive = activePane?.id == pane.id
     let closingID = pane.id
     layout.remove(pane: pane)
-    // Drop the pane from the source-of-truth array. After this point
-    // (and assuming SwiftUI's view tree doesn't strongly hold the pane
-    // via an `@Bindable` or `let pane:` field), the pane and its
-    // libghostty surface will deallocate.
     panes.removeAll { $0.id == pane.id }
     if wasActive {
       activePane = panes.last
@@ -133,6 +129,14 @@ final class MisttyTab: Identifiable {
       activePane?.focusKeyboardInput()
     }
     if zoomedPane?.id == closingID { zoomedPane = nil }
+    // Force-release the libghostty surface + threads + IOSurfaces NOW.
+    // SwiftUI's view-tree cache + AppKit's `_commonAwake` notification
+    // observer keep the `MisttyPane` + `TerminalSurfaceView` instances
+    // alive past `closePane` (see Memory Graph analysis). Without this
+    // call the heavy resources accumulate — the 9GB / 17-day scenario.
+    // The Swift objects may still leak (small per-object cost) but the
+    // multi-MB-per-pane GPU + thread resources are reliably released.
+    pane.releaseResources()
     DebugLog.shared.log(
       "popup",
       "closePane tabID=\(id) paneID=\(closingID) remaining-panes=\(panes.count) "
