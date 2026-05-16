@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel any in-flight CI for the same branch/PR — pushing a new commit
+# supersedes the previous build instead of queueing it up.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Cache Zig build
+        # The GhosttyKit.xcframework is the gating dependency for
+        # `swift test`. Caching by submodule SHA + build inputs means
+        # most CI runs reuse a prebuilt xcframework instead of doing the
+        # ~5-minute Zig build.
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/ghostty/zig-out
+            vendor/ghostty/.zig-cache
+            ~/.cache/zig
+          key: zig-${{ runner.os }}-${{ hashFiles('vendor/ghostty/build.zig', 'vendor/ghostty/build.zig.zon') }}
+          restore-keys: |
+            zig-${{ runner.os }}-
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-test-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-test-${{ runner.os }}-
+
+      - name: Build libghostty
+        # `just test` doesn't depend on this in the justfile (you can
+        # iterate locally without rebuilding ghostty), but the test
+        # target's linker needs the xcframework.
+        run: just build-libghostty
+
+      - name: Run tests
+        # `just test` already skips `*BenchmarkTests` suites — those
+        # run release-only and have their own command (`just bench`).
+        run: just test
