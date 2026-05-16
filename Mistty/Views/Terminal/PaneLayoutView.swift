@@ -3,12 +3,16 @@ import SwiftUI
 
 struct PaneLayoutView: View {
   let node: PaneLayoutNode
-  /// Source of truth for which `MisttyPane` instances exist in this tab.
-  /// Leaves in `node` reference panes by ID and we resolve them through
-  /// this array. Without this indirection, the layout enum's
-  /// `.leaf(MisttyPane)` heap allocation strongly held closed panes via
-  /// SwiftUI's view-tree cache, leaking the libghostty surface forever.
-  let panes: [MisttyPane]
+  /// Owning tab. Pane lookups go through `tab.pane(byID:)` so each render
+  /// reads the *current* `tab.panes`. An earlier attempt stored
+  /// `let panes: [MisttyPane]` directly, but SwiftUI caches stale view-
+  /// struct copies — each cached copy held its own `[MisttyPane]`
+  /// snapshot from when it was rendered, re-leaking the closed panes
+  /// the layout-ID refactor was supposed to fix. By referencing the tab
+  /// (single instance, mutated in place), cached struct copies all
+  /// point at the same `tab.panes` array which has the closed pane
+  /// already removed.
+  let tab: MisttyTab
   let activePane: MisttyPane?
   var isWindowModeActive: Bool = false
   var windowModeState: MisttyTab.WindowModeState = .inactive
@@ -23,7 +27,7 @@ struct PaneLayoutView: View {
   var onResizeBetween: ((MisttyPane, MisttyPane, CGFloat) -> Void)?
 
   private func pane(byID id: Int) -> MisttyPane? {
-    panes.first { $0.id == id }
+    tab.pane(byID: id)
   }
 
   var body: some View {
@@ -117,7 +121,7 @@ struct PaneLayoutView: View {
   @ViewBuilder
   private func child(_ node: PaneLayoutNode) -> some View {
     PaneLayoutView(
-      node: node, panes: panes, activePane: activePane,
+      node: node, tab: tab, activePane: activePane,
       isWindowModeActive: isWindowModeActive,
       windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
       paneCount: paneCount,

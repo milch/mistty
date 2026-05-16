@@ -337,7 +337,7 @@ struct ContentView: View {
               } else {
                 PaneLayoutView(
                   node: tab.layout.root,
-                  panes: tab.panes,
+                  tab: tab,
                   activePane: tab.activePane,
                   isWindowModeActive: tab.isWindowModeActive,
                   windowModeState: tab.windowModeState,
