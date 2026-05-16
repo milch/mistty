@@ -49,6 +49,8 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 ### Misc & Bugs
 
+- Toasts need to dodge the cursor
+
 Larger:
 
 - OSC777/OSC9/OSC99 notifications support
