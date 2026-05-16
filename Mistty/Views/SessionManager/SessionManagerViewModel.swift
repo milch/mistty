@@ -102,6 +102,20 @@ final class SessionManagerViewModel {
 
   var query = ""
   private var allItems: [SessionManagerItem] = []
+  /// Parallel to `allItems`: prepared targets for the fuzzy matcher. Built
+  /// once when items load and reused across every keystroke — without
+  /// this, each filter pass re-walked every item's display+subtitle
+  /// strings to lowercase + byte-arrayify + histogram them. That cost
+  /// grows with both `N items` and `keystrokes`, so it shows up most
+  /// painfully on long typed queries.
+  private var allPreparedTargets: [PreparedTargets] = []
+
+  private struct PreparedTargets {
+    let display: FuzzyMatcher.PreparedTarget?
+    let subtitle: FuzzyMatcher.PreparedTarget?
+    let prefixLen: Int
+  }
+
   var filteredItems: [SessionManagerItem] = []
   var selectedIndex = 0
   var matchResults: [String: ItemMatchResult] = [:]
@@ -155,6 +169,16 @@ final class SessionManagerViewModel {
       if scoreA != scoreB { return scoreA > scoreB }
       return categoryOrder(a) < categoryOrder(b)
     }
+    // Precompute prepared targets — the per-item lowercase/byte/histogram
+    // work that previously ran on every keystroke now happens once.
+    allPreparedTargets = allItems.map { item in
+      let fields = matchableFields(for: item)
+      return PreparedTargets(
+        display: FuzzyMatcher.prepare(target: fields.rawName),
+        subtitle: fields.subtitle.flatMap { FuzzyMatcher.prepare(target: $0) },
+        prefixLen: fields.prefixLen
+      )
+    }
     applyFilter()
   }
 
@@ -204,12 +228,11 @@ final class SessionManagerViewModel {
 
     var scored: [ScoredItem] = []
 
-    for item in allItems {
-      let fields = matchableFields(for: item)
-
-      // Prepare each target once per item and reuse across all tokens.
-      let prepDisplay = FuzzyMatcher.prepare(target: fields.rawName)
-      let prepSubtitle = fields.subtitle.flatMap { FuzzyMatcher.prepare(target: $0) }
+    for (idx, item) in allItems.enumerated() {
+      let prepared = allPreparedTargets[idx]
+      let prepDisplay = prepared.display
+      let prepSubtitle = prepared.subtitle
+      let prefixLen = prepared.prefixLen
 
       var allTokensMatch = true
       var minScore = Double.infinity
@@ -229,14 +252,14 @@ final class SessionManagerViewModel {
         if let dm = displayMatch, let sm = subtitleMatch, let ss = subtitleScore {
           if dm.score >= ss {
             minScore = min(minScore, dm.score)
-            displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + fields.prefixLen })
+            displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + prefixLen })
           } else {
             minScore = min(minScore, ss)
             subtitleIndices.append(contentsOf: sm.matchedIndices)
           }
         } else if let dm = displayMatch {
           minScore = min(minScore, dm.score)
-          displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + fields.prefixLen })
+          displayIndices.append(contentsOf: dm.matchedIndices.map { $0 + prefixLen })
         } else if let sm = subtitleMatch, let ss = subtitleScore {
           minScore = min(minScore, ss)
           subtitleIndices.append(contentsOf: sm.matchedIndices)

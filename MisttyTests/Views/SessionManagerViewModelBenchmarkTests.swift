@@ -126,4 +126,22 @@ final class SessionManagerViewModelBenchmarkTests: XCTestCase {
       }
     }
   }
+
+  /// Longer typing sequence — exposes any algorithm whose per-keystroke
+  /// cost grows with query length (e.g. Damerau-Levenshtein in the typo
+  /// fallback is O(qLen × windowLen) per cell, so cost scales ~qLen²
+  /// without an early-out).
+  func test_benchmark_updateQuery_longTypingSequence() async {
+    let vm = await makeLoadedViewModel()
+    let sequence = [
+      "p", "pr", "pro", "proj", "proje", "projec", "project",
+      "project-", "project-a", "project-al", "project-alp",
+      "project-alph", "project-alpha",
+    ]
+    measure {
+      for q in sequence {
+        vm.updateQuery(q)
+      }
+    }
+  }
 }

@@ -140,15 +140,27 @@ struct FuzzyMatcher {
     target: [UInt8], targetCounts: [Int],
     maxEdits: Int
   ) -> FuzzyMatch? {
-    // Constant-time prefilter: a 128-entry histogram comparison. SIMD on
-    // ContiguousArray would compress this further but the loop is so tight
-    // the compiler vectorizes it already.
+    // Sum the missing-char count across the 128-entry histogram. Any char
+    // the query needs but the target lacks costs at least one edit in DL
+    // (substitution, insertion, or deletion), so once the sum exceeds
+    // `maxEdits` no window can possibly fit — return nil without paying
+    // for the O(qLen × windowLen × windowCount) typo search.
+    //
+    // This is the main reason long queries used to grind: the typo path
+    // scales as ~qLen², and previously *every* item ran it as soon as a
+    // single query char was missing.
+    var missing = 0
     for i in 0..<128 {
-      if queryCounts[i] > targetCounts[i] {
-        return typoMatchASCII(query: query, target: target, maxEdits: maxEdits)
+      let diff = queryCounts[i] - targetCounts[i]
+      if diff > 0 {
+        missing &+= diff
+        if missing > maxEdits { return nil }
       }
     }
-    if let result = strictMatchASCII(query: query, target: target) {
+    // No char missing → strict subsequence may succeed; try it first.
+    // Otherwise skip strict (any missing char guarantees strict fails) and
+    // go straight to typo, which still has a chance since missing ≤ maxEdits.
+    if missing == 0, let result = strictMatchASCII(query: query, target: target) {
       return result
     }
     return typoMatchASCII(query: query, target: target, maxEdits: maxEdits)
@@ -336,12 +348,19 @@ struct FuzzyMatcher {
     target: [Character], targetCounts: [Character: Int],
     maxEdits: Int
   ) -> FuzzyMatch? {
+    // See `matchASCII` for the rationale: a char short in target costs at
+    // least one DL edit, so missing > maxEdits guarantees typoMatch fails.
+    var missing = 0
     for (c, needed) in queryCounts {
-      if (targetCounts[c] ?? 0) < needed {
-        return typoMatch(query: query, target: target, targetLength: target.count)
+      let have = targetCounts[c] ?? 0
+      if have < needed {
+        missing &+= needed - have
+        if missing > maxEdits { return nil }
       }
     }
-    if let result = strictMatch(query: query, target: target, targetLength: target.count) {
+    if missing == 0,
+      let result = strictMatch(query: query, target: target, targetLength: target.count)
+    {
       return result
     }
     return typoMatch(query: query, target: target, targetLength: target.count)
