@@ -12,8 +12,13 @@ struct TabBarView: View {
             TabBarItem(
               tab: tab,
               isActive: session.activeTab?.id == tab.id,
-              onSelect: { session.activeTab = tab },
-              onClose: { session.closeTab(tab) }
+              // `[weak tab]` — same retention pattern as the pane
+              // closures fixed in e44e17f. SwiftUI's view tree can
+              // outlive `session.tabs.removeAll`, so a strong capture
+              // here pins the tab (and through `tab.layout`, its
+              // pane + libghostty surface).
+              onSelect: { [weak tab] in if let tab { session.activeTab = tab } },
+              onClose: { [weak tab] in if let tab { session.closeTab(tab) } }
             )
           }
         }
