@@ -49,13 +49,13 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 ### Misc & Bugs
 
-- Cross-session tab move (drag a tab from session A into session B's tab list). Intra-session reorder shipped in the tab DnD work — the cross-session case is deferred because it needs the source tab to be detached from session A's `tabs` array and re-inserted into B's, with the pane(s) underneath kept alive. The drop indicator is intentionally suppressed today when hovering over a different session's tabs so the UI doesn't promise something that won't happen.
-
 Larger:
 
 - OSC777/OSC9/OSC99 notifications support
-- Zen mode (similar to zoomed - except that it pulls out the pane similar to a popup, full height with default 120 character width (configurable), background is dimmed)
 - Refactor so that the “session manager” uses configurable data sources. Zoxide can be one but generic “read json from a file” or “list these dir contents” or “run this command to populate the list” could be nice
+- Popups not bound to the "main" window - i.e. they become an accessory window. Need some way to distinguish popups linked from the current pane (e.g. the lazygit use-case) and unlinked popups (e.g. quick terminal feature)
+- Cross-session tab move (drag a tab from session A into session B's tab list). Intra-session reorder shipped in the tab DnD work — the cross-session case is deferred because it needs the source tab to be detached from session A's `tabs` array and re-inserted into B's, with the pane(s) underneath kept alive. The drop indicator is intentionally suppressed today when hovering over a different session's tabs so the UI doesn't promise something that won't happen.
+- Zen mode (similar to zoomed - except that it pulls out the pane similar to a popup, full height with default 120 character width (configurable), background is dimmed)
 
 ### Multi-window v2+ followups
 
