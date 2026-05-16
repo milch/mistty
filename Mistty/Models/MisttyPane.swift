@@ -79,18 +79,6 @@ final class MisttyPane: Identifiable {
 
   init(id: Int) {
     self.id = id
-    DebugLog.shared.log("popup", "MisttyPane init id=\(id)")
-  }
-
-  /// Used by the popup leak investigation: if a popup is dismissed but the
-  /// pane never deinits, this log line never appears — that's the smoking
-  /// gun for the retention. Captures `id` locally so the `Task` hop to
-  /// `DebugLog` (which is `@MainActor`) doesn't capture `self`.
-  deinit {
-    let capturedID = id
-    Task { @MainActor in
-      DebugLog.shared.log("popup", "MisttyPane deinit id=\(capturedID)")
-    }
   }
 
   /// Backing storage. `nil` until something reads `surfaceView` for the

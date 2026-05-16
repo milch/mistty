@@ -13,18 +13,5 @@ final class PopupState: Identifiable {
     self.definition = definition
     self.pane = pane
     self.isVisible = isVisible
-    DebugLog.shared.log(
-      "popup", "PopupState init id=\(id) name='\(definition.name)' paneID=\(pane.id)")
-  }
-
-  deinit {
-    let capturedID = id
-    let capturedName = definition.name
-    let capturedPaneID = pane.id
-    Task { @MainActor in
-      DebugLog.shared.log(
-        "popup",
-        "PopupState deinit id=\(capturedID) name='\(capturedName)' paneID=\(capturedPaneID)")
-    }
   }
 }

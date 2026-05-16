@@ -51,7 +51,6 @@ final class MisttyTab: Identifiable {
     layout = PaneLayout(pane: pane)
     panes = [pane]
     activePane = pane
-    DebugLog.shared.log("popup", "MisttyTab init id=\(id) (fresh tab w/ paneID=\(pane.id))")
   }
 
   init(id: Int, existingPane pane: MisttyPane, paneIDGenerator: @escaping () -> Int) {
@@ -61,14 +60,6 @@ final class MisttyTab: Identifiable {
     layout = PaneLayout(pane: pane)
     panes = [pane]
     activePane = pane
-    DebugLog.shared.log("popup", "MisttyTab init id=\(id) (existingPane paneID=\(pane.id))")
-  }
-
-  deinit {
-    let capturedID = id
-    Task { @MainActor in
-      DebugLog.shared.log("popup", "MisttyTab deinit id=\(capturedID)")
-    }
   }
 
   /// Reorder `panes` to match `layout`'s left-to-right / top-to-bottom
@@ -132,16 +123,12 @@ final class MisttyTab: Identifiable {
     // Force-release the libghostty surface + threads + IOSurfaces NOW.
     // SwiftUI's view-tree cache + AppKit's `_commonAwake` notification
     // observer keep the `MisttyPane` + `TerminalSurfaceView` instances
-    // alive past `closePane` (see Memory Graph analysis). Without this
-    // call the heavy resources accumulate — the 9GB / 17-day scenario.
-    // The Swift objects may still leak (small per-object cost) but the
-    // multi-MB-per-pane GPU + thread resources are reliably released.
+    // alive past `closePane`. Without this call the heavy resources
+    // accumulate — see the 9GB / 17-day scenario investigated in
+    // `b406c48`. The Swift objects may still leak (small per-object
+    // cost) but the multi-MB-per-pane GPU + thread resources are
+    // reliably released.
     pane.releaseResources()
-    DebugLog.shared.log(
-      "popup",
-      "closePane tabID=\(id) paneID=\(closingID) remaining-panes=\(panes.count) "
-        + "(removed from layout — pane should deinit if no other refs)")
-    LeakDetector.scheduleCheck(tab: nil, panes: [pane])
   }
 
   /// Make `pane` the active pane AND route keyboard input to it. Prefer this

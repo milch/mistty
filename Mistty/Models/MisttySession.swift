@@ -83,15 +83,8 @@ final class MisttySession: Identifiable {
   }
 
   func closeTab(_ tab: MisttyTab) {
-    let paneIDs = tab.panes.map(\.id)
-    let panesSnapshot = tab.panes
     tabs.removeAll { $0.id == tab.id }
     if activeTab?.id == tab.id { activeTab = tabs.last }
-    DebugLog.shared.log(
-      "popup",
-      "closeTab id=\(tab.id) paneIDs=\(paneIDs) total-tabs=\(tabs.count) "
-        + "(removed from session.tabs — tab + panes should deinit if no other refs)")
-    LeakDetector.scheduleCheck(tab: tab, panes: panesSnapshot)
   }
 
   /// Reorder tabs in place. Mirrors `WindowState.moveSessions` and is the
@@ -106,20 +99,11 @@ final class MisttySession: Identifiable {
       if existing.isVisible {
         existing.isVisible = false
         activePopup = nil
-        DebugLog.shared.log(
-          "popup",
-          "toggle hide '\(definition.name)' popupID=\(existing.id) "
-            + "paneID=\(existing.pane.id) total-popups=\(popups.count) "
-            + "(retained in array — not closed)")
       } else {
         // Hide any other visible popup first
         activePopup?.isVisible = false
         existing.isVisible = true
         activePopup = existing
-        DebugLog.shared.log(
-          "popup",
-          "toggle show (reuse) '\(definition.name)' popupID=\(existing.id) "
-            + "paneID=\(existing.pane.id) total-popups=\(popups.count)")
       }
       return
     }
@@ -137,10 +121,6 @@ final class MisttySession: Identifiable {
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup
-    DebugLog.shared.log(
-      "popup",
-      "toggle create '\(definition.name)' popupID=\(popup.id) "
-        + "paneID=\(pane.id) total-popups=\(popups.count)")
   }
 
   func openPopup(definition: PopupDefinition) {
@@ -149,10 +129,6 @@ final class MisttySession: Identifiable {
         activePopup?.isVisible = false
         existing.isVisible = true
         activePopup = existing
-        DebugLog.shared.log(
-          "popup",
-          "open show (reuse) '\(definition.name)' popupID=\(existing.id) "
-            + "paneID=\(existing.pane.id) total-popups=\(popups.count)")
       }
       return
     }
@@ -169,10 +145,6 @@ final class MisttySession: Identifiable {
     let popup = PopupState(id: popupIDGenerator(), definition: definition, pane: pane)
     popups.append(popup)
     activePopup = popup
-    DebugLog.shared.log(
-      "popup",
-      "open create '\(definition.name)' popupID=\(popup.id) "
-        + "paneID=\(pane.id) total-popups=\(popups.count)")
   }
 
   /// Wrap a user-supplied popup command in `sh -c '…'` so multi-statement
@@ -206,21 +178,12 @@ final class MisttySession: Identifiable {
   func closePopup(_ popup: PopupState) {
     popups.removeAll { $0.id == popup.id }
     if activePopup?.id == popup.id { activePopup = nil }
-    DebugLog.shared.log(
-      "popup",
-      "closePopup '\(popup.definition.name)' popupID=\(popup.id) "
-        + "paneID=\(popup.pane.id) total-popups=\(popups.count) "
-        + "(removed from array — pane should deinit if no other refs)")
+    // Drop the popup's libghostty surface eagerly — see `MisttyTab.closePane`
+    // for the rationale; same retention pattern applies to popup panes.
+    popup.pane.releaseResources()
   }
 
   func hideActivePopup() {
-    if let popup = activePopup {
-      DebugLog.shared.log(
-        "popup",
-        "hideActivePopup '\(popup.definition.name)' popupID=\(popup.id) "
-          + "paneID=\(popup.pane.id) total-popups=\(popups.count) "
-          + "(retained in array — not closed)")
-    }
     activePopup?.isVisible = false
     activePopup = nil
   }

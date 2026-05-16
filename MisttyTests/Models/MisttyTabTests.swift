@@ -69,4 +69,79 @@ final class MisttyTabTests: XCTestCase {
 
     XCTAssertEqual(tab.title, "zsh")
   }
+
+  // MARK: - Resource teardown (b406c48 regression)
+
+  /// `closePane` must drop the pane from `tab.panes` (the source of
+  /// truth) and from `tab.layout.leafIDs` (the shape). Both used to be
+  /// derived from the layout enum's leaf payload; after the
+  /// pane-IDs-in-leaves refactor they're maintained independently.
+  func test_closePane_removesFromPanesAndLayout() {
+    let tab = makeTab()
+    tab.splitActivePane(direction: .horizontal)
+    let closing = tab.panes[1]
+    let surviving = tab.panes[0]
+
+    tab.closePane(closing)
+
+    XCTAssertEqual(tab.panes.map(\.id), [surviving.id])
+    XCTAssertEqual(tab.layout.leafIDs, [surviving.id])
+  }
+
+  /// Closing a pane must call `releaseResources()` on it so the
+  /// libghostty surface + threads + IOSurface textures are released
+  /// eagerly. Without this, SwiftUI's view-tree cache keeps the
+  /// `TerminalSurfaceView` alive and the surface accumulates
+  /// (~5GB / 17 days in the worst case investigated in b406c48).
+  func test_closePane_releasesPaneSurface() {
+    TerminalSurfaceView.skipSurfaceCreation = true
+    defer { TerminalSurfaceView.skipSurfaceCreation = false }
+
+    let tab = makeTab()
+    tab.splitActivePane(direction: .horizontal)
+    let closing = tab.panes[1]
+    _ = closing.surfaceView  // force load
+    XCTAssertNotNil(closing.surfaceViewIfLoaded, "precondition: view loaded")
+
+    tab.closePane(closing)
+
+    XCTAssertNil(
+      closing.surfaceViewIfLoaded,
+      "closePane must invoke releaseResources() on the closed pane so its"
+        + " libghostty surface is freed regardless of SwiftUI cache retention")
+  }
+
+  /// Closing the *last* pane in a tab — `tab.panes` ends up empty,
+  /// `tab.layout.root` collapses to `.empty`, and the pane's resources
+  /// are torn down. Caller (session) closes the tab afterward; that's
+  /// out of scope here.
+  func test_closeLastPane_emptiesEverything() {
+    TerminalSurfaceView.skipSurfaceCreation = true
+    defer { TerminalSurfaceView.skipSurfaceCreation = false }
+
+    let tab = makeTab()
+    let only = tab.activePane!
+    _ = only.surfaceView
+
+    tab.closePane(only)
+
+    XCTAssertTrue(tab.panes.isEmpty)
+    XCTAssertTrue(tab.layout.leafIDs.isEmpty)
+    XCTAssertNil(tab.activePane)
+    XCTAssertNil(only.surfaceViewIfLoaded)
+  }
+
+  /// Defensive: closing a `zoomedPane` must also clear that property.
+  /// Otherwise the strong `MisttyTab.zoomedPane` keeps the closed pane
+  /// alive in the model layer, undoing the close.
+  func test_closeZoomedPane_clearsZoomReference() {
+    let tab = makeTab()
+    tab.splitActivePane(direction: .horizontal)
+    let zoomed = tab.panes[1]
+    tab.zoomedPane = zoomed
+
+    tab.closePane(zoomed)
+
+    XCTAssertNil(tab.zoomedPane, "Closing the zoomed pane must clear zoomedPane")
+  }
 }
