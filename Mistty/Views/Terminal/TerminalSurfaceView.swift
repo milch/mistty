@@ -55,6 +55,16 @@ final class TerminalSurfaceView: NSView {
   private let configuredPaddingY: CGFloat
   private let configuredPaddingBalance: Bool
 
+  /// Token for the screen-change observer. Stored so `deinit` can remove
+  /// it via the token. We use the closure-based `addObserver(forName:…)`
+  /// form with `[weak self]` instead of the older
+  /// `addObserver(self, selector:…)` target-action form, because the
+  /// latter (per memory-graph debugging) ends up wrapped in a
+  /// `__NSMallocBlock__` that strongly captures the view — which then
+  /// keeps the view + its pane + its libghostty surface alive forever
+  /// since `deinit` (and its `removeObserver`) never run.
+  private var screenChangeObserver: NSObjectProtocol?
+
   init(
     frame: NSRect,
     workingDirectory: URL? = nil,
@@ -79,11 +89,25 @@ final class TerminalSurfaceView: NSView {
     // different backing scale. See ghostty-org/ghostty#2731. The handler
     // re-runs the backing-properties path which is what actually pushes the
     // new scale to libghostty and the CA layer.
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(windowDidChangeScreen(_:)),
-      name: NSWindow.didChangeScreenNotification,
-      object: nil)
+    //
+    // `[weak self]` is load-bearing — the older `addObserver(self, selector:…)`
+    // form pinned the view strongly, kept the pane alive, kept the libghostty
+    // surface (renderer thread + IOSurfaces) alive forever.
+    screenChangeObserver = NotificationCenter.default.addObserver(
+      forName: NSWindow.didChangeScreenNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] note in
+      // Extract the `NSWindow` here (where `note` is in scope) — `Notification`
+      // isn't `Sendable`, so we can't smuggle it into the main-actor hop.
+      let object = note.object as? NSWindow
+      MainActor.assumeIsolated {
+        guard let self, let window = self.window, object == window else { return }
+        DispatchQueue.main.async { [weak self] in
+          self?.viewDidChangeBackingProperties()
+        }
+      }
+    }
 
     if Self.skipSurfaceCreation {
       return
@@ -203,8 +227,14 @@ final class TerminalSurfaceView: NSView {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("Not implemented") }
 
-  deinit {
-    NotificationCenter.default.removeObserver(self)
+  /// `isolated` so we can touch the `@MainActor`-isolated
+  /// `screenChangeObserver` property — strict concurrency rejects access
+  /// from the default nonisolated deinit. NSView instances are always
+  /// allocated + freed on the main thread, so the isolation is real.
+  isolated deinit {
+    if let screenChangeObserver {
+      NotificationCenter.default.removeObserver(screenChangeObserver)
+    }
     if let surface { ghostty_surface_free(surface) }
   }
 
@@ -353,20 +383,6 @@ final class TerminalSurfaceView: NSView {
       "scale",
       "viewDidChangeBackingProperties: scale=\(scale) size=\(w)x\(h)px bounds=\(bounds.size)"
     )
-  }
-
-  /// `viewDidChangeBackingProperties` is unreliable across sleep/wake and
-  /// some monitor-swap paths — AppKit can skip it when the window's screen
-  /// changes without its point dimensions changing. The screen-change
-  /// notification fires in those cases, so re-run the backing-properties
-  /// path async (the dispatch gives AppKit time to settle the new screen on
-  /// the window before we read `backingScaleFactor`).
-  @objc private func windowDidChangeScreen(_ notification: Notification) {
-    guard let window = self.window else { return }
-    guard let object = notification.object as? NSWindow, object == window else { return }
-    DispatchQueue.main.async { [weak self] in
-      self?.viewDidChangeBackingProperties()
-    }
   }
 
   // MARK: - Keyboard Input
