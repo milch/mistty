@@ -35,8 +35,17 @@ struct PaneLayoutView: View {
         windowModeState: windowModeState,
         joinPickTabNames: joinPickTabNames,
         paneCount: paneCount,
-        onClose: { onClosePane?(pane) },
-        onSelect: { onSelectPane?(pane) }
+        // `[weak pane]` breaks the retain cycle that was leaking ~140
+        // libghostty surfaces over the lifetime of a long-running Mistty.
+        // The cycle: `MisttyPane._surfaceView → TerminalSurfaceView →
+        // .onSelect closure (captures pane strongly) → MisttyPane`. With
+        // strong capture, even after `closePane`/`closeTab` drop the model
+        // refs the view kept the pane (and its libghostty renderer + io
+        // threads + IOSurfaces) alive forever. SwiftUI eventually
+        // dismantles the NSViewRepresentable, but the orphaned NSView
+        // still held the closure-via-pane cycle.
+        onClose: { [weak pane] in if let pane { onClosePane?(pane) } },
+        onSelect: { [weak pane] in if let pane { onSelectPane?(pane) } }
       )
     case .split(let direction, let a, let b, let ratio):
       // ZStack with absolute positioning so the divider can be a 12pt-wide

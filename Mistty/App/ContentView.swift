@@ -326,7 +326,12 @@ struct ContentView: View {
                   windowModeState: tab.windowModeState,
                   joinPickTabNames: joinPickTabNames,
                   paneCount: tab.panes.count,
-                  onClose: { closePane(zoomedPane) },
+                  // `[weak zoomedPane]` — see `PaneLayoutView` for the
+                  // full cycle. Same closure-on-NSView retention path
+                  // exists here for the zoomed pane.
+                  onClose: { [weak zoomedPane] in
+                    if let zoomedPane { closePane(zoomedPane) }
+                  },
                   onSelect: {}
                 )
               } else {
