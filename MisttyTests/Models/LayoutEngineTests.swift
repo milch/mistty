@@ -5,10 +5,15 @@ import XCTest
 @MainActor
 final class LayoutEngineTests: XCTestCase {
   private var nextPaneId = 1
+  /// See `PaneLayoutTests.allPanes` — same rationale: layout enum
+  /// now stores pane IDs, so test code needs a separate panes array
+  /// to resolve back to instances.
+  private var allPanes: [MisttyPane] = []
 
   private func makePane() -> MisttyPane {
     let pane = MisttyPane(id: nextPaneId)
     nextPaneId += 1
+    allPanes.append(pane)
     return pane
   }
 
@@ -17,7 +22,10 @@ final class LayoutEngineTests: XCTestCase {
   }
 
   override func setUp() async throws {
-    await MainActor.run { nextPaneId = 1 }
+    await MainActor.run {
+      nextPaneId = 1
+      allPanes = []
+    }
   }
 
   // MARK: - Even Horizontal
@@ -26,8 +34,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(2)
     let node = LayoutEngine.apply(.evenHorizontal, to: panes)
     if case .split(.horizontal, .leaf(let a), .leaf(let b), let ratio) = node {
-      XCTAssertEqual(a.id, panes[0].id)
-      XCTAssertEqual(b.id, panes[1].id)
+      XCTAssertEqual(a, panes[0].id)
+      XCTAssertEqual(b, panes[1].id)
       XCTAssertEqual(ratio, 0.5, accuracy: 0.001)
     } else {
       XCTFail("Expected horizontal split of two leaves")
@@ -41,9 +49,9 @@ final class LayoutEngineTests: XCTestCase {
       .horizontal, .leaf(let a), .split(.horizontal, .leaf(let b), .leaf(let c), let innerRatio),
       let outerRatio) = node
     {
-      XCTAssertEqual(a.id, panes[0].id)
-      XCTAssertEqual(b.id, panes[1].id)
-      XCTAssertEqual(c.id, panes[2].id)
+      XCTAssertEqual(a, panes[0].id)
+      XCTAssertEqual(b, panes[1].id)
+      XCTAssertEqual(c, panes[2].id)
       XCTAssertEqual(outerRatio, 1.0 / 3.0, accuracy: 0.001)
       XCTAssertEqual(innerRatio, 0.5, accuracy: 0.001)
     } else {
@@ -55,8 +63,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(4)
     let node = LayoutEngine.apply(.evenHorizontal, to: panes)
     let layout = PaneLayout(root: node)
-    XCTAssertEqual(layout.leaves.count, 4)
-    XCTAssertEqual(layout.leaves.map(\.id), panes.map(\.id))
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 4)
+    XCTAssertEqual(layout.leafIDs, panes.map(\.id))
   }
 
   // MARK: - Even Vertical
@@ -65,8 +73,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(2)
     let node = LayoutEngine.apply(.evenVertical, to: panes)
     if case .split(.vertical, .leaf(let a), .leaf(let b), let ratio) = node {
-      XCTAssertEqual(a.id, panes[0].id)
-      XCTAssertEqual(b.id, panes[1].id)
+      XCTAssertEqual(a, panes[0].id)
+      XCTAssertEqual(b, panes[1].id)
       XCTAssertEqual(ratio, 0.5, accuracy: 0.001)
     } else {
       XCTFail("Expected vertical split of two leaves")
@@ -77,7 +85,7 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(3)
     let node = LayoutEngine.apply(.evenVertical, to: panes)
     if case .split(.vertical, .leaf(let a), .split(.vertical, _, _, _), let outerRatio) = node {
-      XCTAssertEqual(a.id, panes[0].id)
+      XCTAssertEqual(a, panes[0].id)
       XCTAssertEqual(outerRatio, 1.0 / 3.0, accuracy: 0.001)
     } else {
       XCTFail("Expected nested vertical splits")
@@ -90,8 +98,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(2)
     let node = LayoutEngine.apply(.mainHorizontal, to: panes)
     if case .split(.horizontal, .leaf(let main), .leaf(let other), let ratio) = node {
-      XCTAssertEqual(main.id, panes[0].id)
-      XCTAssertEqual(other.id, panes[1].id)
+      XCTAssertEqual(main, panes[0].id)
+      XCTAssertEqual(other, panes[1].id)
       XCTAssertEqual(ratio, 0.66, accuracy: 0.001)
     } else {
       XCTFail("Expected horizontal split with 0.66 ratio")
@@ -102,7 +110,7 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(3)
     let node = LayoutEngine.apply(.mainHorizontal, to: panes)
     if case .split(.horizontal, .leaf(let main), .split(.vertical, _, _, _), let ratio) = node {
-      XCTAssertEqual(main.id, panes[0].id)
+      XCTAssertEqual(main, panes[0].id)
       XCTAssertEqual(ratio, 0.66, accuracy: 0.001)
     } else {
       XCTFail("Expected main-horizontal layout")
@@ -113,8 +121,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(5)
     let node = LayoutEngine.apply(.mainHorizontal, to: panes)
     let layout = PaneLayout(root: node)
-    XCTAssertEqual(layout.leaves.count, 5)
-    XCTAssertEqual(layout.leaves.map(\.id), panes.map(\.id))
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 5)
+    XCTAssertEqual(layout.leafIDs, panes.map(\.id))
   }
 
   // MARK: - Main Vertical
@@ -123,8 +131,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(2)
     let node = LayoutEngine.apply(.mainVertical, to: panes)
     if case .split(.vertical, .leaf(let main), .leaf(let other), let ratio) = node {
-      XCTAssertEqual(main.id, panes[0].id)
-      XCTAssertEqual(other.id, panes[1].id)
+      XCTAssertEqual(main, panes[0].id)
+      XCTAssertEqual(other, panes[1].id)
       XCTAssertEqual(ratio, 0.66, accuracy: 0.001)
     } else {
       XCTFail("Expected vertical split with 0.66 ratio")
@@ -135,7 +143,7 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(3)
     let node = LayoutEngine.apply(.mainVertical, to: panes)
     if case .split(.vertical, .leaf(let main), .split(.horizontal, _, _, _), let ratio) = node {
-      XCTAssertEqual(main.id, panes[0].id)
+      XCTAssertEqual(main, panes[0].id)
       XCTAssertEqual(ratio, 0.66, accuracy: 0.001)
     } else {
       XCTFail("Expected main-vertical layout")
@@ -148,8 +156,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(2)
     let node = LayoutEngine.apply(.tiled, to: panes)
     if case .split(.horizontal, .leaf(let a), .leaf(let b), let ratio) = node {
-      XCTAssertEqual(a.id, panes[0].id)
-      XCTAssertEqual(b.id, panes[1].id)
+      XCTAssertEqual(a, panes[0].id)
+      XCTAssertEqual(b, panes[1].id)
       XCTAssertEqual(ratio, 0.5, accuracy: 0.001)
     } else {
       XCTFail("Expected simple horizontal split for 2-pane tiled")
@@ -160,8 +168,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(3)
     let node = LayoutEngine.apply(.tiled, to: panes)
     let layout = PaneLayout(root: node)
-    XCTAssertEqual(layout.leaves.count, 3)
-    XCTAssertEqual(layout.leaves.map(\.id), panes.map(\.id))
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 3)
+    XCTAssertEqual(layout.leafIDs, panes.map(\.id))
 
     if case .split(
       .vertical,
@@ -169,9 +177,9 @@ final class LayoutEngineTests: XCTestCase {
       .split(.horizontal, .leaf(let c), .empty, _),
       let ratio) = node
     {
-      XCTAssertEqual(a.id, panes[0].id)
-      XCTAssertEqual(b.id, panes[1].id)
-      XCTAssertEqual(c.id, panes[2].id)
+      XCTAssertEqual(a, panes[0].id)
+      XCTAssertEqual(b, panes[1].id)
+      XCTAssertEqual(c, panes[2].id)
       XCTAssertEqual(ratio, 0.5, accuracy: 0.001)
     } else {
       XCTFail("Expected 2x2 tiled grid with empty cell")
@@ -187,10 +195,10 @@ final class LayoutEngineTests: XCTestCase {
       .split(.horizontal, .leaf(let c), .leaf(let d), _),
       _) = node
     {
-      XCTAssertEqual(a.id, panes[0].id)
-      XCTAssertEqual(b.id, panes[1].id)
-      XCTAssertEqual(c.id, panes[2].id)
-      XCTAssertEqual(d.id, panes[3].id)
+      XCTAssertEqual(a, panes[0].id)
+      XCTAssertEqual(b, panes[1].id)
+      XCTAssertEqual(c, panes[2].id)
+      XCTAssertEqual(d, panes[3].id)
     } else {
       XCTFail("Expected 2x2 tiled grid")
     }
@@ -200,8 +208,8 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(5)
     let node = LayoutEngine.apply(.tiled, to: panes)
     let layout = PaneLayout(root: node)
-    XCTAssertEqual(layout.leaves.count, 5)
-    XCTAssertEqual(layout.leaves.map(\.id), panes.map(\.id))
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 5)
+    XCTAssertEqual(layout.leafIDs, panes.map(\.id))
   }
 
   // MARK: - Edge cases
@@ -210,7 +218,7 @@ final class LayoutEngineTests: XCTestCase {
     let panes = makePanes(1)
     let node = LayoutEngine.apply(.evenHorizontal, to: panes)
     if case .leaf(let p) = node {
-      XCTAssertEqual(p.id, panes[0].id)
+      XCTAssertEqual(p, panes[0].id)
     } else {
       XCTFail("Single pane should return a leaf node")
     }

@@ -8,7 +8,7 @@ enum StandardLayout: Sendable {
 struct LayoutEngine {
   static func apply(_ layout: StandardLayout, to panes: [MisttyPane]) -> PaneLayoutNode {
     guard !panes.isEmpty else { return .empty }
-    guard panes.count > 1 else { return .leaf(panes[0]) }
+    guard panes.count > 1 else { return .leaf(panes[0].id) }
 
     switch layout {
     case .evenHorizontal: return evenSplit(.horizontal, panes)
@@ -27,11 +27,11 @@ struct LayoutEngine {
   {
     assert(panes.count >= 2)
     if panes.count == 2 {
-      return .split(direction, .leaf(panes[0]), .leaf(panes[1]), 0.5)
+      return .split(direction, .leaf(panes[0].id), .leaf(panes[1].id), 0.5)
     }
     let ratio = 1.0 / Double(panes.count)
     let rest = Array(panes.dropFirst())
-    return .split(direction, .leaf(panes[0]), evenSplit(direction, rest), ratio)
+    return .split(direction, .leaf(panes[0].id), evenSplit(direction, rest), ratio)
   }
 
   // MARK: - Main split
@@ -46,11 +46,11 @@ struct LayoutEngine {
     let secondaryDirection = direction.toggled
     let restNode: PaneLayoutNode
     if rest.count == 1 {
-      restNode = .leaf(rest[0])
+      restNode = .leaf(rest[0].id)
     } else {
       restNode = evenSplit(secondaryDirection, rest)
     }
-    return .split(direction, .leaf(main), restNode, 0.66)
+    return .split(direction, .leaf(main.id), restNode, 0.66)
   }
 
   // MARK: - Tiled
@@ -77,7 +77,7 @@ struct LayoutEngine {
 
   /// Build a single row: even horizontal split of panes, padded with .empty nodes.
   private static func buildRow(_ panes: [MisttyPane], emptyCount: Int) -> PaneLayoutNode {
-    var nodes: [PaneLayoutNode] = panes.map { .leaf($0) }
+    var nodes: [PaneLayoutNode] = panes.map { .leaf($0.id) }
     nodes.append(contentsOf: Array(repeating: PaneLayoutNode.empty, count: emptyCount))
     return evenSplitNodes(.horizontal, nodes)
   }

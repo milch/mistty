@@ -17,11 +17,12 @@ extension WindowsStore {
               sshCommand: session.sshCommand,
               lastActivatedAt: session.lastActivatedAt,
               tabs: session.tabs.map { tab in
-                TabSnapshot(
+                let paneLookup = Dictionary(uniqueKeysWithValues: tab.panes.map { ($0.id, $0) })
+                return TabSnapshot(
                   id: tab.id,
                   customTitle: tab.customTitle,
                   directory: tab.directory,
-                  layout: snapshotLayout(tab.layout.root),
+                  layout: snapshotLayout(tab.layout.root, panes: paneLookup),
                   activePaneID: tab.activePane?.id
                 )
               },
@@ -135,7 +136,10 @@ extension WindowsStore {
       id: snapshot.id, existingPane: firstPane, paneIDGenerator: paneIDGen)
     tab.customTitle = snapshot.customTitle
     tab.layout = PaneLayout(root: rootNode)
-    tab.refreshPanesFromLayout()
+    // Hand the tab every restored pane in one shot — without this only
+    // `firstPane` lives in `tab.panes`, and `refreshPanesFromLayout`
+    // would drop every other leaf because its lookup couldn't find them.
+    tab.installPanes(Array(panes.values))
 
     if let activeID = snapshot.activePaneID,
        let active = tab.panes.first(where: { $0.id == activeID }) {
@@ -166,7 +170,7 @@ extension WindowsStore {
         pane.execInitialInput = false
       }
       panes[paneSnap.id] = pane
-      return .leaf(pane)
+      return .leaf(pane.id)
     case .split(let dir, let a, let b, let ratio):
       let aNode = restoreLayoutNode(a, config: config, panes: &panes, maxPaneID: &maxPaneID)
       let bNode = restoreLayoutNode(b, config: config, panes: &panes, maxPaneID: &maxPaneID)
@@ -185,9 +189,16 @@ extension WindowsStore {
     return FileManager.default.homeDirectoryForCurrentUser
   }
 
-  func snapshotLayout(_ node: PaneLayoutNode) -> LayoutNodeSnapshot {
+  func snapshotLayout(_ node: PaneLayoutNode, panes: [Int: MisttyPane]) -> LayoutNodeSnapshot {
     switch node {
-    case .leaf(let pane):
+    case .leaf(let paneID):
+      guard let pane = panes[paneID] else {
+        // Stale leaf — the pane was removed from `tab.panes` but the
+        // layout enum is still being traversed. Emit a placeholder so
+        // the snapshot can still be written; the restored layout will
+        // drop the orphaned leaf.
+        return .leaf(pane: PaneSnapshot(id: paneID))
+      }
       let captured = ForegroundProcessResolver.current(for: pane).map {
         CapturedProcess(executable: $0.executable, argv: $0.argv, pid: $0.pid)
       }
@@ -203,8 +214,8 @@ extension WindowsStore {
     case .split(let dir, let a, let b, let ratio):
       return .split(
         direction: dir == .horizontal ? .horizontal : .vertical,
-        a: snapshotLayout(a),
-        b: snapshotLayout(b),
+        a: snapshotLayout(a, panes: panes),
+        b: snapshotLayout(b, panes: panes),
         ratio: Double(ratio)
       )
     }

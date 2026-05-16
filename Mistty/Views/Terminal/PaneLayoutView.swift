@@ -3,6 +3,12 @@ import SwiftUI
 
 struct PaneLayoutView: View {
   let node: PaneLayoutNode
+  /// Source of truth for which `MisttyPane` instances exist in this tab.
+  /// Leaves in `node` reference panes by ID and we resolve them through
+  /// this array. Without this indirection, the layout enum's
+  /// `.leaf(MisttyPane)` heap allocation strongly held closed panes via
+  /// SwiftUI's view-tree cache, leaking the libghostty surface forever.
+  let panes: [MisttyPane]
   let activePane: MisttyPane?
   var isWindowModeActive: Bool = false
   var windowModeState: MisttyTab.WindowModeState = .inactive
@@ -13,40 +19,37 @@ struct PaneLayoutView: View {
   var onClosePane: ((MisttyPane) -> Void)?
   var onSelectPane: ((MisttyPane) -> Void)?
   /// Called as the user drags a split divider. `delta` is a ratio-space
-  /// increment in [-1, 1] against the split's container size. The receiver
-  /// is expected to mutate the underlying layout via
-  /// `PaneLayout.resizeSplit(between:and:delta:)`.
+  /// increment in [-1, 1] against the split's container size.
   var onResizeBetween: ((MisttyPane, MisttyPane, CGFloat) -> Void)?
+
+  private func pane(byID id: Int) -> MisttyPane? {
+    panes.first { $0.id == id }
+  }
 
   var body: some View {
     switch node {
     case .empty:
       Color(nsColor: .windowBackgroundColor)
-    case .leaf(let pane):
-      PaneView(
-        pane: pane,
-        isActive: activePane?.id == pane.id,
-        isWindowModeActive: isWindowModeActive,
-        // Each pane keeps its own copyModeState across focus switches, but
-        // only the focused pane shows the overlay — other panes that have a
-        // stored state stay scrolled to their saved position with no UI
-        // chrome until refocused.
-        copyModeState: (pane.id == activePane?.id) ? pane.copyModeState : nil,
-        windowModeState: windowModeState,
-        joinPickTabNames: joinPickTabNames,
-        paneCount: paneCount,
-        // `[weak pane]` breaks the retain cycle that was leaking ~140
-        // libghostty surfaces over the lifetime of a long-running Mistty.
-        // The cycle: `MisttyPane._surfaceView → TerminalSurfaceView →
-        // .onSelect closure (captures pane strongly) → MisttyPane`. With
-        // strong capture, even after `closePane`/`closeTab` drop the model
-        // refs the view kept the pane (and its libghostty renderer + io
-        // threads + IOSurfaces) alive forever. SwiftUI eventually
-        // dismantles the NSViewRepresentable, but the orphaned NSView
-        // still held the closure-via-pane cycle.
-        onClose: { [weak pane] in if let pane { onClosePane?(pane) } },
-        onSelect: { [weak pane] in if let pane { onSelectPane?(pane) } }
-      )
+    case .leaf(let paneID):
+      if let pane = pane(byID: paneID) {
+        PaneView(
+          pane: pane,
+          isActive: activePane?.id == pane.id,
+          isWindowModeActive: isWindowModeActive,
+          copyModeState: (pane.id == activePane?.id) ? pane.copyModeState : nil,
+          windowModeState: windowModeState,
+          joinPickTabNames: joinPickTabNames,
+          paneCount: paneCount,
+          onClose: { [weak pane] in if let pane { onClosePane?(pane) } },
+          onSelect: { [weak pane] in if let pane { onSelectPane?(pane) } }
+        )
+      } else {
+        // Stale leaf — the pane has been removed from `tab.panes` but
+        // a layout that still references it survived briefly. Render
+        // empty rather than crashing; the next layout update will drop
+        // this branch.
+        Color(nsColor: .windowBackgroundColor)
+      }
     case .split(let direction, let a, let b, let ratio):
       // ZStack with absolute positioning so the divider can be a 12pt-wide
       // hit target sitting *on top of* the panes' boundary — without that,
@@ -89,7 +92,8 @@ struct PaneLayoutView: View {
     b: PaneLayoutNode,
     containerSize: CGFloat
   ) -> some View {
-    if let aRep = Self.firstLeaf(a), let bRep = Self.firstLeaf(b),
+    if let aID = Self.firstLeafID(a), let bID = Self.firstLeafID(b),
+      let aRep = pane(byID: aID), let bRep = pane(byID: bID),
       let onResizeBetween
     {
       SplitDivider(
@@ -113,7 +117,8 @@ struct PaneLayoutView: View {
   @ViewBuilder
   private func child(_ node: PaneLayoutNode) -> some View {
     PaneLayoutView(
-      node: node, activePane: activePane, isWindowModeActive: isWindowModeActive,
+      node: node, panes: panes, activePane: activePane,
+      isWindowModeActive: isWindowModeActive,
       windowModeState: windowModeState, joinPickTabNames: joinPickTabNames,
       paneCount: paneCount,
       borderColor: borderColor, borderWidth: borderWidth,
@@ -122,11 +127,11 @@ struct PaneLayoutView: View {
     )
   }
 
-  private static func firstLeaf(_ node: PaneLayoutNode) -> MisttyPane? {
+  private static func firstLeafID(_ node: PaneLayoutNode) -> Int? {
     switch node {
-    case .leaf(let p): return p
+    case .leaf(let id): return id
     case .empty: return nil
-    case .split(_, let a, _, _): return firstLeaf(a)
+    case .split(_, let a, _, _): return firstLeafID(a)
     }
   }
 }

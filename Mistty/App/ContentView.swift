@@ -337,6 +337,7 @@ struct ContentView: View {
               } else {
                 PaneLayoutView(
                   node: tab.layout.root,
+                  panes: tab.panes,
                   activePane: tab.activePane,
                   isWindowModeActive: tab.isWindowModeActive,
                   windowModeState: tab.windowModeState,
@@ -993,7 +994,8 @@ struct ContentView: View {
   private func focusAdjacentPane(_ direction: NavigationDirection) {
     guard let tab = state.activeSession?.activeTab,
       let current = tab.activePane,
-      let target = tab.layout.adjacentPane(from: current, direction: direction)
+      let targetID = tab.layout.adjacentPaneID(from: current, direction: direction),
+      let target = tab.pane(byID: targetID)
     else { return }
     tab.focusPane(target)
   }
@@ -1443,7 +1445,9 @@ struct ContentView: View {
       if pane.isRunningNeovim && !pane.isInRemoteShell { return event }
 
       // Navigate between MistTY panes — only consume if navigation succeeds
-      if let target = tab.layout.adjacentPane(from: pane, direction: direction) {
+      if let targetID = tab.layout.adjacentPaneID(from: pane, direction: direction),
+        let target = tab.pane(byID: targetID)
+      {
         tab.focusPane(target)
         return nil  // Consume the event
       }

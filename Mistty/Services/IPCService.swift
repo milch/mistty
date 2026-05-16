@@ -328,7 +328,9 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
         return
       }
 
-      guard let target = tab.layout.adjacentPane(from: pane, direction: navDirection) else {
+      guard let targetID = tab.layout.adjacentPaneID(from: pane, direction: navDirection),
+        let target = tab.pane(byID: targetID)
+      else {
         reply(nil, MisttyIPC.error(.operationFailed, "No pane in direction \(direction)"))
         return
       }

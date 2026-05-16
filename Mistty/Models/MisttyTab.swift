@@ -11,6 +11,11 @@ final class MisttyTab: Identifiable {
     customTitle ?? title
   }
   let directory: URL?
+  /// Source of truth for the panes owned by this tab. `layout` references
+  /// these via ID. When this array drops a pane, the pane (and its
+  /// libghostty surface) is deallocated — independent of whether the
+  /// layout enum's stale heap allocation is still cached in some SwiftUI
+  /// view tree.
   private(set) var panes: [MisttyPane] = []
   var activePane: MisttyPane?
   var hasBell = false
@@ -59,10 +64,6 @@ final class MisttyTab: Identifiable {
     DebugLog.shared.log("popup", "MisttyTab init id=\(id) (existingPane paneID=\(pane.id))")
   }
 
-  /// Investigation hook for the surface-leak hunt: if a tab is removed
-  /// from `MisttySession.tabs` but `MisttyTab deinit id=N` never appears,
-  /// something is still strongly referencing the tab — which also keeps
-  /// its panes (and their libghostty surfaces) alive.
   deinit {
     let capturedID = id
     Task { @MainActor in
@@ -70,11 +71,25 @@ final class MisttyTab: Identifiable {
     }
   }
 
-  /// Resync `panes` from the current `layout.leaves` after `restore` wires a
-  /// new tree into the tab. Not needed in normal operation because
-  /// split/close already keep them in sync.
+  /// Reorder `panes` to match `layout`'s left-to-right / top-to-bottom
+  /// traversal. Called after layout mutations and after `restore` wires
+  /// a new tree in.
   func refreshPanesFromLayout() {
-    panes = layout.leaves
+    let order = layout.leafIDs
+    let byID = Dictionary(uniqueKeysWithValues: panes.map { ($0.id, $0) })
+    panes = order.compactMap { byID[$0] }
+  }
+
+  /// Install a complete set of panes (e.g. during state restoration) and
+  /// reorder them to match the layout's traversal order.
+  func installPanes(_ newPanes: [MisttyPane]) {
+    panes = newPanes
+    refreshPanesFromLayout()
+  }
+
+  /// Look up a pane owned by this tab by its ID.
+  func pane(byID id: Int) -> MisttyPane? {
+    panes.first { $0.id == id }
   }
 
   func splitActivePane(direction: SplitDirection) {
@@ -85,15 +100,17 @@ final class MisttyTab: Identifiable {
     newPane.directory = activePane.currentWorkingDirectory
       ?? activePane.directory
       ?? directory
+    panes.append(newPane)
     layout.split(pane: activePane, direction: direction, newPane: newPane)
-    panes = layout.leaves
+    refreshPanesFromLayout()
     self.activePane = newPane
   }
 
   func addExistingPane(_ pane: MisttyPane, direction: SplitDirection) {
     guard let activePane else { return }
+    panes.append(pane)
     layout.split(pane: activePane, direction: direction, newPane: pane)
-    panes = layout.leaves
+    refreshPanesFromLayout()
     self.activePane = pane
   }
 
@@ -101,7 +118,11 @@ final class MisttyTab: Identifiable {
     let wasActive = activePane?.id == pane.id
     let closingID = pane.id
     layout.remove(pane: pane)
-    panes = layout.leaves
+    // Drop the pane from the source-of-truth array. After this point
+    // (and assuming SwiftUI's view tree doesn't strongly hold the pane
+    // via an `@Bindable` or `let pane:` field), the pane and its
+    // libghostty surface will deallocate.
+    panes.removeAll { $0.id == pane.id }
     if wasActive {
       activePane = panes.last
       // The closed pane's OSC 2 title was what the tab last latched onto.
@@ -111,6 +132,7 @@ final class MisttyTab: Identifiable {
       // stays on the destroyed surface, so keystrokes go nowhere.
       activePane?.focusKeyboardInput()
     }
+    if zoomedPane?.id == closingID { zoomedPane = nil }
     DebugLog.shared.log(
       "popup",
       "closePane tabID=\(id) paneID=\(closingID) remaining-panes=\(panes.count) "
@@ -127,10 +149,9 @@ final class MisttyTab: Identifiable {
   }
 
   func applyStandardLayout(_ standardLayout: StandardLayout) {
-    let currentPanes = layout.leaves
-    guard currentPanes.count >= 2 else { return }
+    guard panes.count >= 2 else { return }
     zoomedPane = nil
-    layout = PaneLayout(root: LayoutEngine.apply(standardLayout, to: currentPanes))
-    panes = layout.leaves
+    layout = PaneLayout(root: LayoutEngine.apply(standardLayout, to: panes))
+    refreshPanesFromLayout()
   }
 }

@@ -5,38 +5,46 @@ import XCTest
 @MainActor
 final class PaneLayoutTests: XCTestCase {
   private var nextPaneId = 1
+  /// Tracks every pane created in this test case so test code can
+  /// resolve `layout.leafIDs` back to `MisttyPane` instances via the
+  /// `*(in:)` convenience helpers. Required because the layout enum
+  /// now stores pane IDs (not class refs) to avoid retaining closed
+  /// panes through SwiftUI's view-tree cache.
+  private var allPanes: [MisttyPane] = []
 
   private func makePane() -> MisttyPane {
     let pane = MisttyPane(id: nextPaneId)
     nextPaneId += 1
+    allPanes.append(pane)
     return pane
   }
 
   override func setUp() async throws {
     await MainActor.run {
       nextPaneId = 1
+      allPanes = []
     }
   }
 
   func test_singlePaneHasOneLeaf() {
     let pane = makePane()
     let layout = PaneLayout(pane: pane)
-    XCTAssertEqual(layout.leaves.count, 1)
-    XCTAssertEqual(layout.leaves[0].id, pane.id)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 1)
+    XCTAssertEqual(layout.leaves(in: allPanes)[0].id, pane.id)
   }
 
   func test_splitAddsSecondLeaf() {
     let pane = makePane()
     var layout = PaneLayout(pane: pane)
     layout.split(pane: pane, direction: .horizontal, newPane: makePane())
-    XCTAssertEqual(layout.leaves.count, 2)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 2)
   }
 
   func test_splitPreservesOriginalPane() {
     let pane = makePane()
     var layout = PaneLayout(pane: pane)
     layout.split(pane: pane, direction: .horizontal, newPane: makePane())
-    XCTAssertTrue(layout.leaves.contains(where: { $0.id == pane.id }))
+    XCTAssertTrue(layout.leaves(in: allPanes).contains(where: { $0.id == pane.id }))
   }
 
   func test_splitDirectionIsRecorded() {
@@ -54,27 +62,27 @@ final class PaneLayoutTests: XCTestCase {
     let pane = makePane()
     var layout = PaneLayout(pane: pane)
     layout.split(pane: pane, direction: .horizontal, newPane: makePane())
-    let secondPane = layout.leaves.first(where: { $0.id != pane.id })!
+    let secondPane = layout.leaves(in: allPanes).first(where: { $0.id != pane.id })!
     layout.split(pane: secondPane, direction: .vertical, newPane: makePane())
-    XCTAssertEqual(layout.leaves.count, 3)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 3)
   }
 
   func test_adjacentPaneHorizontal() {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
 
     // Right of first pane should be second pane
-    let right = layout.adjacentPane(from: panes[0], direction: .right)
+    let right = layout.adjacentPane(from: panes[0], direction: .right, in: allPanes)
     XCTAssertEqual(right?.id, panes[1].id)
 
     // Left of second pane should be first pane
-    let left = layout.adjacentPane(from: panes[1], direction: .left)
+    let left = layout.adjacentPane(from: panes[1], direction: .left, in: allPanes)
     XCTAssertEqual(left?.id, panes[0].id)
 
     // Left of first pane should be nil (edge)
-    let none = layout.adjacentPane(from: panes[0], direction: .left)
+    let none = layout.adjacentPane(from: panes[0], direction: .left, in: allPanes)
     XCTAssertNil(none)
   }
 
@@ -82,12 +90,12 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .vertical, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
 
-    let down = layout.adjacentPane(from: panes[0], direction: .down)
+    let down = layout.adjacentPane(from: panes[0], direction: .down, in: allPanes)
     XCTAssertEqual(down?.id, panes[1].id)
 
-    let up = layout.adjacentPane(from: panes[1], direction: .up)
+    let up = layout.adjacentPane(from: panes[1], direction: .up, in: allPanes)
     XCTAssertEqual(up?.id, panes[0].id)
   }
 
@@ -106,7 +114,7 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
     layout.resizeSplit(containing: panes[0], delta: 0.1)
     if case .split(_, _, _, let ratio) = layout.root {
       XCTAssertEqual(ratio, 0.6, accuracy: 0.001)
@@ -116,21 +124,24 @@ final class PaneLayoutTests: XCTestCase {
   }
 
   /// Regression: removing the only pane used to leave `root` pointing at
-  /// the original `.leaf(pane)` (only `isEmpty` was flipped), so the
+  /// the original `.leaf(pane.id)` (only `isEmpty` was flipped), so the
   /// layout silently retained a strong ref to the closed pane. Combined
   /// with any external retention of the owning tab, this kept the pane
   /// (and its libghostty surface) alive forever.
   func test_removeLastPaneDropsReferenceFromRoot() {
     weak var weakPane: MisttyPane?
     do {
-      let pane = makePane()
+      // Create the pane directly rather than via `makePane()` so the
+      // test class's `allPanes` tracker doesn't pin it (that would
+      // defeat the weak-ref check below).
+      let pane = MisttyPane(id: 99)
       weakPane = pane
       var layout = PaneLayout(pane: pane)
       layout.remove(pane: pane)
       if case .leaf = layout.root {
         XCTFail("Root should not be `.leaf` after removing the last pane")
       }
-      XCTAssertTrue(layout.leaves.isEmpty)
+      XCTAssertTrue(layout.leafIDs.isEmpty)
       // `pane` and `layout` go out of scope at the end of this `do`
       // block — if `layout.remove` correctly collapsed the root to
       // `.empty`, no strong ref remains and `weakPane` goes to nil.
@@ -156,7 +167,7 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
     // 800 px tab, 10 px/cell → 80 cols; 5 cells → 5*10/800 = 0.0625 delta.
     layout.resizeSplit(
       containing: panes[0], cells: 5, along: .horizontal, cellSize: 10, tabSize: 800)
@@ -171,7 +182,7 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
     layout.resizeSplit(
       containing: panes[0], cells: -1, along: .horizontal, cellSize: 8, tabSize: 800)
     // -1 cell * 8 px / 800 px = -0.01 delta
@@ -186,7 +197,7 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .vertical, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
     // 480 px tab, 20 px/cell (24 rows); 3 cells → 3*20/480 = 0.125
     layout.resizeSplit(
       containing: panes[0], cells: 3, along: .vertical, cellSize: 20, tabSize: 480)
@@ -211,8 +222,8 @@ final class PaneLayoutTests: XCTestCase {
     let pC = makePane()
     let root: PaneLayoutNode = .split(
       .horizontal,
-      .leaf(pA),
-      .split(.vertical, .leaf(pB), .leaf(pC), 0.5),
+      .leaf(pA.id),
+      .split(.vertical, .leaf(pB.id), .leaf(pC.id), 0.5),
       0.5)
     var layout = PaneLayout(root: root)
     layout.resizeSplit(
@@ -244,8 +255,8 @@ final class PaneLayoutTests: XCTestCase {
     // that on top with a small top band (ratio 0.25).
     let root: PaneLayoutNode = .split(
       .vertical,
-      .split(.vertical, .leaf(pA), .leaf(pB), 0.5),
-      .leaf(pC),
+      .split(.vertical, .leaf(pA.id), .leaf(pB.id), 0.5),
+      .leaf(pC.id),
       0.25)
     var layout = PaneLayout(root: root)
     // Target pane A. The outer vertical split matches direction first and
@@ -265,7 +276,7 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
     layout.resizeSplit(
       containing: panes[0], cells: 0, along: .horizontal, cellSize: 10, tabSize: 800)
     if case .split(_, _, _, let ratio) = layout.root {
@@ -285,7 +296,7 @@ final class PaneLayoutTests: XCTestCase {
     let p1 = makePane()
     var layout = PaneLayout(pane: p1)
     layout.split(pane: p1, direction: .horizontal, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
     let r0 = layout.unitRect(of: panes[0])
     let r1 = layout.unitRect(of: panes[1])
     XCTAssertEqual(r0?.width ?? 0, 0.5, accuracy: 0.001)
@@ -297,7 +308,7 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .vertical, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
 
     // Get initial ratio
     let ratioBefore: CGFloat
@@ -320,12 +331,12 @@ final class PaneLayoutTests: XCTestCase {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.split(pane: pane1, direction: .horizontal, newPane: makePane())
-    let panes = layout.leaves
+    let panes = layout.leaves(in: allPanes)
     XCTAssertEqual(panes.count, 2)
 
     layout.remove(pane: panes[1])
-    XCTAssertEqual(layout.leaves.count, 1)
-    XCTAssertEqual(layout.leaves[0].id, pane1.id)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 1)
+    XCTAssertEqual(layout.leaves(in: allPanes)[0].id, pane1.id)
     XCTAssertFalse(layout.isEmpty)
   }
 
@@ -334,7 +345,7 @@ final class PaneLayoutTests: XCTestCase {
     var layout = PaneLayout(pane: pane1)
     layout.remove(pane: pane1)
     XCTAssertTrue(layout.isEmpty)
-    XCTAssertTrue(layout.leaves.isEmpty)
+    XCTAssertTrue(layout.leaves(in: allPanes).isEmpty)
   }
 
   func test_removeNonExistentPane() {
@@ -342,7 +353,7 @@ final class PaneLayoutTests: XCTestCase {
     let pane2 = makePane()
     var layout = PaneLayout(pane: pane1)
     layout.remove(pane: pane2)
-    XCTAssertEqual(layout.leaves.count, 1)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 1)
     XCTAssertFalse(layout.isEmpty)
   }
 
@@ -350,17 +361,17 @@ final class PaneLayoutTests: XCTestCase {
 
   func test_leavesSkipsEmpty() {
     let pane = makePane()
-    let root: PaneLayoutNode = .split(.horizontal, .leaf(pane), .empty, 0.5)
+    let root: PaneLayoutNode = .split(.horizontal, .leaf(pane.id), .empty, 0.5)
     let layout = PaneLayout(root: root)
-    XCTAssertEqual(layout.leaves.count, 1)
-    XCTAssertEqual(layout.leaves[0].id, pane.id)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 1)
+    XCTAssertEqual(layout.leaves(in: allPanes)[0].id, pane.id)
   }
 
   func test_rootInitializer() {
     let pane = makePane()
-    let root: PaneLayoutNode = .leaf(pane)
+    let root: PaneLayoutNode = .leaf(pane.id)
     let layout = PaneLayout(root: root)
-    XCTAssertEqual(layout.leaves.count, 1)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 1)
   }
 
   func test_adjacentPaneSkipsEmpty() {
@@ -368,11 +379,11 @@ final class PaneLayoutTests: XCTestCase {
     let pane2 = makePane()
     let root: PaneLayoutNode = .split(
       .horizontal,
-      .leaf(pane1),
-      .split(.horizontal, .empty, .leaf(pane2), 0.5),
+      .leaf(pane1.id),
+      .split(.horizontal, .empty, .leaf(pane2.id), 0.5),
       0.5)
     let layout = PaneLayout(root: root)
-    let adjacent = layout.adjacentPane(from: pane1, direction: .right)
+    let adjacent = layout.adjacentPane(from: pane1, direction: .right, in: allPanes)
     XCTAssertEqual(adjacent?.id, pane2.id)
   }
 
@@ -382,15 +393,15 @@ final class PaneLayoutTests: XCTestCase {
     let pane3 = makePane()
     let root: PaneLayoutNode = .split(
       .vertical,
-      .split(.horizontal, .leaf(pane1), .leaf(pane2), 0.5),
-      .split(.horizontal, .leaf(pane3), .empty, 0.5),
+      .split(.horizontal, .leaf(pane1.id), .leaf(pane2.id), 0.5),
+      .split(.horizontal, .leaf(pane3.id), .empty, 0.5),
       0.5)
     var layout = PaneLayout(root: root)
     layout.remove(pane: pane3)
-    XCTAssertEqual(layout.leaves.count, 2)
+    XCTAssertEqual(layout.leaves(in: allPanes).count, 2)
     if case .split(.horizontal, .leaf(let a), .leaf(let b), _) = layout.root {
-      XCTAssertEqual(a.id, pane1.id)
-      XCTAssertEqual(b.id, pane2.id)
+      XCTAssertEqual(a, pane1.id)
+      XCTAssertEqual(b, pane2.id)
     } else {
       XCTFail("Expected flat horizontal split after collapsing empty sibling")
     }
@@ -398,15 +409,15 @@ final class PaneLayoutTests: XCTestCase {
 
   func test_firstLeafSkipsEmpty() {
     let pane = makePane()
-    let root: PaneLayoutNode = .split(.horizontal, .empty, .leaf(pane), 0.5)
+    let root: PaneLayoutNode = .split(.horizontal, .empty, .leaf(pane.id), 0.5)
     let layout = PaneLayout(root: root)
-    let adjacent = layout.adjacentPane(from: pane, direction: .left)
+    let adjacent = layout.adjacentPane(from: pane, direction: .left, in: allPanes)
     XCTAssertNil(adjacent)
   }
 
   func test_swapPaneSkipsEmpty() {
     let pane1 = makePane()
-    let root: PaneLayoutNode = .split(.horizontal, .leaf(pane1), .empty, 0.5)
+    let root: PaneLayoutNode = .split(.horizontal, .leaf(pane1.id), .empty, 0.5)
     var layout = PaneLayout(root: root)
     let target = layout.swapPane(pane1, direction: .right)
     XCTAssertNil(target)
@@ -434,38 +445,38 @@ final class PaneLayoutTests: XCTestCase {
 
   func test_2x2_horizontalNavStaysOnSameRow_top() {
     let (layout, p1, p2, _, _) = make2x2()
-    XCTAssertEqual(layout.adjacentPane(from: p1, direction: .right)?.id, p2.id)
-    XCTAssertEqual(layout.adjacentPane(from: p2, direction: .left)?.id, p1.id)
+    XCTAssertEqual(layout.adjacentPane(from: p1, direction: .right, in: allPanes)?.id, p2.id)
+    XCTAssertEqual(layout.adjacentPane(from: p2, direction: .left, in: allPanes)?.id, p1.id)
   }
 
   func test_2x2_horizontalNavStaysOnSameRow_bottom() {
     let (layout, _, _, p3, p4) = make2x2()
-    XCTAssertEqual(layout.adjacentPane(from: p3, direction: .right)?.id, p4.id)
-    XCTAssertEqual(layout.adjacentPane(from: p4, direction: .left)?.id, p3.id)
+    XCTAssertEqual(layout.adjacentPane(from: p3, direction: .right, in: allPanes)?.id, p4.id)
+    XCTAssertEqual(layout.adjacentPane(from: p4, direction: .left, in: allPanes)?.id, p3.id)
   }
 
   func test_2x2_verticalNavStaysOnSameColumn_left() {
     let (layout, p1, _, p3, _) = make2x2()
-    XCTAssertEqual(layout.adjacentPane(from: p1, direction: .down)?.id, p3.id)
-    XCTAssertEqual(layout.adjacentPane(from: p3, direction: .up)?.id, p1.id)
+    XCTAssertEqual(layout.adjacentPane(from: p1, direction: .down, in: allPanes)?.id, p3.id)
+    XCTAssertEqual(layout.adjacentPane(from: p3, direction: .up, in: allPanes)?.id, p1.id)
   }
 
   func test_2x2_verticalNavStaysOnSameColumn_right() {
     let (layout, _, p2, _, p4) = make2x2()
-    XCTAssertEqual(layout.adjacentPane(from: p2, direction: .down)?.id, p4.id)
-    XCTAssertEqual(layout.adjacentPane(from: p4, direction: .up)?.id, p2.id)
+    XCTAssertEqual(layout.adjacentPane(from: p2, direction: .down, in: allPanes)?.id, p4.id)
+    XCTAssertEqual(layout.adjacentPane(from: p4, direction: .up, in: allPanes)?.id, p2.id)
   }
 
   func test_2x2_edgeReturnsNil() {
     let (layout, p1, p2, p3, p4) = make2x2()
-    XCTAssertNil(layout.adjacentPane(from: p1, direction: .left))
-    XCTAssertNil(layout.adjacentPane(from: p1, direction: .up))
-    XCTAssertNil(layout.adjacentPane(from: p2, direction: .right))
-    XCTAssertNil(layout.adjacentPane(from: p2, direction: .up))
-    XCTAssertNil(layout.adjacentPane(from: p3, direction: .left))
-    XCTAssertNil(layout.adjacentPane(from: p3, direction: .down))
-    XCTAssertNil(layout.adjacentPane(from: p4, direction: .right))
-    XCTAssertNil(layout.adjacentPane(from: p4, direction: .down))
+    XCTAssertNil(layout.adjacentPane(from: p1, direction: .left, in: allPanes))
+    XCTAssertNil(layout.adjacentPane(from: p1, direction: .up, in: allPanes))
+    XCTAssertNil(layout.adjacentPane(from: p2, direction: .right, in: allPanes))
+    XCTAssertNil(layout.adjacentPane(from: p2, direction: .up, in: allPanes))
+    XCTAssertNil(layout.adjacentPane(from: p3, direction: .left, in: allPanes))
+    XCTAssertNil(layout.adjacentPane(from: p3, direction: .down, in: allPanes))
+    XCTAssertNil(layout.adjacentPane(from: p4, direction: .right, in: allPanes))
+    XCTAssertNil(layout.adjacentPane(from: p4, direction: .down, in: allPanes))
   }
 
   /// Tall pane on the left, two stacked on the right:
@@ -479,16 +490,16 @@ final class PaneLayoutTests: XCTestCase {
     // Build: horizontal(leaf(A), vertical(leaf(B), leaf(C)))
     let root: PaneLayoutNode = .split(
       .horizontal,
-      .leaf(pA),
-      .split(.vertical, .leaf(pB), .leaf(pC), 0.5),
+      .leaf(pA.id),
+      .split(.vertical, .leaf(pB.id), .leaf(pC.id), 0.5),
       0.5)
     let layout = PaneLayout(root: root)
 
     // From B, left → A (only pane on the left)
-    XCTAssertEqual(layout.adjacentPane(from: pB, direction: .left)?.id, pA.id)
-    XCTAssertEqual(layout.adjacentPane(from: pC, direction: .left)?.id, pA.id)
+    XCTAssertEqual(layout.adjacentPane(from: pB, direction: .left, in: allPanes)?.id, pA.id)
+    XCTAssertEqual(layout.adjacentPane(from: pC, direction: .left, in: allPanes)?.id, pA.id)
     // From A, right → tie between B and C (centers equidistant); any non-nil is acceptable
-    let rightFromA = layout.adjacentPane(from: pA, direction: .right)
+    let rightFromA = layout.adjacentPane(from: pA, direction: .right, in: allPanes)
     XCTAssertTrue(rightFromA?.id == pB.id || rightFromA?.id == pC.id)
   }
 
@@ -499,9 +510,9 @@ final class PaneLayoutTests: XCTestCase {
     let state = store.createWindow()
     let session = state.createSession(name: "test", directory: URL(fileURLWithPath: "/tmp"))
     let tab = session.tabs[0]
-    XCTAssertEqual(tab.layout.leaves.count, 1)
+    XCTAssertEqual(tab.layout.leafIDs.count, 1)
     tab.splitActivePane(direction: .horizontal)
-    XCTAssertEqual(tab.layout.leaves.count, 2)
+    XCTAssertEqual(tab.layout.leafIDs.count, 2)
     XCTAssertEqual(tab.panes.count, 2)
   }
 
@@ -520,9 +531,9 @@ final class PaneLayoutTests: XCTestCase {
     tab.splitActivePane(direction: .horizontal)  // 1 | 2  (active=2)
     tab.splitActivePane(direction: .vertical)  // 1 | 2/3 (active=3)
     tab.activePane = tab.panes.first  // focus pane 1
-    let leafIdsBefore = Set(tab.layout.leaves.map { $0.id })
+    let leafIdsBefore = Set(tab.layout.leafIDs)
     tab.splitActivePane(direction: .vertical)  // 1/4 | 2/3 — new pane 4 below 1
-    let leafIdsAfter = Set(tab.layout.leaves.map { $0.id })
+    let leafIdsAfter = Set(tab.layout.leafIDs)
     let newPaneId = leafIdsAfter.subtracting(leafIdsBefore).first
     XCTAssertNotNil(newPaneId)
     XCTAssertEqual(tab.activePane?.id, newPaneId)

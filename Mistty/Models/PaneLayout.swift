@@ -4,8 +4,15 @@ enum NavigationDirection {
   case left, right, up, down
 }
 
+/// Layout tree describing the split-and-pane shape of a tab. Leaves
+/// reference panes by **ID**, not by class instance — the owning
+/// `MisttyTab` holds the panes themselves via `tab.panes`. Without
+/// this indirection, every cached SwiftUI view tree (e.g. `PaneLayoutView`
+/// in `ForEachState.Item`) ended up retaining the closed pane via the
+/// indirect-enum heap allocation of `.leaf(pane)`, leaking the libghostty
+/// surface forever.
 indirect enum PaneLayoutNode {
-  case leaf(MisttyPane)
+  case leaf(Int)
   case empty
   case split(SplitDirection, PaneLayoutNode, PaneLayoutNode, CGFloat)
 }
@@ -15,45 +22,43 @@ struct PaneLayout {
   var root: PaneLayoutNode
 
   init(pane: MisttyPane) {
-    root = .leaf(pane)
+    root = .leaf(pane.id)
   }
 
   init(root: PaneLayoutNode) {
     self.root = root
   }
 
-  var leaves: [MisttyPane] {
+  /// Pane IDs in display (left-to-right, top-to-bottom) order. The owning
+  /// `MisttyTab` is the source-of-truth for the actual `MisttyPane`
+  /// instances; the layout just describes the arrangement.
+  var leafIDs: [Int] {
     if isEmpty { return [] }
-    return Self.collectLeaves(root)
+    return Self.collectLeafIDs(root)
   }
 
-  private static func collectLeaves(_ node: PaneLayoutNode) -> [MisttyPane] {
+  private static func collectLeafIDs(_ node: PaneLayoutNode) -> [Int] {
     switch node {
-    case .leaf(let pane):
-      return [pane]
+    case .leaf(let id):
+      return [id]
     case .empty:
       return []
     case .split(_, let a, let b, _):
-      return collectLeaves(a) + collectLeaves(b)
+      return collectLeafIDs(a) + collectLeafIDs(b)
     }
   }
 
   /// Returns true if the pane was removed. If removing the last pane,
-  /// `leaves` will be empty — the caller should handle that (e.g. close the tab).
+  /// `leafIDs` will be empty — the caller should handle that (e.g. close the tab).
   @discardableResult
   mutating func remove(pane: MisttyPane) -> Bool {
     if let newRoot = Self.removeNode(root, target: pane.id) {
       root = newRoot
     } else {
-      // The entire tree was just this one pane — collapse to `.empty`.
-      // CRITICAL: setting only `isEmpty = true` and leaving `root` at the
-      // old `.leaf(pane)` value made the layout *appear* empty (since
-      // `leaves` gates on `isEmpty`) while still strongly holding the
-      // closed pane via the unchanged enum case. As long as anything kept
-      // the owning `MisttyTab` alive (SwiftUI view-tree retention is
-      // enough), the pane and its libghostty surface lived forever —
-      // root cause of the ~140-surface accumulation seen in long-running
-      // processes.
+      // Last pane removed — collapse to `.empty`. Setting only `isEmpty
+      // = true` and leaving `root` at the old `.leaf(id)` value would
+      // leave a stale node in the tree; harmless after the ID refactor
+      // (the leaf no longer retains the pane) but still confusing.
       root = .empty
       isEmpty = true
     }
@@ -64,7 +69,7 @@ struct PaneLayout {
 
   private static func removeNode(_ node: PaneLayoutNode, target: Int) -> PaneLayoutNode? {
     switch node {
-    case .leaf(let p) where p.id == target:
+    case .leaf(let id) where id == target:
       return nil  // Remove this leaf
     case .leaf:
       return node  // Not the target, keep it
@@ -78,7 +83,6 @@ struct PaneLayout {
       case (nil, let remaining): return remaining
       case (let remaining, nil): return remaining
       case (let left?, let right?):
-        // Collapse empty siblings so orphaned .empty nodes don't waste screen space
         if case .empty = left { return right }
         if case .empty = right { return left }
         return .split(dir, left, right, ratio)
@@ -87,18 +91,18 @@ struct PaneLayout {
   }
 
   mutating func split(pane: MisttyPane, direction: SplitDirection, newPane: MisttyPane) {
-    root = Self.insertSplit(root, target: pane.id, direction: direction, newPane: newPane)
+    root = Self.insertSplit(root, target: pane.id, direction: direction, newPaneID: newPane.id)
   }
 
   private static func insertSplit(
     _ node: PaneLayoutNode,
     target: Int,
     direction: SplitDirection,
-    newPane: MisttyPane
+    newPaneID: Int
   ) -> PaneLayoutNode {
     switch node {
-    case .leaf(let p) where p.id == target:
-      return .split(direction, .leaf(p), .leaf(newPane), 0.5)
+    case .leaf(let id) where id == target:
+      return .split(direction, .leaf(id), .leaf(newPaneID), 0.5)
     case .leaf:
       return node
     case .empty:
@@ -106,8 +110,8 @@ struct PaneLayout {
     case .split(let dir, let a, let b, let ratio):
       return .split(
         dir,
-        insertSplit(a, target: target, direction: direction, newPane: newPane),
-        insertSplit(b, target: target, direction: direction, newPane: newPane),
+        insertSplit(a, target: target, direction: direction, newPaneID: newPaneID),
+        insertSplit(b, target: target, direction: direction, newPaneID: newPaneID),
         ratio
       )
     }
@@ -124,11 +128,10 @@ struct PaneLayout {
     case .leaf, .empty:
       return node
     case .split(let dir, let a, let b, let ratio):
-      // Check if target is a direct leaf child of this split
       let isDirectChild: Bool
       switch (a, b) {
-      case (.leaf(let p), _) where p.id == target: isDirectChild = true
-      case (_, .leaf(let p)) where p.id == target: isDirectChild = true
+      case (.leaf(let id), _) where id == target: isDirectChild = true
+      case (_, .leaf(let id)) where id == target: isDirectChild = true
       default: isDirectChild = false
       }
 
@@ -136,7 +139,6 @@ struct PaneLayout {
         return .split(dir.toggled, a, b, ratio)
       }
 
-      // Recurse
       return .split(dir, rotate(a, target: target), rotate(b, target: target), ratio)
     }
   }
@@ -149,21 +151,11 @@ struct PaneLayout {
     root = Self.adjustRatio(root, target: pane.id, delta: delta, along: direction)
   }
 
-  /// Resize the split by `cells` rows (for `.vertical`) or columns (for
-  /// `.horizontal`) instead of a ratio. `cellSize` is the grid cell size in
-  /// points along the movement axis; `tabSize` is the enclosing tab's pixel
-  /// size along the movement axis. We walk to the split whose divider would
-  /// actually move, compute its container's pixel extent from its unit rect,
-  /// and convert `cells * cellSize` into a ratio delta. Positive `cells`
-  /// matches `resizeSplit(containing:delta:along:)` sign semantics — divider
-  /// moves right/down.
   /// Resize the split whose divider sits between two specific panes. Used by
   /// drag-to-resize where the divider's identity is unambiguous — we know
   /// exactly which split the user grabbed. Walks the tree to find the
   /// lowest ancestor that puts `aRep` and `bRep` on opposite sides, and
-  /// bumps that split's ratio by `delta`. Differs from the `containing:`
-  /// variant which reaches for the outermost matching-direction ancestor;
-  /// for drag we need the exact split.
+  /// bumps that split's ratio by `delta`.
   mutating func resizeSplit(
     between aRep: MisttyPane, and bRep: MisttyPane, delta: CGFloat
   ) {
@@ -177,17 +169,15 @@ struct PaneLayout {
     case .leaf, .empty:
       return node
     case .split(let dir, let childA, let childB, let ratio):
-      let aInA = collectLeaves(childA).contains { $0.id == a }
-      let aInB = collectLeaves(childB).contains { $0.id == a }
-      let bInA = collectLeaves(childA).contains { $0.id == b }
-      let bInB = collectLeaves(childB).contains { $0.id == b }
+      let aInA = collectLeafIDs(childA).contains(a)
+      let aInB = collectLeafIDs(childB).contains(a)
+      let bInA = collectLeafIDs(childA).contains(b)
+      let bInB = collectLeafIDs(childB).contains(b)
 
-      // a and b on opposite sides of this split — this is the divider.
       if (aInA && bInB) || (aInB && bInA) {
         return .split(dir, childA, childB, max(0.1, min(0.9, ratio + delta)))
       }
 
-      // Otherwise recurse into whichever side contains both.
       if aInA && bInA {
         return .split(
           dir, adjustRatioBetween(childA, a: a, b: b, delta: delta), childB, ratio)
@@ -220,10 +210,6 @@ struct PaneLayout {
     root = Self.adjustRatio(root, target: pane.id, delta: delta, along: direction)
   }
 
-  /// Walk the tree and return the unit rect of the split node whose ratio
-  /// `adjustRatio` would mutate — i.e. the first ancestor split that both
-  /// contains `target` AND whose direction matches `along`. Returns `nil` if
-  /// no such split exists (single-pane tab, or target not found).
   private static func targetSplitContainer(
     _ node: PaneLayoutNode,
     target: Int,
@@ -234,13 +220,12 @@ struct PaneLayout {
     case .leaf, .empty:
       return nil
     case .split(let dir, let a, let b, let ratio):
-      let aContains = collectLeaves(a).contains { $0.id == target }
-      let bContains = collectLeaves(b).contains { $0.id == target }
+      let aContains = collectLeafIDs(a).contains(target)
+      let bContains = collectLeafIDs(b).contains(target)
       guard aContains || bContains else { return nil }
       if dir == direction {
         return bounds
       }
-      // Recurse with shrunken bounds along the non-matching axis
       let aBounds: CGRect
       let bBounds: CGRect
       switch dir {
@@ -273,17 +258,14 @@ struct PaneLayout {
     case .leaf, .empty:
       return node
     case .split(let dir, let a, let b, let ratio):
-      let aContains = collectLeaves(a).contains { $0.id == target }
-      let bContains = collectLeaves(b).contains { $0.id == target }
+      let aContains = collectLeafIDs(a).contains(target)
+      let bContains = collectLeafIDs(b).contains(target)
       guard aContains || bContains else { return node }
 
-      // If this split matches the requested direction, adjust its ratio.
-      // Positive delta moves the divider right/down (increases ratio = more space for side A).
       if direction == nil || direction == dir {
         return .split(dir, a, b, max(0.1, min(0.9, ratio + delta)))
       }
 
-      // Direction doesn't match this split — recurse into the subtree containing the target
       if aContains {
         return .split(dir, adjustRatio(a, target: target, delta: delta, along: direction), b, ratio)
       } else {
@@ -295,25 +277,21 @@ struct PaneLayout {
   // MARK: - Pane Navigation
 
   /// Unit rect of the given pane within the layout (coordinates in [0, 1]).
-  /// Useful for back-converting a pane's pixel bounds into total tab bounds:
-  /// `tabWidth = paneBounds.width / unitRect.width`.
   func unitRect(of pane: MisttyPane) -> CGRect? {
     Self.collectRects(root, in: CGRect(x: 0, y: 0, width: 1, height: 1))[pane.id]
   }
 
-  /// Find the nearest adjacent pane in `direction` using the actual layout
-  /// geometry. Computes each leaf's unit rect (within [0, 1]), filters to
-  /// panes on the correct side, and picks the one closest to the source —
-  /// ties on movement-axis distance are broken by orthogonal-axis center
-  /// alignment so navigation stays in the same row/column.
-  func adjacentPane(from pane: MisttyPane, direction: NavigationDirection) -> MisttyPane? {
+  /// ID of the nearest adjacent pane in `direction` using the actual layout
+  /// geometry. Returns the ID — callers resolve to `MisttyPane` via the
+  /// owning tab's `panes` array.
+  func adjacentPaneID(from pane: MisttyPane, direction: NavigationDirection) -> Int? {
     let rects = Self.collectRects(root, in: CGRect(x: 0, y: 0, width: 1, height: 1))
     guard let source = rects[pane.id] else { return nil }
 
     let eps: CGFloat = 1e-4
-    var best: (pane: MisttyPane, movement: CGFloat, orthogonal: CGFloat)?
-    for leaf in leaves where leaf.id != pane.id {
-      guard let r = rects[leaf.id] else { continue }
+    var best: (id: Int, movement: CGFloat, orthogonal: CGFloat)?
+    for leafID in leafIDs where leafID != pane.id {
+      guard let r = rects[leafID] else { continue }
       let movement: CGFloat
       let orthogonal: CGFloat
       switch direction {
@@ -338,19 +316,19 @@ struct PaneLayout {
         if movement < current.movement
           || (abs(movement - current.movement) < eps && orthogonal < current.orthogonal)
         {
-          best = (leaf, movement, orthogonal)
+          best = (leafID, movement, orthogonal)
         }
       } else {
-        best = (leaf, movement, orthogonal)
+        best = (leafID, movement, orthogonal)
       }
     }
-    return best?.pane
+    return best?.id
   }
 
   private static func collectRects(_ node: PaneLayoutNode, in bounds: CGRect) -> [Int: CGRect] {
     switch node {
-    case .leaf(let p):
-      return [p.id: bounds]
+    case .leaf(let id):
+      return [id: bounds]
     case .empty:
       return [:]
     case .split(let dir, let a, let b, let ratio):
@@ -376,28 +354,46 @@ struct PaneLayout {
 
   // MARK: - Swap Panes
 
+  /// Swap `pane` with its neighbour in `direction`. Returns the ID of the
+  /// pane that was swapped with, or `nil` if there's no neighbour.
   @discardableResult
-  mutating func swapPane(_ pane: MisttyPane, direction: NavigationDirection) -> MisttyPane? {
-    guard let target = adjacentPane(from: pane, direction: direction) else { return nil }
-    root = Self.swapLeaves(root, pane1: pane, pane2: target)
-    return target
+  mutating func swapPane(_ pane: MisttyPane, direction: NavigationDirection) -> Int? {
+    guard let targetID = adjacentPaneID(from: pane, direction: direction) else { return nil }
+    root = Self.swapLeafIDs(root, idA: pane.id, idB: targetID)
+    return targetID
   }
 
-  private static func swapLeaves(_ node: PaneLayoutNode, pane1: MisttyPane, pane2: MisttyPane)
-    -> PaneLayoutNode
-  {
+  private static func swapLeafIDs(_ node: PaneLayoutNode, idA: Int, idB: Int) -> PaneLayoutNode {
     switch node {
-    case .leaf(let p):
-      if p.id == pane1.id { return .leaf(pane2) }
-      if p.id == pane2.id { return .leaf(pane1) }
+    case .leaf(let id):
+      if id == idA { return .leaf(idB) }
+      if id == idB { return .leaf(idA) }
       return node
     case .empty:
       return node
     case .split(let dir, let a, let b, let ratio):
       return .split(
-        dir, swapLeaves(a, pane1: pane1, pane2: pane2), swapLeaves(b, pane1: pane1, pane2: pane2),
-        ratio)
+        dir, swapLeafIDs(a, idA: idA, idB: idB), swapLeafIDs(b, idA: idA, idB: idB), ratio)
     }
   }
+}
 
+// MARK: - Convenience: resolve leaf IDs against a panes array
+
+extension PaneLayout {
+  /// Resolves `leafIDs` to `MisttyPane` instances in display order. The
+  /// supplied `panes` array is the source of truth (typically
+  /// `tab.panes`); leaves whose IDs no longer have a corresponding pane
+  /// are silently dropped.
+  func leaves(in panes: [MisttyPane]) -> [MisttyPane] {
+    let byID = Dictionary(uniqueKeysWithValues: panes.map { ($0.id, $0) })
+    return leafIDs.compactMap { byID[$0] }
+  }
+
+  func adjacentPane(
+    from pane: MisttyPane, direction: NavigationDirection, in panes: [MisttyPane]
+  ) -> MisttyPane? {
+    guard let id = adjacentPaneID(from: pane, direction: direction) else { return nil }
+    return panes.first { $0.id == id }
+  }
 }

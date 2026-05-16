@@ -151,9 +151,10 @@ final class WindowsStore {
           sshCommand: session.sshCommand,
           lastActivatedAt: session.lastActivatedAt,
           tabs: session.tabs.map { tab in
-            TabSnapshot(
+            let paneLookup = Dictionary(uniqueKeysWithValues: tab.panes.map { ($0.id, $0) })
+            return TabSnapshot(
               id: tab.id, customTitle: tab.customTitle, directory: tab.directory,
-              layout: snapshotLayout(tab.layout.root),
+              layout: snapshotLayout(tab.layout.root, panes: paneLookup),
               activePaneID: tab.activePane?.id)
           },
           activeTabID: session.activeTab?.id)
