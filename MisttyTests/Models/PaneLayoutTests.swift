@@ -115,6 +115,31 @@ final class PaneLayoutTests: XCTestCase {
     }
   }
 
+  /// Regression: removing the only pane used to leave `root` pointing at
+  /// the original `.leaf(pane)` (only `isEmpty` was flipped), so the
+  /// layout silently retained a strong ref to the closed pane. Combined
+  /// with any external retention of the owning tab, this kept the pane
+  /// (and its libghostty surface) alive forever.
+  func test_removeLastPaneDropsReferenceFromRoot() {
+    weak var weakPane: MisttyPane?
+    do {
+      let pane = makePane()
+      weakPane = pane
+      var layout = PaneLayout(pane: pane)
+      layout.remove(pane: pane)
+      if case .leaf = layout.root {
+        XCTFail("Root should not be `.leaf` after removing the last pane")
+      }
+      XCTAssertTrue(layout.leaves.isEmpty)
+      // `pane` and `layout` go out of scope at the end of this `do`
+      // block — if `layout.remove` correctly collapsed the root to
+      // `.empty`, no strong ref remains and `weakPane` goes to nil.
+    }
+    XCTAssertNil(
+      weakPane,
+      "MisttyPane should be deallocated after closing the last pane in a layout")
+  }
+
   func test_rotateSplit() {
     let pane1 = makePane()
     var layout = PaneLayout(pane: pane1)

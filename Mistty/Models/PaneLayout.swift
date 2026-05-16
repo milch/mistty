@@ -44,12 +44,20 @@ struct PaneLayout {
   mutating func remove(pane: MisttyPane) -> Bool {
     if let newRoot = Self.removeNode(root, target: pane.id) {
       root = newRoot
-      return true
     } else {
-      // The entire tree was just this one pane — mark as empty
+      // The entire tree was just this one pane — collapse to `.empty`.
+      // CRITICAL: setting only `isEmpty = true` and leaving `root` at the
+      // old `.leaf(pane)` value made the layout *appear* empty (since
+      // `leaves` gates on `isEmpty`) while still strongly holding the
+      // closed pane via the unchanged enum case. As long as anything kept
+      // the owning `MisttyTab` alive (SwiftUI view-tree retention is
+      // enough), the pane and its libghostty surface lived forever —
+      // root cause of the ~140-surface accumulation seen in long-running
+      // processes.
+      root = .empty
       isEmpty = true
-      return true
     }
+    return true
   }
 
   private(set) var isEmpty = false
