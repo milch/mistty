@@ -8,6 +8,13 @@ import Foundation
 /// The pure handler `handle(event:)` is extracted so tests can drive it
 /// directly with synthesized `NSEvent`s; `install()` wraps it in
 /// `NSEvent.addLocalMonitorForEvents` and posts notifications on consume.
+///
+/// `@MainActor` because the monitor's two side effects — reading `NSApp`
+/// and calling `NSApp.sendAction(...)` for the text-responder pass-through
+/// — are main-actor isolated. AppKit guarantees local event monitors fire
+/// on the main thread anyway, so this just makes the runtime invariant
+/// explicit to the type checker.
+@MainActor
 final class ShortcutMonitor {
   /// Caller-supplied window/state queries. Recomputed on every keyDown
   /// rather than cached, since "key window" / "first responder" / "in modal

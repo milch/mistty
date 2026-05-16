@@ -2,6 +2,7 @@ import AppKit
 import Testing
 @testable import Mistty
 
+@MainActor
 struct ShortcutMonitorTests {
   // Test fixtures
   private func makeContext(
