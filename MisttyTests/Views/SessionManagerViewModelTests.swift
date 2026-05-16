@@ -251,7 +251,17 @@ final class SessionManagerViewModelTests: XCTestCase {
     let _ = store.createSession(name: "project", directory: URL(fileURLWithPath: "/tmp"))
     store.activeSession = nil
 
-    let vm = SessionManagerViewModel(state: store, windowsStore: windowsStore)
+    // Inject a "proj"-matching directory so the test doesn't depend on
+    // the runner's zoxide DB having a project-shaped entry. The running
+    // session's `sidebarLabel` falls back to `directory.lastPathComponent`
+    // (= "tmp" here) and so doesn't match the query — the test was
+    // implicitly relying on zoxide to provide the real-match item it
+    // wanted to confirm wasn't displaced by the newOption.
+    let vm = SessionManagerViewModel(
+      state: store, windowsStore: windowsStore,
+      recentDirectories: { [URL(fileURLWithPath: "/Users/me/project-folder")] },
+      sshHosts: { [] }
+    )
     await vm.load()
     vm.updateQuery("proj")
 
