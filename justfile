@@ -133,7 +133,7 @@ bump component:
 
 # Build the app (debug)
 build:
-    swift build
+    swift build -c release
 
 # Build the app (release)
 build-release: build-libghostty
@@ -166,7 +166,10 @@ bundle: build
       cp Mistty/Resources/AppIcon.icns "$APP/Contents/Resources/"
     fi
     just _copy-ghostty-resources "$APP"
-    codesign -s - -f "$APP"
+    # Sign the dev build with `com.apple.security.get-task-allow` so Xcode's
+    # Memory Graph Debugger / sample / leaks etc. can attach via task_for_pid.
+    # Release builds do NOT get this entitlement (see `bundle-release`).
+    codesign -s - -f --entitlements Mistty-dev.entitlements "$APP"
     echo "Bundled: $APP"
 
 # Package as .app bundle (release)
