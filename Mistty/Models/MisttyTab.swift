@@ -115,6 +115,7 @@ final class MisttyTab: Identifiable {
       "popup",
       "closePane tabID=\(id) paneID=\(closingID) remaining-panes=\(panes.count) "
         + "(removed from layout — pane should deinit if no other refs)")
+    LeakDetector.scheduleCheck(tab: nil, panes: [pane])
   }
 
   /// Make `pane` the active pane AND route keyboard input to it. Prefer this
