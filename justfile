@@ -133,7 +133,7 @@ bump component:
 
 # Build the app (debug)
 build:
-    swift build -c release
+    swift build
 
 # Build the app (release)
 build-release: build-libghostty
@@ -377,6 +377,47 @@ test:
 # one suite, e.g. `just bench SessionManagerViewModelBenchmarkTests`.
 bench filter="Benchmark":
     swift test -c release --filter {{filter}}
+
+# CLI alternative to Xcode's Memory Graph Debugger. Dumps every live
+# MisttyPane / MisttyTab instance with its full retain tree (the same
+# info the right-pane in Xcode shows when you click an instance).
+# Requires the dev build, which is signed with `get-task-allow` so
+# `task_for_pid` can attach. Pass `class=MisttyPane` (default) or
+# any other Swift/ObjC class name.
+memgraph class="MisttyPane":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PID=$(pgrep -f Mistty-dev.app/Contents/MacOS/Mistty | head -1)
+    if [ -z "$PID" ]; then
+      echo "error: no Mistty-dev process found. Launch it first:" >&2
+      echo "  open /Applications/Mistty-dev.app" >&2
+      exit 1
+    fi
+    echo "Tracing live {{class}} instances in PID $PID..."
+    echo "(use heap to find addresses, leaks --traceTree to walk retainers)"
+    echo
+    # `heap` prints one section per class. Grep for the class header and
+    # the subsequent lines until the next blank.
+    ADDRS=$(heap "$PID" 2>/dev/null \
+      | awk -v cls="{{class}}" '
+          /^[A-Za-z_].*<[0-9]+>$/ { in_section = ($0 ~ cls); next }
+          in_section && /^0x[0-9a-f]+/ { print $1 }
+          /^$/ { in_section = 0 }
+        ')
+    if [ -z "$ADDRS" ]; then
+      echo "No live {{class}} instances found."
+      exit 0
+    fi
+    COUNT=$(echo "$ADDRS" | wc -l | tr -d ' ')
+    echo "Found $COUNT live {{class}} instance(s). Tracing each:"
+    echo
+    for addr in $ADDRS; do
+      echo "============================================================"
+      echo "  {{class}} @ $addr"
+      echo "============================================================"
+      leaks --traceTree="$addr" "$PID" 2>/dev/null || echo "(no trace available)"
+      echo
+    done
 
 # Clean build artifacts
 clean:
