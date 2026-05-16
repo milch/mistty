@@ -46,6 +46,7 @@ final class MisttyTab: Identifiable {
     layout = PaneLayout(pane: pane)
     panes = [pane]
     activePane = pane
+    DebugLog.shared.log("popup", "MisttyTab init id=\(id) (fresh tab w/ paneID=\(pane.id))")
   }
 
   init(id: Int, existingPane pane: MisttyPane, paneIDGenerator: @escaping () -> Int) {
@@ -55,6 +56,18 @@ final class MisttyTab: Identifiable {
     layout = PaneLayout(pane: pane)
     panes = [pane]
     activePane = pane
+    DebugLog.shared.log("popup", "MisttyTab init id=\(id) (existingPane paneID=\(pane.id))")
+  }
+
+  /// Investigation hook for the surface-leak hunt: if a tab is removed
+  /// from `MisttySession.tabs` but `MisttyTab deinit id=N` never appears,
+  /// something is still strongly referencing the tab — which also keeps
+  /// its panes (and their libghostty surfaces) alive.
+  deinit {
+    let capturedID = id
+    Task { @MainActor in
+      DebugLog.shared.log("popup", "MisttyTab deinit id=\(capturedID)")
+    }
   }
 
   /// Resync `panes` from the current `layout.leaves` after `restore` wires a
@@ -86,6 +99,7 @@ final class MisttyTab: Identifiable {
 
   func closePane(_ pane: MisttyPane) {
     let wasActive = activePane?.id == pane.id
+    let closingID = pane.id
     layout.remove(pane: pane)
     panes = layout.leaves
     if wasActive {
@@ -97,6 +111,10 @@ final class MisttyTab: Identifiable {
       // stays on the destroyed surface, so keystrokes go nowhere.
       activePane?.focusKeyboardInput()
     }
+    DebugLog.shared.log(
+      "popup",
+      "closePane tabID=\(id) paneID=\(closingID) remaining-panes=\(panes.count) "
+        + "(removed from layout — pane should deinit if no other refs)")
   }
 
   /// Make `pane` the active pane AND route keyboard input to it. Prefer this

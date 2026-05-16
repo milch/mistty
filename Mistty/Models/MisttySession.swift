@@ -83,8 +83,13 @@ final class MisttySession: Identifiable {
   }
 
   func closeTab(_ tab: MisttyTab) {
+    let paneIDs = tab.panes.map(\.id)
     tabs.removeAll { $0.id == tab.id }
     if activeTab?.id == tab.id { activeTab = tabs.last }
+    DebugLog.shared.log(
+      "popup",
+      "closeTab id=\(tab.id) paneIDs=\(paneIDs) total-tabs=\(tabs.count) "
+        + "(removed from session.tabs — tab + panes should deinit if no other refs)")
   }
 
   /// Reorder tabs in place. Mirrors `WindowState.moveSessions` and is the
