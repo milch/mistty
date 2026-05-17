@@ -59,23 +59,14 @@ struct CopyModeOverlay: View {
         .offset(x: gridOffsetX, y: gridOffsetY)
       }
 
-      // Mode indicator
-      VStack {
-        Spacer()
-        HStack {
-          if state.subMode == .searchForward || state.subMode == .searchReverse {
-            Text(searchBarText)
-              .font(.system(size: 11, weight: .bold, design: .monospaced))
-              .foregroundStyle(.white)
-              .padding(.horizontal, 8)
-              .padding(.vertical, 2)
-              .background(Color.blue.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
-          } else {
-            CopyModeHints(state: state)
-          }
-          Spacer()
-        }
-        .padding(4)
+      // Mode indicator — dodges the cursor by flipping to the top edge
+      // when the cursor is in the bottom-left region (where the toast lives).
+      // Hidden entirely when the user pressed `gh`.
+      if !state.toastHidden {
+        toastRow
+          .frame(maxWidth: .infinity, maxHeight: .infinity,
+                 alignment: dodgeToTop ? .topLeading : .bottomLeading)
+          .animation(.easeInOut(duration: 0.18), value: dodgeToTop)
       }
 
       // Help overlay (g?)
@@ -99,6 +90,35 @@ struct CopyModeOverlay: View {
     return "\(prefix)\(state.searchQuery)\u{2588}\(matchInfo)"
   }
 
+  @ViewBuilder
+  private var toastRow: some View {
+    HStack {
+      if state.subMode == .searchForward || state.subMode == .searchReverse {
+        Text(searchBarText)
+          .font(.system(size: 11, weight: .bold, design: .monospaced))
+          .foregroundStyle(.white)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 2)
+          .background(Color.blue.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+      } else {
+        CopyModeHints(state: state)
+      }
+      Spacer()
+    }
+    .padding(4)
+  }
+
+  /// Flip the toast to the top edge when the cursor is in the bottom-left
+  /// region — the toast's default home. Bottom 25% of rows is enough room for
+  /// the toast (single or two lines) plus a margin; the column check keeps
+  /// the toast at the bottom when the cursor is on the right side of the
+  /// viewport, since they don't overlap there.
+  private var dodgeToTop: Bool {
+    guard state.rows > 0, state.cols > 0 else { return false }
+    let inBottomRows = state.cursorRow >= state.rows - max(2, state.rows / 4)
+    let inLeftCols = state.cursorCol < (state.cols * 3) / 5
+    return inBottomRows && inLeftCols
+  }
 }
 
 struct SelectionHighlightView: View {

@@ -327,6 +327,15 @@ final class TerminalSurfaceView: NSView {
     return (row: max(0, min(row, Int(size.rows) - 1)), col: max(0, min(col, Int(size.columns) - 1)))
   }
 
+  /// Returns the viewport size in cells. Useful for callers that need to
+  /// position UI relative to grid dimensions (e.g. cursor-dodging toasts).
+  func viewportGridSize() -> (rows: Int, cols: Int)? {
+    guard let surface else { return nil }
+    let size = ghostty_surface_size(surface)
+    guard size.rows > 0, size.columns > 0 else { return nil }
+    return (rows: Int(size.rows), cols: Int(size.columns))
+  }
+
   // MARK: - Layout
 
   override func setFrameSize(_ newSize: NSSize) {

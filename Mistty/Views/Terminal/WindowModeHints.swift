@@ -13,6 +13,7 @@ struct WindowModeHints: View {
     ("b", "break to tab"),
     ("m", "join to tab"),
     ("r", "rotate"),
+    ("gh", "hide"),
     ("esc", "exit"),
   ]
 

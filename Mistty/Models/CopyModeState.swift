@@ -19,6 +19,9 @@ struct CopyModeState {
   var lastFind: (kind: FindCharKind, char: Character)?
   var pendingG: Bool = false
   var showingHelp: Bool = false
+  /// `gh` toggles the small mode-indicator toast at the bottom of the
+  /// viewport. Independent of the help overlay (`g?`).
+  var toastHidden: Bool = false
 
   /// Vim "desired column" — remembered during vertical movement (j/k).
   /// Set to Int.max by $ to mean "end of line". Reset by horizontal motions.
@@ -417,6 +420,9 @@ struct CopyModeState {
     case "?":
       showingHelp.toggle()
       return showingHelp ? [.showHelp] : [.hideHelp]
+    case "h":
+      toastHidden.toggle()
+      return []
     default:
       // Cancel g, process key normally
       return handleNormalKey(

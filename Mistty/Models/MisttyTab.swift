@@ -27,6 +27,14 @@ final class MisttyTab: Identifiable {
   var windowModeState: WindowModeState = .inactive
   var isWindowModeActive: Bool { windowModeState != .inactive }
 
+  /// `gh` while in window mode hides the bottom hint toast. Resets when
+  /// window mode is re-entered, so the user always sees the hints again
+  /// the next time they activate the mode.
+  var windowModeHintsHidden: Bool = false
+  /// Set after the user presses `g` in window mode; the next keypress
+  /// completes the chord (e.g. `h` toggles `windowModeHintsHidden`).
+  var windowModePendingG: Bool = false
+
   /// Convenience: is the *focused* pane in copy mode? Each pane keeps its
   /// own `copyModeState`; this just asks the active one.
   var isCopyModeActive: Bool { activePane?.isCopyModeActive ?? false }

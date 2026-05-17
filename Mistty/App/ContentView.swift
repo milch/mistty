@@ -353,13 +353,22 @@ struct ContentView: View {
                 )
               }
               if tab.windowModeState != .inactive {
-                WindowModeHints(
-                  isJoinPick: tab.windowModeState == .joinPick,
-                  tabNames: joinPickTabNames,
-                  paneCount: tab.panes.count
-                )
-                .padding(6)
-                .allowsHitTesting(false)
+                // Join-pick is part of the workflow (numbers select targets),
+                // so it stays visible even when the user hid the normal hints.
+                let hidden = tab.windowModeHintsHidden && tab.windowModeState != .joinPick
+                if !hidden {
+                  let dodgeUp = windowToastDodgeUp(activePane: tab.activePane)
+                  WindowModeHints(
+                    isJoinPick: tab.windowModeState == .joinPick,
+                    tabNames: joinPickTabNames,
+                    paneCount: tab.panes.count
+                  )
+                  .padding(6)
+                  .frame(maxWidth: .infinity, maxHeight: .infinity,
+                         alignment: dodgeUp ? .top : .bottom)
+                  .allowsHitTesting(false)
+                  .animation(.easeInOut(duration: 0.18), value: dodgeUp)
+                }
               }
             }
           }
@@ -661,6 +670,8 @@ struct ContentView: View {
       removeWindowModeMonitor()
     } else {
       tab.windowModeState = .normal
+      tab.windowModeHintsHidden = false
+      tab.windowModePendingG = false
       installWindowModeMonitor()
     }
   }
@@ -855,6 +866,22 @@ struct ContentView: View {
         return nil  // Consume all other keys in join-pick mode
       }
 
+      // `gh` chord toggles the hint toast. Any other key after `g` falls
+      // through to the normal handlers below (and clears the pending state).
+      if let tab = self.state.activeSession?.activeTab {
+        if tab.windowModePendingG {
+          tab.windowModePendingG = false
+          if event.keyCode == 4 {  // h
+            tab.windowModeHintsHidden.toggle()
+            return nil
+          }
+          // fall through with the second key
+        } else if event.keyCode == 5 {  // g
+          tab.windowModePendingG = true
+          return nil
+        }
+      }
+
       // Cmd+Arrow resize: 5 cells, Cmd+Shift+Arrow resize: 1 cell.
       // Sign matches existing semantics — divider moves right/down on
       // positive cells (pane A grows).
@@ -1012,6 +1039,19 @@ struct ContentView: View {
       let pane = tab.activePane
     else { return }
     tab.layout.resizeSplit(containing: pane, delta: delta, along: direction)
+  }
+
+  /// Decide whether the window-mode toast should sit at the top edge instead
+  /// of its default bottom-center home. Flip to the top when the active
+  /// pane's terminal cursor is in the lower portion of its viewport — that's
+  /// where prompt output and freshly typed commands live, so a bottom toast
+  /// would otherwise cover them.
+  private func windowToastDodgeUp(activePane: MisttyPane?) -> Bool {
+    guard let surface = activePane?.surfaceViewIfLoaded,
+      let pos = surface.cursorPosition(),
+      let size = surface.viewportGridSize()
+    else { return false }
+    return pos.row >= size.rows - max(2, size.rows / 4)
   }
 
   /// Resize the split containing the active pane by a row/column count.
