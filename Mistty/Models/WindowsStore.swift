@@ -391,6 +391,21 @@ final class WindowsStore {
     activeWindow = tracked.state
   }
 
+  // MARK: - Dock badge
+
+  /// Set the Dock icon badge to the number of background tabs with an active
+  /// bell. Called on bell ring, on desktop notification, and on tab-switch
+  /// (which clears `hasBell` for the newly-active tab). No-ops when `NSApp`
+  /// isn't yet available (tests).
+  func updateDockBadge() {
+    let count = windows
+      .flatMap(\.sessions)
+      .flatMap(\.tabs)
+      .filter(\.hasBell)
+      .count
+    NSApp?.dockTile.badgeLabel = count > 0 ? String(count) : nil
+  }
+
   // MARK: - Restore helpers
 
   /// Append a window state that arrived through `restore(...)`. The

@@ -118,7 +118,7 @@ struct ContentView: View {
         guard newActive == state.id else { return }
         if let tab = state.activeSession?.activeTab, tab.hasBell {
           tab.hasBell = false
-          updateDockBadge()
+          windowsStore.updateDockBadge()
         }
         // Restore popup focus on window switch. The popup pane lives in a
         // SwiftUI overlay; when the window resigns key and later becomes
@@ -138,7 +138,7 @@ struct ContentView: View {
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         if let tab = state.activeSession?.activeTab, tab.hasBell {
           tab.hasBell = false
-          updateDockBadge()
+          windowsStore.updateDockBadge()
         }
         // Same popup-focus restore as the window-switch path above; AppKit's
         // first-responder auto-restore is unreliable for views hosted in
@@ -162,7 +162,7 @@ struct ContentView: View {
       }
       .onChange(of: state.activeSession?.activeTab?.id) { _, _ in
         state.activeSession?.activeTab?.hasBell = false
-        updateDockBadge()
+        windowsStore.updateDockBadge()
         // Window mode is ephemeral (tmux-style prefix). When the user switches
         // away to a different session/tab, clear it from the tab we're leaving
         // so it doesn't appear "stuck" on return — and drop the global
@@ -618,7 +618,7 @@ struct ContentView: View {
     }
     // A closed tab may have carried a background bell — recompute so the
     // dock badge doesn't linger above the remaining tab count.
-    updateDockBadge()
+    windowsStore.updateDockBadge()
   }
 
   // MARK: - Notification Handlers
@@ -720,7 +720,7 @@ struct ContentView: View {
     if session.tabs.isEmpty {
       state.closeSession(session)
     }
-    updateDockBadge()
+    windowsStore.updateDockBadge()
   }
 
   private func handleSetTitle(_ notification: Notification) {
@@ -762,7 +762,7 @@ struct ContentView: View {
     if !isLookingAtPane {
       resolved.tab.hasBell = true
     }
-    updateDockBadge()
+    windowsStore.updateDockBadge()
     // Bounce the dock icon once when the bell rings while Mistty is in
     // the background. .informationalRequest bounces once and stops; the
     // call is a no-op when the app is already frontmost so the explicit
@@ -770,18 +770,6 @@ struct ContentView: View {
     if !NSApp.isActive {
       NSApp.requestUserAttention(.informationalRequest)
     }
-  }
-
-  /// Set the Dock icon badge to the number of background tabs with an active
-  /// bell. Called on ring and on tab-switch (which clears `hasBell` for the
-  /// newly-active tab). No-ops when `NSApp` isn't yet available (tests).
-  private func updateDockBadge() {
-    let count = windowsStore.windows
-      .flatMap(\.sessions)
-      .flatMap(\.tabs)
-      .filter(\.hasBell)
-      .count
-    NSApp.dockTile.badgeLabel = count > 0 ? String(count) : nil
   }
 
   private func handleCloseSurface(_ notification: Notification) {
