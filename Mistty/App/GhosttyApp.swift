@@ -115,6 +115,26 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
     }
     return true
 
+  case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+    if target.tag == GHOSTTY_TARGET_SURFACE {
+      let surface = target.target.surface
+      let notification = action.action.desktop_notification
+      // Convert the C strings synchronously — `action` is only valid for the
+      // duration of this callback.
+      let title = notification.title.map { String(cString: $0) } ?? ""
+      let body = notification.body.map { String(cString: $0) } ?? ""
+      DispatchQueue.main.async {
+        guard let userdata = ghostty_surface_userdata(surface) else { return }
+        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+        NotificationCenter.default.post(
+          name: .ghosttyDesktopNotification,
+          object: nil,
+          userInfo: ["paneID": view.pane?.id as Any, "title": title, "body": body]
+        )
+      }
+    }
+    return true
+
   default:
     return false
   }
@@ -182,6 +202,7 @@ extension Notification.Name {
   static let ghosttyCloseSurface = Notification.Name("ghosttyCloseSurface")
   static let ghosttyRingBell = Notification.Name("ghosttyRingBell")
   static let ghosttyPwd = Notification.Name("ghosttyPwd")
+  static let ghosttyDesktopNotification = Notification.Name("ghosttyDesktopNotification")
 }
 
 // MARK: - GhosttyAppManager
