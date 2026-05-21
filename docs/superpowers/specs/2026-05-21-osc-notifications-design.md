@@ -114,9 +114,9 @@ On `.ghosttyDesktopNotification`:
 5. **Else:**
    - `tab.hasBell = true` and `windowsStore.updateDockBadge()` — reuses
      the existing orange tab activity indicator and dock badge.
-   - Lazily call `requestAuthorization(options: [.alert])` the first time
-     the service needs to post (tracked by an internal flag so it is
-     requested once).
+   - Ensure notification authorization has been requested — see
+     Authorization timing. By the time a notification needs to post it has
+     normally already been requested.
    - Build a `UNMutableNotificationContent`:
      - `title` = resolved title (see Title resolution).
      - `body` = the OSC body.
@@ -126,6 +126,26 @@ On `.ghosttyDesktopNotification`:
      - `sound` = `nil` (silent; audio is the bell's job).
    - `UNUserNotificationCenter.current().add(request)` with a fresh UUID
      request identifier.
+
+### Authorization timing
+
+`requestAuthorization(options: [.alert])` is called at most once per
+process, tracked by an internal `didRequestAuthorization` flag shared by
+both paths below:
+
+- **Eager** — if `[notifications].enabled` was *explicitly* set to `true`
+  in `config.toml`, the service requests authorization at app launch. A
+  user who deliberately turned notifications on gets the macOS permission
+  prompt up front rather than at some surprising later moment.
+- **Lazy** — otherwise (the `[notifications]` table or its `enabled` key
+  is absent, so `enabled` is `true` only by default), authorization is
+  requested the first time a notification actually needs to post. Fresh
+  installs that never touched the config are not nagged.
+- `enabled = false` (explicit or not) → never requested.
+
+The config-reload path re-evaluates this: if a reload flips the config to
+explicitly-enabled and authorization has not yet been requested, the
+service requests it then.
 
 ### Delegate callbacks
 
@@ -172,9 +192,15 @@ New `[notifications]` table in `config.toml`:
 enabled = true   # default
 ```
 
-- New `NotificationsConfig { enabled: Bool }` value type, default
-  `enabled = true`, parsed by `MisttyConfig` like the other config
-  sections. A missing `[notifications]` table yields the default.
+- New `NotificationsConfig` value type, parsed by `MisttyConfig` like the
+  other config sections. It exposes:
+  - `enabled: Bool` — resolved value, default `true`. A missing
+    `[notifications]` table or `enabled` key yields `true`.
+  - `explicitlyEnabled: Bool` — `true` only when the `[notifications]`
+    table contains `enabled = true` literally. Drives the eager
+    authorization request (see Authorization timing). The TOML parser must
+    distinguish a present key from an absent one — parse `enabled` as an
+    optional and derive both fields from it.
 - Live reload: `NotificationService` reads `MisttyConfig.current` at
   event time, so the existing `MisttyConfig.reload()` path covers it with
   no extra observers.
@@ -210,8 +236,10 @@ Click a banner → Mistty activates and focuses the emitting pane.
 
 Unit tests:
 
-- `NotificationsConfig` TOML parsing — default `true`, explicit `false`,
-  and a missing `[notifications]` table.
+- `NotificationsConfig` TOML parsing — `enabled` resolves to `true` for a
+  missing `[notifications]` table, `true`/`false` when set explicitly; and
+  `explicitlyEnabled` is `true` only for a literal `enabled = true`
+  (`false` for an absent table, an absent key, or `enabled = false`).
 - Title-resolution fallback function — OSC-777 title wins; empty title
   falls through process title → session name → `"Mistty"`.
 - The `isFocused` / should-banner boolean helper across the input matrix.
@@ -227,7 +255,10 @@ Manual verification (the libghostty action callback and
 - Click a banner → Mistty activates and focuses the emitting pane.
 - `[notifications] enabled = false`, reload config → notifications
   suppressed without a restart.
-- First notification on a clean install → macOS permission prompt.
+- Config with a literal `[notifications] enabled = true` → macOS
+  permission prompt at app launch.
+- Config with no `[notifications]` table → no prompt at launch; the
+  prompt appears on the first notification that needs to post.
 
 ## Follow-ups
 
