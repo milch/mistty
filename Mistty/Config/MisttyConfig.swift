@@ -36,6 +36,15 @@ struct CopyModeHintsConfig: Sendable, Equatable {
   var uppercaseAction: HintAction = .open
 }
 
+/// Desktop-notification settings. `enabled` is the master switch (default
+/// `true`). `explicitlyEnabled` is `true` only when the user literally wrote
+/// `enabled = true` in `[notifications]` — it drives the eager
+/// authorization request at launch (see `NotificationService`).
+struct NotificationsConfig: Sendable, Equatable {
+  var enabled: Bool = true
+  var explicitlyEnabled: Bool = false
+}
+
 enum TabBarMode: String, Sendable, Equatable, CaseIterable {
   case always = "always"
   case never = "never"
@@ -182,6 +191,7 @@ struct MisttyConfig: Sendable, Equatable {
   var shortcuts: ShortcutsConfig = .default
   var ghostty: GhosttyPassthroughConfig = GhosttyPassthroughConfig()
   var restore: RestoreConfig = RestoreConfig()
+  var notifications: NotificationsConfig = NotificationsConfig()
 
   /// Absolute path to the `zoxide` binary. When set, `ZoxideService` uses
   /// this directly instead of probing common install locations or spawning
@@ -342,6 +352,12 @@ struct MisttyConfig: Sendable, Equatable {
           strategy: t["strategy"]?.string,
           env: env
         )
+      }
+    }
+    if let notifTable = table["notifications"]?.table {
+      if let enabled = notifTable["enabled"]?.bool {
+        config.notifications.enabled = enabled
+        config.notifications.explicitlyEnabled = enabled
       }
     }
     return config
@@ -563,6 +579,11 @@ struct MisttyConfig: Sendable, Equatable {
       if ui.paneBorderWidth != UIConfig().paneBorderWidth {
         lines.append("pane_border_width = \(ui.paneBorderWidth)")
       }
+    }
+    if notifications != NotificationsConfig() {
+      lines.append("")
+      lines.append("[notifications]")
+      lines.append("enabled = \(notifications.enabled)")
     }
     let defaultBindings = ShortcutAction.defaults
     let userBindings = shortcuts.bindings

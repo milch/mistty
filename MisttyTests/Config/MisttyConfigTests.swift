@@ -294,4 +294,58 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertEqual(MisttyConfig.current.fontSize, 42)
     XCTAssertNotNil(MisttyConfig.lastParseError)
   }
+
+  func test_notifications_defaultEnabled() throws {
+    let config = try MisttyConfig.parse("")
+    XCTAssertTrue(config.notifications.enabled)
+    XCTAssertFalse(config.notifications.explicitlyEnabled)
+  }
+
+  func test_notifications_explicitTrue() throws {
+    let toml = """
+      [notifications]
+      enabled = true
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertTrue(config.notifications.enabled)
+    XCTAssertTrue(config.notifications.explicitlyEnabled)
+  }
+
+  func test_notifications_explicitFalse() throws {
+    let toml = """
+      [notifications]
+      enabled = false
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertFalse(config.notifications.enabled)
+    XCTAssertFalse(config.notifications.explicitlyEnabled)
+  }
+
+  func test_notifications_emptyTableUsesDefaults() throws {
+    let config = try MisttyConfig.parse("[notifications]")
+    XCTAssertTrue(config.notifications.enabled)
+    XCTAssertFalse(config.notifications.explicitlyEnabled)
+  }
+
+  func test_save_notifications_roundTrip_explicitTrue() throws {
+    var config = MisttyConfig()
+    config.notifications = NotificationsConfig(enabled: true, explicitlyEnabled: true)
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("mistty-notif-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try config.save(to: tmp)
+    let roundTripped = try MisttyConfig.loadThrowing(from: tmp)
+    XCTAssertEqual(roundTripped.notifications, config.notifications)
+  }
+
+  func test_save_notifications_roundTrip_explicitFalse() throws {
+    var config = MisttyConfig()
+    config.notifications = NotificationsConfig(enabled: false, explicitlyEnabled: false)
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("mistty-notif-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try config.save(to: tmp)
+    let roundTripped = try MisttyConfig.loadThrowing(from: tmp)
+    XCTAssertEqual(roundTripped.notifications, config.notifications)
+  }
 }
