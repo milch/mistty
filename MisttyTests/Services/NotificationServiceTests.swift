@@ -32,4 +32,10 @@ final class NotificationServiceTests: XCTestCase {
       rawTitle: "   ", processTitle: "  ", sessionLabel: "myproj")
     XCTAssertEqual(result, "myproj")
   }
+
+  func test_resolveTitle_treatsWhitespaceSessionLabelAsMistty() {
+    let result = resolveNotificationTitle(
+      rawTitle: "", processTitle: nil, sessionLabel: "   ")
+    XCTAssertEqual(result, "Mistty")
+  }
 }
