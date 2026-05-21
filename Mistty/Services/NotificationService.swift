@@ -19,3 +19,14 @@ func resolveNotificationTitle(
   if !label.isEmpty { return label }
   return "Mistty"
 }
+
+/// True when the user is actively looking at the tab that emitted the
+/// notification: Mistty frontmost, its window active, that window's active
+/// session matching, and that session's active tab matching. Mirrors
+/// `ContentView.handleRingBell`'s visibility check (tab granularity — a
+/// visible split-peer pane counts as "seen"). When true, no banner is shown.
+func isUserViewingTab(
+  appActive: Bool, windowActive: Bool, sessionActive: Bool, tabActive: Bool
+) -> Bool {
+  appActive && windowActive && sessionActive && tabActive
+}

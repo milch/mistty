@@ -38,4 +38,28 @@ final class NotificationServiceTests: XCTestCase {
       rawTitle: "", processTitle: nil, sessionLabel: "   ")
     XCTAssertEqual(result, "Mistty")
   }
+
+  func test_isUserViewingTab_allTrue() {
+    XCTAssertTrue(
+      isUserViewingTab(
+        appActive: true, windowActive: true, sessionActive: true, tabActive: true))
+  }
+
+  func test_isUserViewingTab_appBackgrounded() {
+    XCTAssertFalse(
+      isUserViewingTab(
+        appActive: false, windowActive: true, sessionActive: true, tabActive: true))
+  }
+
+  func test_isUserViewingTab_differentWindow() {
+    XCTAssertFalse(
+      isUserViewingTab(
+        appActive: true, windowActive: false, sessionActive: true, tabActive: true))
+  }
+
+  func test_isUserViewingTab_differentTab() {
+    XCTAssertFalse(
+      isUserViewingTab(
+        appActive: true, windowActive: true, sessionActive: true, tabActive: false))
+  }
 }
