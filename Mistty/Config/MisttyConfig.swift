@@ -580,6 +580,8 @@ struct MisttyConfig: Sendable, Equatable {
         lines.append("pane_border_width = \(ui.paneBorderWidth)")
       }
     }
+    // Re-emits an explicit `enabled = true` (not only `false`) so the user's
+    // opt-in survives save→load; `parse` re-derives `explicitlyEnabled`.
     if notifications != NotificationsConfig() {
       lines.append("")
       lines.append("[notifications]")
