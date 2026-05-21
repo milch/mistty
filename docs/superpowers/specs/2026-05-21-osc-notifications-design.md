@@ -103,13 +103,15 @@ On `.ghosttyDesktopNotification`:
    `false`, drop. Read live each time, so config reload takes effect with
    no extra wiring.
 2. **Resolve the pane** via the global `WindowsStore.pane(byId:)`.
-3. **Compute `isFocused`** — Mistty is frontmost (`NSApp.isActive`) ∧ the
-   pane's window is key ∧ the pane is the active pane of the active tab of
-   the active session. This mirrors `ContentView.handleRingBell`'s
-   visibility check. Extract the decision as a pure boolean helper
-   (inputs: `appActive`, `windowKey`, `sessionActive`, `tabActive`,
-   `paneActive`) so it is unit-testable.
-4. **If `isFocused`** → no-op. The user is already looking at the pane
+3. **Compute `isViewingTab`** — Mistty is frontmost (`NSApp.isActive`) ∧
+   the pane's window is the active window ∧ that window's active session
+   matches ∧ that session's active tab matches. This mirrors
+   `ContentView.handleRingBell` exactly, including its granularity: the
+   check stops at the tab, not the individual pane, so a notification from
+   a visible split-peer pane is treated as "seen". Extract the decision as
+   a pure boolean helper (inputs: `appActive`, `windowActive`,
+   `sessionActive`, `tabActive`) so it is unit-testable.
+4. **If `isViewingTab`** → no-op. The user is already looking at the tab
    that fired it; no banner, no tab flag. (Same principle as the bell.)
 5. **Else:**
    - `tab.hasBell = true` and `windowsStore.updateDockBadge()` — reuses
@@ -210,7 +212,7 @@ enabled = true   # default
 
 | Situation | Banner? | Tab flagged? |
 | --- | --- | --- |
-| Emitting pane is the focused pane, Mistty frontmost | no | no |
+| Emitting pane's tab is the active tab, Mistty frontmost | no | no |
 | Emitting pane in a background tab/window, Mistty frontmost | yes | yes |
 | Mistty backgrounded | yes | yes |
 | `[notifications] enabled = false` | no | no |
