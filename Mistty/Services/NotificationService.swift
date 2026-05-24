@@ -89,8 +89,10 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     guard MisttyConfig.current.notifications.enabled else { return }
 
     // Default title for the unresolvable-pane path (pane closed between
-    // emission and dispatch, or no surface userdata).
-    var title = rawTitle.isEmpty ? "Mistty" : rawTitle
+    // emission and dispatch, or no surface userdata). Trim so a whitespace-
+    // only title falls back, mirroring `resolveNotificationTitle`.
+    let trimmedRaw = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    var title = trimmedRaw.isEmpty ? "Mistty" : trimmedRaw
     var threadID: String?
 
     if let paneID, let store = windowsStore, let resolved = store.pane(byId: paneID) {
