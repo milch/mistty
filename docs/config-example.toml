@@ -96,6 +96,18 @@ alphabet = "asdfghjkl"
 #              having to swap via uppercase.
 uppercase_action = "open"
 
+# ─── Desktop notifications ───────────────────────────────────────────────────
+# Mistty raises a macOS notification when a program in a pane emits an OSC 9
+# or OSC 777 notification escape sequence (e.g. a "build finished" message).
+# A notification from a pane you are not currently looking at also flags its
+# tab and the Dock icon, like a terminal bell.
+#
+# When `enabled` is explicitly set to `true` here, Mistty asks for macOS
+# notification permission at launch; otherwise it asks the first time a
+# notification fires. Set `enabled = false` to turn the feature off.
+# [notifications]
+# enabled = true
+
 # ─── Window chrome ───────────────────────────────────────────────────────────
 [ui]
 # When to show the tab bar.

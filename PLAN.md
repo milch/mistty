@@ -51,7 +51,7 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 
 Larger:
 
-- OSC777/OSC9/OSC99 notifications support
+- OSC 99 (Kitty notification protocol) — needs a libghostty Zig parser patch (new OSC parser + action plumbing). OSC 9 + OSC 777 shipped (see `## Implemented`). Spec context: `docs/superpowers/specs/2026-05-21-osc-notifications-design.md`.
 - Refactor so that the “session manager” uses configurable data sources. Zoxide can be one but generic “read json from a file” or “list these dir contents” or “run this command to populate the list” could be nice
 - Popups not bound to the "main" window - i.e. they become an accessory window. Need some way to distinguish popups linked from the current pane (e.g. the lazygit use-case) and unlinked popups (e.g. quick terminal feature)
 - Cross-session tab move (drag a tab from session A into session B's tab list). Intra-session reorder shipped in the tab DnD work — the cross-session case is deferred because it needs the source tab to be detached from session A's `tabs` array and re-inserted into B's, with the pane(s) underneath kept alive. The drop indicator is intentionally suppressed today when hovering over a different session's tabs so the UI doesn't promise something that won't happen.
@@ -84,6 +84,16 @@ Spec: `docs/superpowers/specs/2026-04-28-keyboard-shortcuts-config-design.md`. P
 - Indexed focus-tab/focus-session shortcuts collapsed into `focus_tab_modifier` / `focus_session_modifier` config keys (defaults `cmd` / `ctrl`). Tab and session modifiers must differ
 - Conflict handling: two actions resolving to the same chord aborts config reload with a banner in Settings; the previous good config stays active until the conflict is fixed
 - Settings UI for shortcuts deferred to the preference-pane redesign; in-mode keys (window-mode hjkl/etc., copy-mode vim grammar) remain hardcoded by design
+
+### OSC desktop notifications
+
+Spec: `docs/superpowers/specs/2026-05-21-osc-notifications-design.md`. Plan: `docs/superpowers/plans/2026-05-21-osc-notifications.md`.
+
+- OSC 9 (iTerm2 fallback) and OSC 777 (rxvt) escape sequences raise macOS desktop notifications. libghostty already parses both into a `GHOSTTY_ACTION_DESKTOP_NOTIFICATION` action; a new case in `GhosttyApp.actionCallback` re-broadcasts it as the in-process `.ghosttyDesktopNotification` event
+- New global `NotificationService` singleton consumes the event exactly once (per-window handling would post duplicate banners), owns the `UNUserNotificationCenter` delegate, and posts the banner. Clicking a banner activates Mistty and focuses the emitting window/session/tab/pane
+- A notification for a tab the user isn't viewing flags the tab via the existing `hasBell` indicator + Dock badge; `updateDockBadge()` moved from `ContentView` onto `WindowsStore` so the service can reach it. The "is the user viewing this tab" check mirrors `handleRingBell` at tab granularity. When Mistty is frontmost on a different pane the banner is forced via the `willPresent` delegate returning `[.banner, .list]`
+- `[notifications]` config table with `enabled` (default `true`). Authorization is requested at launch when `enabled` is explicitly `true`, otherwise lazily on the first notification. Rate-limiting / de-duplication are left to libghostty (1/sec, 5s dedup)
+- OSC 99 (Kitty notification protocol) deferred — no parser in vendored ghostty; tracked under `### Misc & Bugs`
 
 ### Multi-window v1
 
