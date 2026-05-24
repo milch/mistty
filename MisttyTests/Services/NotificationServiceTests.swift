@@ -57,6 +57,12 @@ final class NotificationServiceTests: XCTestCase {
         appActive: true, windowActive: false, sessionActive: true, tabActive: true))
   }
 
+  func test_isUserViewingTab_differentSession() {
+    XCTAssertFalse(
+      isUserViewingTab(
+        appActive: true, windowActive: true, sessionActive: false, tabActive: true))
+  }
+
   func test_isUserViewingTab_differentTab() {
     XCTAssertFalse(
       isUserViewingTab(
