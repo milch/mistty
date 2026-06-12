@@ -30,9 +30,16 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
       let surface = target.target.surface
       if let title = action.action.set_title.title {
         let titleStr = String(cString: title)
+        // Resolve userdata NOW — `surface` is only guaranteed valid for
+        // the duration of this callback. The main thread can free it
+        // (tearDownSurface) before the async block runs, which made the
+        // deferred ghostty_surface_userdata call a use-after-free. The
+        // retain keeps the Swift view alive across the hop; the C
+        // surface pointer is never touched after this callback returns.
+        guard let userdata = ghostty_surface_userdata(surface) else { return true }
+        let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
         DispatchQueue.main.async {
-          guard let userdata = ghostty_surface_userdata(surface) else { return }
-          let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+          let view = unmanagedView.takeRetainedValue()
           NotificationCenter.default.post(
             name: .ghosttySetTitle,
             object: nil,
@@ -56,9 +63,11 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
   case GHOSTTY_ACTION_RING_BELL:
     if target.tag == GHOSTTY_TARGET_SURFACE {
       let surface = target.target.surface
+      // See GHOSTTY_ACTION_SET_TITLE for the userdata-resolution rationale.
+      guard let userdata = ghostty_surface_userdata(surface) else { return true }
+      let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
       DispatchQueue.main.async {
-        guard let userdata = ghostty_surface_userdata(surface) else { return }
-        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+        let view = unmanagedView.takeRetainedValue()
         NotificationCenter.default.post(
           name: .ghosttyRingBell,
           object: nil,
@@ -73,9 +82,11 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
       let surface = target.target.surface
       if let pwd = action.action.pwd.pwd {
         let pwdStr = String(cString: pwd)
+        // See GHOSTTY_ACTION_SET_TITLE for the userdata-resolution rationale.
+        guard let userdata = ghostty_surface_userdata(surface) else { return true }
+        let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
         DispatchQueue.main.async {
-          guard let userdata = ghostty_surface_userdata(surface) else { return }
-          let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+          let view = unmanagedView.takeRetainedValue()
           NotificationCenter.default.post(
             name: .ghosttyPwd,
             object: nil,
@@ -90,9 +101,11 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
     if target.tag == GHOSTTY_TARGET_SURFACE {
       let surface = target.target.surface
       let sb = action.action.scrollbar
+      // See GHOSTTY_ACTION_SET_TITLE for the userdata-resolution rationale.
+      guard let userdata = ghostty_surface_userdata(surface) else { return true }
+      let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
       DispatchQueue.main.async {
-        guard let userdata = ghostty_surface_userdata(surface) else { return }
-        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+        let view = unmanagedView.takeRetainedValue()
         view.scrollbarState = ScrollbarState(total: sb.total, offset: sb.offset, len: sb.len)
         // If copy mode is hinting, re-scan labels after mouse/wheel scroll.
         NotificationCenter.default.post(name: .misttyScrollChanged, object: nil)
@@ -123,9 +136,11 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
       // duration of this callback.
       let title = notification.title.map { String(cString: $0) } ?? ""
       let body = notification.body.map { String(cString: $0) } ?? ""
+      // See GHOSTTY_ACTION_SET_TITLE for the userdata-resolution rationale.
+      guard let userdata = ghostty_surface_userdata(surface) else { return true }
+      let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
       DispatchQueue.main.async {
-        guard let userdata = ghostty_surface_userdata(surface) else { return }
-        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+        let view = unmanagedView.takeRetainedValue()
         NotificationCenter.default.post(
           name: .ghosttyDesktopNotification,
           object: nil,
@@ -193,11 +208,14 @@ private let writeClipboardCallback: ghostty_runtime_write_clipboard_cb = {
   }
 }
 
-/// Close surface callback — shell exited.
+/// Close surface callback — shell exited. Retain the view across the
+/// main-thread hop; the unretained reference could dangle if the pane is
+/// torn down (and the view deallocated) before the block runs.
 private let closeSurfaceCallback: ghostty_runtime_close_surface_cb = { userdata, processAlive in
   guard let userdata else { return }
-  let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+  let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
   DispatchQueue.main.async {
+    let view = unmanagedView.takeRetainedValue()
     NotificationCenter.default.post(
       name: .ghosttyCloseSurface,
       object: nil,
