@@ -31,6 +31,14 @@ func isUserViewingTab(
   appActive && windowActive && sessionActive && tabActive
 }
 
+/// Cap program-controlled notification text. OSC 9 title/body come straight
+/// from whatever runs in the pane; unbounded strings cost memory in the
+/// notification store and make spoofing/spam cheap. 256 chars is far beyond
+/// what a macOS banner can display.
+func clampNotificationText(_ text: String, limit: Int = 256) -> String {
+  text.count <= limit ? text : String(text.prefix(limit))
+}
+
 /// Owns the macOS desktop-notification integration. A single instance
 /// (`shared`) consumes the in-process `.ghosttyDesktopNotification` event
 /// exactly once — handling it per-window would post one banner per window.
@@ -118,8 +126,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
   private func postBanner(title: String, body: String, paneID: Int?, threadID: String?) {
     let content = UNMutableNotificationContent()
-    content.title = title
-    content.body = body
+    content.title = clampNotificationText(title)
+    content.body = clampNotificationText(body)
     if let threadID { content.threadIdentifier = threadID }
     if let paneID { content.userInfo = ["paneID": paneID] }
     let request = UNNotificationRequest(

@@ -68,4 +68,13 @@ final class NotificationServiceTests: XCTestCase {
       isUserViewingTab(
         appActive: true, windowActive: true, sessionActive: true, tabActive: false))
   }
+
+  func test_clampNotificationText_passesShortTextThrough() {
+    XCTAssertEqual(clampNotificationText("build done"), "build done")
+  }
+
+  func test_clampNotificationText_capsLongText() {
+    let long = String(repeating: "x", count: 10_000)
+    XCTAssertEqual(clampNotificationText(long).count, 256)
+  }
 }
