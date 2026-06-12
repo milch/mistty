@@ -146,6 +146,14 @@ final class MisttyTab: Identifiable {
     pane.releaseResources()
   }
 
+  /// Release every pane's libghostty surface. Called when the whole tab
+  /// is discarded (session.closeTab, session/window teardown) —
+  /// `closePane` handles the single-pane case. Idempotent; panes whose
+  /// surface never materialized are no-ops.
+  func releaseAllPaneResources() {
+    for pane in panes { pane.releaseResources() }
+  }
+
   /// Make `pane` the active pane AND route keyboard input to it. Prefer this
   /// over writing `activePane` directly — the two must move together or the
   /// focus ring and first-responder desync.

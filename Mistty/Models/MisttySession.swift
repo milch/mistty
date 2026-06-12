@@ -85,6 +85,10 @@ final class MisttySession: Identifiable {
   func closeTab(_ tab: MisttyTab) {
     tabs.removeAll { $0.id == tab.id }
     if activeTab?.id == tab.id { activeTab = tabs.last }
+    // Pane-move flows (join/break) detach the pane and only close the tab
+    // once it's empty, so this only tears down surfaces that are genuinely
+    // going away. See MisttyTab.closePane for why eager release is needed.
+    tab.releaseAllPaneResources()
   }
 
   /// Reorder tabs in place. Mirrors `WindowState.moveSessions` and is the
