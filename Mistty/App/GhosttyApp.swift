@@ -158,17 +158,28 @@ private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = {
   return true
 }
 
-/// Clipboard confirm read callback — ghostty calls this when the clipboard
-/// content it just read looks unsafe (e.g. contains control chars). Without a
-/// confirmation UI we auto-confirm so Cmd+V always lands; OSC-52 reads will
-/// also go through, matching ghostty's "trust the user" default until we build
-/// a real prompt.
+/// Clipboard confirm-read callback — ghostty routes a clipboard read here
+/// when it needs confirmation: unsafe paste contents, or any OSC-52 read
+/// (the default `clipboard-read = ask`). Cmd+V pastes are user-initiated,
+/// so they auto-confirm (no prompt UI yet). OSC-52 reads are
+/// program-initiated: auto-confirming them hands the user's clipboard
+/// (passwords, tokens) to whatever runs in the pane, silently — so they
+/// are denied. Denial completes the request with an empty string +
+/// confirmed=true, matching ghostty's own cancel path
+/// (BaseTerminalController.clipboardConfirmationComplete), which frees
+/// the core's request state.
 private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard_cb = {
   userdata, str, state, request in
   guard let userdata, let state, let str else { return }
   let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
   guard let surface = view.surface else { return }
-  ghostty_surface_complete_clipboard_request(surface, str, state, true)
+  switch request {
+  case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
+    ghostty_surface_complete_clipboard_request(surface, str, state, true)
+  default:
+    // OSC-52 read (and any future program-initiated request): deny.
+    ghostty_surface_complete_clipboard_request(surface, "", state, true)
+  }
 }
 
 /// Clipboard write callback.
