@@ -66,4 +66,25 @@ final class SessionCloseTeardownTests: XCTestCase {
         "closeSession must release every tab pane and popup pane surface")
     }
   }
+
+  func test_closeWindow_releasesAllSurfaces_andStillSnapshots() {
+    let session = makeSession()
+    let tab = session.tabs[0]
+    tab.splitActivePane(direction: .horizontal)
+    let panes = tab.panes
+    panes.forEach { _ = $0.surfaceView }  // force load
+
+    windowsStore.closeWindow(state)
+
+    for pane in panes {
+      XCTAssertNil(
+        pane.surfaceViewIfLoaded,
+        "closeWindow must cascade surface teardown through its sessions")
+    }
+    // The recently-closed snapshot must still be captured (teardown runs
+    // AFTER the snapshot, which reads live pane state).
+    XCTAssertNotNil(
+      windowsStore.reopenMostRecentClosed(),
+      "closeWindow must still push a reopenable snapshot")
+  }
 }

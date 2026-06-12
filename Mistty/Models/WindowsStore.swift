@@ -167,6 +167,10 @@ final class WindowsStore {
     }
     windows.removeAll { $0.id == state.id }
     if activeWindow?.id == state.id { activeWindow = windows.last }
+    // Tear down all surfaces now that the snapshot has been captured —
+    // snapshotLayout's foreground-process probe reads the live pty, so
+    // this must stay AFTER the WindowSnapshot construction above.
+    for session in state.sessions { session.releaseAllResources() }
   }
 
   /// Pop the most recently closed window and queue it for restore.
