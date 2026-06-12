@@ -216,6 +216,25 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertEqual(roundTripped.restore, config.restore)
   }
 
+  /// popup.name / popup.command were interpolated into config.toml WITHOUT
+  /// tomlEscape (unlike every sibling field) — a command containing a
+  /// double quote (e.g. `sh -c "..."`) produced an unparseable file on the
+  /// next Settings save, silently corrupting the user's config.
+  func test_save_popupWithQuotesAndBackslashes_roundTrips() throws {
+    var config = MisttyConfig()
+    config.popups = [
+      PopupDefinition(
+        name: #"log "viewer""#,
+        command: #"sh -c "tail -f /tmp/a.log | grep \"error\"""#)
+    ]
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("mistty-popup-escape-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try config.save(to: tmp)
+    let roundTripped = try MisttyConfig.loadThrowing(from: tmp)
+    XCTAssertEqual(roundTripped.popups, config.popups)
+  }
+
   func test_parse_restoreCommand_withEnv() throws {
     let toml = """
     [[restore.command]]
