@@ -20,7 +20,12 @@ final class FrecencyService {
       for: .applicationSupportDirectory, in: .userDomainMask
     ).first!
     let dir = appSupport.appendingPathComponent("com.mistty")
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    // 0700 to match the IPC dir — frecency.json is a history of visited
+    // directory paths, a mild privacy signal that shouldn't rely solely on
+    // the Application Support parent being user-only.
+    try? FileManager.default.createDirectory(
+      at: dir, withIntermediateDirectories: true,
+      attributes: [.posixPermissions: 0o700])
     return dir.appendingPathComponent("frecency.json")
   }
 
