@@ -48,4 +48,22 @@ final class SessionCloseTeardownTests: XCTestCase {
         "closeTab must release every contained pane's surface")
     }
   }
+
+  func test_closeSession_releasesTabPanesAndPopupPanes() {
+    let session = makeSession()
+    let tab = session.tabs[0]
+    tab.splitActivePane(direction: .horizontal)
+    session.togglePopup(definition: PopupDefinition(name: "scratch", command: "top"))
+    let panes = tab.panes
+    let popupPane = session.popups[0].pane
+    (panes + [popupPane]).forEach { _ = $0.surfaceView }  // force load
+
+    state.closeSession(session)
+
+    for pane in panes + [popupPane] {
+      XCTAssertNil(
+        pane.surfaceViewIfLoaded,
+        "closeSession must release every tab pane and popup pane surface")
+    }
+  }
 }

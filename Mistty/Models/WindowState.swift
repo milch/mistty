@@ -50,6 +50,7 @@ final class WindowState {
   func closeSession(_ session: MisttySession) {
     sessions.removeAll { $0.id == session.id }
     if activeSession?.id == session.id { activeSession = sessions.last }
+    session.releaseAllResources()
   }
 
   /// Append a fully-constructed `MisttySession` during restore. Bypasses

@@ -187,6 +187,15 @@ final class MisttySession: Identifiable {
     popup.pane.releaseResources()
   }
 
+  /// Tear down every libghostty surface owned by this session — all tabs'
+  /// panes and all popup panes. Called when the session (or its window)
+  /// is discarded. See `MisttyTab.closePane` for why eager release is
+  /// required (SwiftUI cache retention; b406c48). Idempotent.
+  func releaseAllResources() {
+    for tab in tabs { tab.releaseAllPaneResources() }
+    for popup in popups { popup.pane.releaseResources() }
+  }
+
   func hideActivePopup() {
     activePopup?.isVisible = false
     activePopup = nil
