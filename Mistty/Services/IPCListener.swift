@@ -24,10 +24,16 @@ final class IPCListener {
   func start() {
     let path = MisttyIPC.serverSocketPath
 
-    // Ensure parent directory exists with 0700 permissions
+    // Ensure parent directory exists with 0700 permissions. createDirectory
+    // only applies the attributes when it creates the directory, so also
+    // re-assert 0700 on every start — a perms drift on an existing dir
+    // would otherwise silently expose the socket (which grants keystroke
+    // injection and screen reads to anyone who can connect).
     let dir = (path as NSString).deletingLastPathComponent
     try? FileManager.default.createDirectory(
       atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    try? FileManager.default.setAttributes(
+      [.posixPermissions: 0o700], ofItemAtPath: dir)
 
     // Unconditionally unlink any stale socket
     unlink(path)
@@ -56,6 +62,11 @@ final class IPCListener {
       Darwin.close(fd)
       return
     }
+
+    // The socket file's mode is umask-dependent after bind (usually
+    // world-connectable if the parent dir were ever traversable). Clamp it
+    // to owner-only as a second layer behind the directory perms.
+    chmod(path, 0o600)
 
     // Listen
     guard Darwin.listen(fd, 5) == 0 else {
@@ -102,6 +113,17 @@ final class IPCListener {
         // Check if we were stopped (fd closed)
         let stillRunning = state.withLock { $0.running }
         if !stillRunning { break }
+        continue
+      }
+
+      // Belt-and-braces peer check: only same-uid clients. Filesystem
+      // perms are the primary gate, but they're a single layer — this
+      // keeps the socket closed to other local users even if directory
+      // permissions drift.
+      var peerUID: uid_t = 0
+      var peerGID: gid_t = 0
+      guard getpeereid(clientFD, &peerUID, &peerGID) == 0, peerUID == getuid() else {
+        Darwin.close(clientFD)
         continue
       }
 
