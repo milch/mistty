@@ -111,6 +111,31 @@ final class MisttyTabTests: XCTestCase {
         + " libghostty surface is freed regardless of SwiftUI cache retention")
   }
 
+  /// Window-mode join/break MOVE a pane between tabs. The move must not
+  /// tear down the pane's surface — releasing it kills the running shell
+  /// and silently respawns a fresh one. Regression: join/break (b01f1b8)
+  /// predate the closePane teardown (b406c48), which made every pane move
+  /// destroy the moved pane's process.
+  func test_detachPane_keepsSurfaceAlive() {
+    TerminalSurfaceView.skipSurfaceCreation = true
+    defer { TerminalSurfaceView.skipSurfaceCreation = false }
+
+    let tab = makeTab()
+    tab.splitActivePane(direction: .horizontal)
+    let moving = tab.panes[1]
+    _ = moving.surfaceView  // force load
+    XCTAssertNotNil(moving.surfaceViewIfLoaded, "precondition: view loaded")
+
+    tab.detachPane(moving)
+
+    XCTAssertEqual(tab.panes.count, 1)
+    XCTAssertFalse(tab.layout.leafIDs.contains(moving.id))
+    XCTAssertNotNil(
+      moving.surfaceViewIfLoaded,
+      "detachPane must keep the moved pane's surface alive — join/break"
+        + " re-attach the pane to another tab")
+  }
+
   /// Closing the *last* pane in a tab — `tab.panes` ends up empty,
   /// `tab.layout.root` collapses to `.empty`, and the pane's resources
   /// are torn down. Caller (session) closes the tab afterward; that's

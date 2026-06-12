@@ -969,7 +969,7 @@ struct ContentView: View {
     sourceTab.windowModeState = .inactive
     removeWindowModeMonitor()
 
-    sourceTab.closePane(pane)
+    sourceTab.detachPane(pane)
     if sourceTab.panes.isEmpty { session.closeTab(sourceTab) }
     targetTab.addExistingPane(pane, direction: .horizontal)
     session.activeTab = targetTab
@@ -985,7 +985,7 @@ struct ContentView: View {
     tab.windowModeState = .inactive
     removeWindowModeMonitor()
 
-    tab.closePane(pane)
+    tab.detachPane(pane)
     if tab.panes.isEmpty { session.closeTab(tab) }
     session.addTabWithPane(pane)
   }

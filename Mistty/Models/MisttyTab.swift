@@ -113,7 +113,10 @@ final class MisttyTab: Identifiable {
     self.activePane = pane
   }
 
-  func closePane(_ pane: MisttyPane) {
+  /// Remove `pane` from this tab WITHOUT tearing down its libghostty
+  /// surface. For move flows (window-mode join/break) where the pane
+  /// lives on in another tab — the running shell must survive the move.
+  func detachPane(_ pane: MisttyPane) {
     let wasActive = activePane?.id == pane.id
     let closingID = pane.id
     layout.remove(pane: pane)
@@ -128,6 +131,10 @@ final class MisttyTab: Identifiable {
       activePane?.focusKeyboardInput()
     }
     if zoomedPane?.id == closingID { zoomedPane = nil }
+  }
+
+  func closePane(_ pane: MisttyPane) {
+    detachPane(pane)
     // Force-release the libghostty surface + threads + IOSurfaces NOW.
     // SwiftUI's view-tree cache + AppKit's `_commonAwake` notification
     // observer keep the `MisttyPane` + `TerminalSurfaceView` instances
