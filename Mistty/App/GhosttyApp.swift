@@ -107,8 +107,13 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
       DispatchQueue.main.async {
         let view = unmanagedView.takeRetainedValue()
         view.scrollbarState = ScrollbarState(total: sb.total, offset: sb.offset, len: sb.len)
-        // If copy mode is hinting, re-scan labels after mouse/wheel scroll.
-        NotificationCenter.default.post(name: .misttyScrollChanged, object: nil)
+        // This action fires for every output chunk (thousands/sec during a
+        // fast build) and was broadcast app-wide. Its only consumer is the
+        // copy-mode hint rescan, which no-ops unless the pane is hinting —
+        // so skip the post unless the emitting pane is actually hinting.
+        if view.pane?.copyModeState?.isHinting == true {
+          NotificationCenter.default.post(name: .misttyScrollChanged, object: nil)
+        }
       }
     }
     return true
