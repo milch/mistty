@@ -4,6 +4,14 @@ import MisttyShared
 import SwiftUI
 import TOMLKit
 
+/// How OSC-52 clipboard *reads* from a program in a pane are handled. Cmd+V
+/// paste is always allowed and unaffected by this.
+enum ClipboardReadMode: String, Sendable, Equatable {
+  case allow
+  case prompt
+  case deny
+}
+
 struct SSHHostOverride: Sendable, Equatable {
   var hostname: String?
   var regex: String?
@@ -204,13 +212,11 @@ struct MisttyConfig: Sendable, Equatable {
   /// because logs go through a file handle per write.
   var debugLogging: Bool = false
 
-  /// Allow programs running in a pane to READ the system clipboard via OSC-52.
-  /// Off by default: a program-initiated clipboard read silently exfiltrates
-  /// whatever's on the clipboard (often passwords/tokens), so Mistty denies it
-  /// like most terminals. Set `allow_clipboard_read = true` to opt in when you
-  /// trust the programs you run (e.g. tmux/nvim clipboard sync over SSH).
-  /// Does NOT affect Cmd+V paste, which is always allowed (user-initiated).
-  var allowClipboardRead: Bool = false
+  /// Global policy for program-initiated OSC-52 clipboard *reads*. `prompt`
+  /// (default) asks per requesting process; `allow`/`deny` decide silently.
+  /// Per-process rules (`clipboardProcessRules`) and in-memory session
+  /// overrides take precedence. Does NOT affect Cmd+V paste.
+  var clipboardRead: ClipboardReadMode = .prompt
 
   /// Multiplier applied to precision (trackpad / Magic Mouse) scroll deltas
   /// before they reach libghostty. 1.0 = raw macOS deltas (too fast in
@@ -257,7 +263,13 @@ struct MisttyConfig: Sendable, Equatable {
       config.zoxidePath = trimmed.isEmpty ? nil : (trimmed as NSString).expandingTildeInPath
     }
     if let debug = table["debug_logging"]?.bool { config.debugLogging = debug }
-    if let allow = table["allow_clipboard_read"]?.bool { config.allowClipboardRead = allow }
+    // Prefer the mode string; tolerate the legacy bool (true→allow, false→deny);
+    // unrecognized values keep the .prompt default.
+    if let mode = table["allow_clipboard_read"]?.string {
+      config.clipboardRead = ClipboardReadMode(rawValue: mode) ?? .prompt
+    } else if let legacy = table["allow_clipboard_read"]?.bool {
+      config.clipboardRead = legacy ? .allow : .deny
+    }
     if let mult = table["scroll_multiplier"]?.double, mult > 0 {
       config.scrollMultiplier = mult
     } else if let mult = table["scroll_multiplier"]?.int, mult > 0 {
@@ -510,8 +522,8 @@ struct MisttyConfig: Sendable, Equatable {
     if debugLogging {
       lines.append("debug_logging = true")
     }
-    if allowClipboardRead {
-      lines.append("allow_clipboard_read = true")
+    if clipboardRead != MisttyConfig().clipboardRead {
+      lines.append("allow_clipboard_read = \"\(clipboardRead.rawValue)\"")
     }
     if scrollMultiplier != MisttyConfig().scrollMultiplier {
       lines.append("scroll_multiplier = \(scrollMultiplier)")

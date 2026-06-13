@@ -198,9 +198,8 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
   case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
     ghostty_surface_complete_clipboard_request(surface, str, state, true)
   default:
-    // OSC-52 read (and any future program-initiated request). Honor the
-    // user's opt-in; otherwise deny with an empty completion.
-    if MisttyConfig.current.allowClipboardRead {
+    // Temporary: full per-process routing lands in Task 6.
+    if MisttyConfig.current.clipboardRead == .allow {
       ghostty_surface_complete_clipboard_request(surface, str, state, true)
     } else {
       ghostty_surface_complete_clipboard_request(surface, "", state, true)

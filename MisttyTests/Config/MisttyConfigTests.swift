@@ -346,17 +346,35 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertFalse(config.notifications.explicitlyEnabled)
   }
 
-  func test_allowClipboardRead_defaultsFalse_parsesAndRoundTrips() throws {
-    XCTAssertFalse(MisttyConfig().allowClipboardRead)
-    XCTAssertTrue(try MisttyConfig.parse("allow_clipboard_read = true").allowClipboardRead)
+  func test_clipboardRead_defaultsToPrompt() {
+    XCTAssertEqual(MisttyConfig().clipboardRead, .prompt)
+  }
 
-    var config = MisttyConfig()
-    config.allowClipboardRead = true
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
-      .appendingPathComponent("mistty-clipread-\(UUID().uuidString).toml")
-    defer { try? FileManager.default.removeItem(at: tmp) }
-    try config.save(to: tmp)
-    XCTAssertTrue(try MisttyConfig.loadThrowing(from: tmp).allowClipboardRead)
+  func test_clipboardRead_parsesModeStrings() throws {
+    XCTAssertEqual(try MisttyConfig.parse("allow_clipboard_read = \"allow\"").clipboardRead, .allow)
+    XCTAssertEqual(try MisttyConfig.parse("allow_clipboard_read = \"prompt\"").clipboardRead, .prompt)
+    XCTAssertEqual(try MisttyConfig.parse("allow_clipboard_read = \"deny\"").clipboardRead, .deny)
+  }
+
+  func test_clipboardRead_migratesLegacyBool() throws {
+    XCTAssertEqual(try MisttyConfig.parse("allow_clipboard_read = true").clipboardRead, .allow)
+    XCTAssertEqual(try MisttyConfig.parse("allow_clipboard_read = false").clipboardRead, .deny)
+  }
+
+  func test_clipboardRead_unrecognizedFallsBackToPrompt() throws {
+    XCTAssertEqual(try MisttyConfig.parse("allow_clipboard_read = \"bogus\"").clipboardRead, .prompt)
+  }
+
+  func test_clipboardRead_roundTrips() throws {
+    for mode in [ClipboardReadMode.allow, .deny] {  // .prompt is the default → not emitted
+      var config = MisttyConfig()
+      config.clipboardRead = mode
+      let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("mistty-clipmode-\(UUID().uuidString).toml")
+      defer { try? FileManager.default.removeItem(at: tmp) }
+      try config.save(to: tmp)
+      XCTAssertEqual(try MisttyConfig.loadThrowing(from: tmp).clipboardRead, mode)
+    }
   }
 
   func test_save_notifications_roundTrip_explicitTrue() throws {
