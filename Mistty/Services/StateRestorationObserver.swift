@@ -5,6 +5,13 @@ import Foundation
 final class StateRestorationObserver {
   let windowsStore: WindowsStore
 
+  /// Trailing debounce for invalidation. A divider drag mutates layout
+  /// ratios on every tick and each mutation re-fires onChange; observation
+  /// is re-armed immediately (so no mutation is missed) but the
+  /// invalidateRestorableState calls are coalesced — the eventual
+  /// restorable-state encode walks every pane's foreground process tree.
+  private var pendingInvalidation: DispatchWorkItem?
+
   init(windowsStore: WindowsStore) {
     self.windowsStore = windowsStore
     reobserve()
@@ -15,8 +22,12 @@ final class StateRestorationObserver {
       _ = snapshotKeys()
     } onChange: { [weak self] in
       DispatchQueue.main.async {
-        NSApp?.invalidateRestorableState()
-        self?.reobserve()
+        guard let self else { return }
+        self.reobserve()
+        self.pendingInvalidation?.cancel()
+        let work = DispatchWorkItem { NSApp?.invalidateRestorableState() }
+        self.pendingInvalidation = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
       }
     }
   }
