@@ -4,12 +4,19 @@ import MisttyShared
 
 enum IPCClientError: LocalizedError, CustomStringConvertible {
     case connectionFailed(String)
+    /// Legacy / plain-text server error (no structured code on the wire).
+    /// Kept distinct so VersionCommand's `where msg.contains(...)` matching
+    /// against older servers keeps working.
     case remoteError(String)
+    /// Structured server error carrying a code, so the CLI can choose a
+    /// distinct exit status.
+    case remoteCoded(code: MisttyIPC.ErrorCode, message: String)
 
     var description: String {
         switch self {
         case .connectionFailed(let message): return message
         case .remoteError(let message): return message
+        case .remoteCoded(_, let message): return message
         }
     }
 
@@ -68,6 +75,7 @@ final class IPCClient {
 
         var request = params
         request["method"] = method
+        request["v"] = MisttyIPC.protocolVersion
         let requestData = try JSONSerialization.data(withJSONObject: request)
 
         guard UnixSocket.sendFrame(fd: fd, payload: requestData) else {
@@ -84,14 +92,20 @@ final class IPCClient {
         }
 
         let statusByte = responseData[0]
-        let payload = responseData.dropFirst()
+        let payload = Data(responseData.dropFirst())
 
         if statusByte == 0x01 {
-            let message = String(data: Data(payload), encoding: .utf8) ?? "Unknown error"
+            // v1+ server: structured {code, message}. Old server: plain text,
+            // which decodes to nil here so we fall back to remoteError.
+            if let structured = MisttyIPC.decodeWireError(payload) {
+                throw IPCClientError.remoteCoded(
+                    code: structured.code, message: structured.message)
+            }
+            let message = String(data: payload, encoding: .utf8) ?? "Unknown error"
             throw IPCClientError.remoteError(message)
         }
 
-        return Data(payload)
+        return payload
     }
 
     // MARK: - Probe

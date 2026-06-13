@@ -18,7 +18,19 @@ enum IPCRun {
             return try client.call(method, params)
         } catch {
             formatter.printError(error.localizedDescription)
-            Foundation.exit(1)
+            Foundation.exit(exitCode(for: error))
+        }
+    }
+
+    /// Distinct exit codes so scripts can branch without parsing stderr:
+    /// 2 = entity not found, 3 = invalid argument, 1 = everything else
+    /// (connection failures, legacy plain-text errors, operationFailed).
+    static func exitCode(for error: Error) -> Int32 {
+        guard case IPCClientError.remoteCoded(let code, _) = error else { return 1 }
+        switch code {
+        case .entityNotFound: return 2
+        case .invalidArgument: return 3
+        case .operationFailed: return 1
         }
     }
 
