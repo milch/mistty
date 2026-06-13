@@ -57,6 +57,11 @@ public enum MisttyIPC {
 
     public static let maxMessageSize: UInt32 = 16 * 1024 * 1024  // 16 MB
 
+    /// Wire protocol version the CLI sends as `"v"` in each request. v0
+    /// (key absent) = legacy client: the server replies to errors with
+    /// plain text. v1+: the server replies with the structured JSON below.
+    public static let protocolVersion = 1
+
     public enum ErrorCode: Int {
         case entityNotFound = 1
         case invalidArgument = 2
@@ -69,5 +74,35 @@ public enum MisttyIPC {
             code: code.rawValue,
             userInfo: [NSLocalizedDescriptionKey: message]
         )
+    }
+
+    /// Structured error payload carried after the 0x01 status byte for
+    /// v1+ clients. Codable so both ends share one definition.
+    public struct WireError: Codable, Equatable {
+        public let code: Int
+        public let message: String
+
+        public init(code: Int, message: String) {
+            self.code = code
+            self.message = message
+        }
+    }
+
+    /// Encode an error for the wire. Errors minted by `MisttyIPC.error`
+    /// keep their code; foreign errors map to `.operationFailed`.
+    public static func encodeWireError(_ error: Error) -> Data {
+        let ns = error as NSError
+        let code = ns.domain == errorDomain
+            ? (ErrorCode(rawValue: ns.code) ?? .operationFailed)
+            : .operationFailed
+        let wire = WireError(code: code.rawValue, message: ns.localizedDescription)
+        return (try? JSONEncoder().encode(wire)) ?? Data(ns.localizedDescription.utf8)
+    }
+
+    /// Decode a structured wire error; nil when the payload is legacy
+    /// plain text (old server) or otherwise unparseable.
+    public static func decodeWireError(_ data: Data) -> (code: ErrorCode, message: String)? {
+        guard let wire = try? JSONDecoder().decode(WireError.self, from: data) else { return nil }
+        return (ErrorCode(rawValue: wire.code) ?? .operationFailed, wire.message)
     }
 }

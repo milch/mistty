@@ -68,4 +68,26 @@ final class IPCConstantsTests: XCTestCase {
     }
     XCTAssertEqual(MisttyIPC.socketPath, MisttyIPC.serverSocketPath)
   }
+
+  // MARK: - Wire-error codec
+
+  func test_encodeDecode_roundTripsCodeAndMessage() {
+    let err = MisttyIPC.error(.entityNotFound, "Tab 5 not found")
+    let data = MisttyIPC.encodeWireError(err)
+    let decoded = MisttyIPC.decodeWireError(data)
+    XCTAssertEqual(decoded?.code, .entityNotFound)
+    XCTAssertEqual(decoded?.message, "Tab 5 not found")
+  }
+
+  func test_encode_foreignError_usesOperationFailedAndDescription() {
+    let err = NSError(
+      domain: "other", code: 99, userInfo: [NSLocalizedDescriptionKey: "boom"])
+    let decoded = MisttyIPC.decodeWireError(MisttyIPC.encodeWireError(err))
+    XCTAssertEqual(decoded?.code, .operationFailed)
+    XCTAssertEqual(decoded?.message, "boom")
+  }
+
+  func test_decode_plainText_returnsNil() {
+    XCTAssertNil(MisttyIPC.decodeWireError(Data("Tab 5 not found".utf8)))
+  }
 }
