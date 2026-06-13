@@ -10,6 +10,11 @@ final class DebugLog {
 
   private(set) var isEnabled: Bool = false
 
+  /// Kept open across appends — opening/seeking/closing a FileHandle per
+  /// log line is 4+ syscalls each, on the main actor. Reset to nil on a
+  /// write error so the next append re-opens (e.g. log file deleted).
+  private var handle: FileHandle?
+
   private let logURL: URL = {
     let logs = FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent("Library/Logs/Mistty", isDirectory: true)
@@ -47,14 +52,21 @@ final class DebugLog {
     var line = raw
     if !line.hasSuffix("\n") { line += "\n" }
     guard let data = line.data(using: .utf8) else { return }
-    if !FileManager.default.fileExists(atPath: logURL.path) {
-      FileManager.default.createFile(atPath: logURL.path, contents: nil)
+    if handle == nil {
+      if !FileManager.default.fileExists(atPath: logURL.path) {
+        FileManager.default.createFile(atPath: logURL.path, contents: nil)
+      }
+      handle = try? FileHandle(forWritingTo: logURL)
+      _ = try? handle?.seekToEnd()
     }
-    guard let handle = try? FileHandle(forWritingTo: logURL) else { return }
-    defer { try? handle.close() }
+    guard let handle else { return }
     do {
-      try handle.seekToEnd()
       try handle.write(contentsOf: data)
-    } catch {}
+    } catch {
+      // Underlying file vanished or fd went bad — drop the handle so the
+      // next append re-creates and re-opens.
+      try? handle.close()
+      self.handle = nil
+    }
   }
 }
