@@ -411,6 +411,27 @@ final class WindowsStoreSnapshotTests: XCTestCase {
     XCTAssertFalse(pane.useCommandField)
   }
 
+  // MARK: - reopenMostRecentClosed
+
+  /// reopenMostRecentClosed used to re-implement restore() inline and
+  /// always activated the FIRST tab, losing which tab was active when the
+  /// window closed. The shared restoreSessions helper honors activeTabID.
+  func test_reopenMostRecentClosed_restoresActiveTab() {
+    let session = state.createSession(name: "s", directory: URL(fileURLWithPath: "/tmp"))
+    session.addTab()  // second tab
+    let secondTabID = session.tabs[1].id
+    session.activeTab = session.tabs[1]
+
+    store.closeWindow(state)
+    XCTAssertNotNil(store.reopenMostRecentClosed())
+
+    let reopened = store.pendingRestoreStates.last
+    let restoredSession = reopened?.sessions.first
+    XCTAssertEqual(
+      restoredSession?.activeTab?.id, secondTabID,
+      "reopen must restore the tab that was active at close time")
+  }
+
   func test_restore_unmatchedCapturedProcessLeavesPaneBareShell() {
     let snapshot = WorkspaceSnapshot(
       version: 2,

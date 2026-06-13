@@ -140,27 +140,7 @@ final class WindowsStore {
     // snapshotLayout helper as takeSnapshot() so foreground-process capture
     // works the same way: nvim, claude, ssh, etc. relaunch on reopen
     // (subject to the user's [[restore.command]] allowlist).
-    let snapshot = WindowSnapshot(
-      id: state.id,
-      sessions: state.sessions.map { session in
-        SessionSnapshot(
-          id: session.id,
-          name: session.name,
-          customName: session.customName,
-          directory: session.directory,
-          sshCommand: session.sshCommand,
-          lastActivatedAt: session.lastActivatedAt,
-          tabs: session.tabs.map { tab in
-            let paneLookup = Dictionary(uniqueKeysWithValues: tab.panes.map { ($0.id, $0) })
-            return TabSnapshot(
-              id: tab.id, customTitle: tab.customTitle, directory: tab.directory,
-              layout: snapshotLayout(tab.layout.root, panes: paneLookup),
-              activePaneID: tab.activePane?.id)
-          },
-          activeTabID: session.activeTab?.id)
-      },
-      activeSessionID: state.activeSession?.id
-    )
+    let snapshot = snapshotWindow(state)
     recentlyClosed.insert(snapshot, at: 0)
     if recentlyClosed.count > 10 {
       recentlyClosed.removeLast(recentlyClosed.count - 10)
@@ -188,32 +168,14 @@ final class WindowsStore {
     // confusing.
     let state = WindowState(id: reserveNextWindowID(), store: self)
     let config = MisttyConfig.current.restore
-    let tabIDGen: () -> Int = { [weak self] in self?.generateTabID() ?? 0 }
-    let paneIDGen: () -> Int = { [weak self] in self?.generatePaneID() ?? 0 }
-    let popupIDGen: () -> Int = { [weak self] in self?.generatePopupID() ?? 0 }
-    var maxPaneID = 0  // restoreTab requires it inout; unused after the loop
-
-    for sessionSnap in snapshot.sessions {
-      let session = MisttySession(
-        id: generateSessionID(),
-        name: sessionSnap.name,
-        directory: sessionSnap.directory,
-        exec: nil,
-        customName: sessionSnap.customName,
-        tabIDGenerator: tabIDGen,
-        paneIDGenerator: paneIDGen,
-        popupIDGenerator: popupIDGen)
-      session.sshCommand = sessionSnap.sshCommand
-      for tab in session.tabs { session.closeTab(tab) }
-      for tabSnap in sessionSnap.tabs {
-        let tab = WindowsStore.restoreTab(
-          from: tabSnap, paneIDGen: paneIDGen,
-          config: config, maxPaneID: &maxPaneID)
-        session.addTabByRestore(tab)
-      }
-      session.activeTab = session.tabs.first
-      state.appendRestoredSession(session)
-    }
+    // Counters were already advanced past these IDs when the window was
+    // live; the max-tracking outputs are unused on this path.
+    var maxSessionID = 0
+    var maxTabID = 0
+    var maxPaneID = 0
+    restoreSessions(
+      from: snapshot.sessions, into: state, config: config, mintSessionIDs: true,
+      maxSessionID: &maxSessionID, maxTabID: &maxTabID, maxPaneID: &maxPaneID)
     state.activeSession = state.sessions.first
     pendingRestoreStates.append(state)
     return state.id

@@ -2,36 +2,41 @@ import Foundation
 import MisttyShared
 
 extension WindowsStore {
+  /// Snapshot one window. Shared by takeSnapshot() (quit-restore) and
+  /// closeWindow() (recently-closed stack) so a new snapshot field can't
+  /// be added to one path and silently dropped from the other.
+  func snapshotWindow(_ window: WindowState) -> WindowSnapshot {
+    WindowSnapshot(
+      id: window.id,
+      sessions: window.sessions.map { session in
+        SessionSnapshot(
+          id: session.id,
+          name: session.name,
+          customName: session.customName,
+          directory: session.directory,
+          sshCommand: session.sshCommand,
+          lastActivatedAt: session.lastActivatedAt,
+          tabs: session.tabs.map { tab in
+            let paneLookup = Dictionary(uniqueKeysWithValues: tab.panes.map { ($0.id, $0) })
+            return TabSnapshot(
+              id: tab.id,
+              customTitle: tab.customTitle,
+              directory: tab.directory,
+              layout: snapshotLayout(tab.layout.root, panes: paneLookup),
+              activePaneID: tab.activePane?.id
+            )
+          },
+          activeTabID: session.activeTab?.id
+        )
+      },
+      activeSessionID: window.activeSession?.id
+    )
+  }
+
   func takeSnapshot() -> WorkspaceSnapshot {
     WorkspaceSnapshot(
       version: WorkspaceSnapshot.currentVersion,
-      windows: windows.map { window in
-        WindowSnapshot(
-          id: window.id,
-          sessions: window.sessions.map { session in
-            SessionSnapshot(
-              id: session.id,
-              name: session.name,
-              customName: session.customName,
-              directory: session.directory,
-              sshCommand: session.sshCommand,
-              lastActivatedAt: session.lastActivatedAt,
-              tabs: session.tabs.map { tab in
-                let paneLookup = Dictionary(uniqueKeysWithValues: tab.panes.map { ($0.id, $0) })
-                return TabSnapshot(
-                  id: tab.id,
-                  customTitle: tab.customTitle,
-                  directory: tab.directory,
-                  layout: snapshotLayout(tab.layout.root, panes: paneLookup),
-                  activePaneID: tab.activePane?.id
-                )
-              },
-              activeTabID: session.activeTab?.id
-            )
-          },
-          activeSessionID: window.activeSession?.id
-        )
-      },
+      windows: windows.map { snapshotWindow($0) },
       activeWindowID: activeWindow?.id
     )
   }
@@ -54,44 +59,9 @@ extension WindowsStore {
       maxWindowID = max(maxWindowID, windowSnap.id)
       let state = WindowState(id: windowSnap.id, store: self)
 
-      for sessionSnap in windowSnap.sessions {
-        maxSessionID = max(maxSessionID, sessionSnap.id)
-        let tabIDGen: () -> Int = { [weak self] in self?.generateTabID() ?? 0 }
-        let paneIDGen: () -> Int = { [weak self] in self?.generatePaneID() ?? 0 }
-        let popupIDGen: () -> Int = { [weak self] in self?.generatePopupID() ?? 0 }
-
-        let session = MisttySession(
-          id: sessionSnap.id,
-          name: sessionSnap.name,
-          directory: sessionSnap.directory,
-          exec: nil,
-          customName: sessionSnap.customName,
-          tabIDGenerator: tabIDGen,
-          paneIDGenerator: paneIDGen,
-          popupIDGenerator: popupIDGen
-        )
-        session.sshCommand = sessionSnap.sshCommand
-        session.lastActivatedAt = sessionSnap.lastActivatedAt
-
-        for tab in session.tabs { session.closeTab(tab) }
-
-        for tabSnap in sessionSnap.tabs {
-          maxTabID = max(maxTabID, tabSnap.id)
-          let tab = Self.restoreTab(
-            from: tabSnap, paneIDGen: paneIDGen,
-            config: config, maxPaneID: &maxPaneID)
-          session.addTabByRestore(tab)
-        }
-
-        if let activeTabID = sessionSnap.activeTabID,
-           let activeTab = session.tabs.first(where: { $0.id == activeTabID }) {
-          session.activeTab = activeTab
-        } else {
-          session.activeTab = session.tabs.first
-        }
-
-        state.appendRestoredSession(session)
-      }
+      restoreSessions(
+        from: windowSnap.sessions, into: state, config: config, mintSessionIDs: false,
+        maxSessionID: &maxSessionID, maxTabID: &maxTabID, maxPaneID: &maxPaneID)
 
       if let activeID = windowSnap.activeSessionID,
          let active = state.sessions.first(where: { $0.id == activeID }) {
@@ -113,6 +83,55 @@ extension WindowsStore {
 
     // activeWindow is wired up post-mount once the NSWindows actually exist.
     pendingActiveWindowID = snapshot.activeWindowID
+  }
+
+  /// Rehydrate sessions from snapshots into `state`. `mintSessionIDs` is
+  /// true for reopen-closed-window (session IDs are surfaced via
+  /// sidebar/IPC; a stale ID across close/reopen would be confusing) and
+  /// false for quit-restore (IDs preserved; counters advanced by caller).
+  func restoreSessions(
+    from snapshots: [SessionSnapshot], into state: WindowState,
+    config: RestoreConfig, mintSessionIDs: Bool,
+    maxSessionID: inout Int, maxTabID: inout Int, maxPaneID: inout Int
+  ) {
+    let tabIDGen: () -> Int = { [weak self] in self?.generateTabID() ?? 0 }
+    let paneIDGen: () -> Int = { [weak self] in self?.generatePaneID() ?? 0 }
+    let popupIDGen: () -> Int = { [weak self] in self?.generatePopupID() ?? 0 }
+
+    for sessionSnap in snapshots {
+      maxSessionID = max(maxSessionID, sessionSnap.id)
+      let session = MisttySession(
+        id: mintSessionIDs ? generateSessionID() : sessionSnap.id,
+        name: sessionSnap.name,
+        directory: sessionSnap.directory,
+        exec: nil,
+        customName: sessionSnap.customName,
+        tabIDGenerator: tabIDGen,
+        paneIDGenerator: paneIDGen,
+        popupIDGenerator: popupIDGen
+      )
+      session.sshCommand = sessionSnap.sshCommand
+      session.lastActivatedAt = sessionSnap.lastActivatedAt
+
+      for tab in session.tabs { session.closeTab(tab) }
+
+      for tabSnap in sessionSnap.tabs {
+        maxTabID = max(maxTabID, tabSnap.id)
+        let tab = Self.restoreTab(
+          from: tabSnap, paneIDGen: paneIDGen,
+          config: config, maxPaneID: &maxPaneID)
+        session.addTabByRestore(tab)
+      }
+
+      if let activeTabID = sessionSnap.activeTabID,
+         let activeTab = session.tabs.first(where: { $0.id == activeTabID }) {
+        session.activeTab = activeTab
+      } else {
+        session.activeTab = session.tabs.first
+      }
+
+      state.appendRestoredSession(session)
+    }
   }
 
   // Snapshot restore helpers:
