@@ -8,6 +8,10 @@ import SwiftUI
 struct MisttyApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
   @State private var windowsStore = WindowsStore()
+  /// Resolves window-scoped commands to the single focused terminal window
+  /// and bridges the legacy mistty* notifications into typed dispatches.
+  /// Created in `init()` once `windowsStore` exists.
+  @State private var commandRouter: WindowCommandRouter
   @State private var ipcListener: IPCListener?
   // Shared parse — see `MisttyConfig.current`. Reading the same cache
   // GhosttyAppManager uses keeps SwiftUI state and libghostty in lockstep and
@@ -15,6 +19,13 @@ struct MisttyApp: App {
   @State private var config: MisttyConfig = MisttyConfig.current
 
   init() {
+    // Initialize the router first: it has no default value, and Swift won't
+    // let `init` touch `self` (e.g. read `config`) until every stored
+    // property is set. `_windowsStore`'s wrappedValue is the
+    // property-initializer default, available before `init` runs.
+    _commandRouter = State(
+      initialValue: WindowCommandRouter(windowsStore: _windowsStore.wrappedValue))
+
     // Opt in to AppKit state restoration by default. Without this, macOS 14+
     // defaults to clearing saved state on quit (the OS-level "Close windows
     // when quitting an app" default), which defeats our restoration feature
@@ -50,7 +61,7 @@ struct MisttyApp: App {
 
   var body: some Scene {
     WindowGroup(id: "terminal") {
-      WindowRootView(windowsStore: windowsStore, config: config)
+      WindowRootView(windowsStore: windowsStore, commandRouter: commandRouter, config: config)
         .applyTopSafeArea(style: config.ui.titleBarStyle)
         .onAppear {
           if ipcListener == nil {

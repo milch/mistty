@@ -6,6 +6,7 @@ import SwiftUI
 struct ContentView: View {
   var state: WindowState
   var windowsStore: WindowsStore
+  var commandRouter: WindowCommandRouter
   var config: MisttyConfig
   @State private var tabBarOverride: TabBarVisibilityOverride = .auto
   @SceneStorage("sidebarWidth") var sidebarWidth: Double = 220
@@ -24,70 +25,82 @@ struct ContentView: View {
 
   var body: some View {
     contentWithNotifications
-      .onReceive(NotificationCenter.default.publisher(for: .misttyFocusTabByIndex)) {
-        notification in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        guard let session = state.activeSession,
-          let index = notification.userInfo?["index"] as? Int,
-          index < session.tabs.count
-        else { return }
-        session.activeTab = session.tabs[index]
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyFocusSessionByIndex)) {
-        notification in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        guard let index = notification.userInfo?["index"] as? Int,
-          index < state.sessions.count
-        else { return }
-        state.activeSession = state.sessions[index]
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyNextTab)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        state.activeSession?.nextTab()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyPrevTab)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        state.activeSession?.prevTab()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyNextSession)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        state.nextSession()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyPrevSession)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        state.prevSession()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionUp)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        state.moveActiveSessionUp()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyMoveSessionDown)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        state.moveActiveSessionDown()
-      }
       .onReceive(NotificationCenter.default.publisher(for: .misttyConfigDidReload)) { _ in
         shortcutMonitor?.updateConfig(MisttyConfig.current.shortcuts)
       }
+      .onAppear {
+        commandRouter.register(windowID: state.id) { command in
+          handleWindowCommand(command)
+        }
+      }
+      .onDisappear {
+        commandRouter.unregister(windowID: state.id)
+      }
+  }
+
+  /// Single sink for window-scoped commands routed by `WindowCommandRouter`.
+  /// Each arm is the verbatim body of the `.onReceive` block it replaced —
+  /// the per-window `isActiveTerminalWindow` guards were deleted because the
+  /// router already resolved the single target window before dispatching.
+  private func handleWindowCommand(_ command: WindowCommand) {
+    switch command {
+    case .newTab(let plain):
+      addTab(inheritSsh: !plain)
+    case .splitHorizontal(let plain):
+      splitPane(direction: .horizontal, inheritSsh: !plain)
+    case .splitVertical(let plain):
+      splitPane(direction: .vertical, inheritSsh: !plain)
+    case .sessionManager:
+      showingSessionManager = true
+    case .closePane:
+      handleClosePane()
+    case .closeTab:
+      handleCloseTab()
+    case .reparentSession(let sessionID):
+      let targetID = sessionID ?? state.activeSession?.id
+      guard let targetID,
+        let session = state.sessions.first(where: { $0.id == targetID })
+      else { return }
+      reparentTargetSessionID = targetID
+      directoryPickerVM = DirectoryPickerViewModel(excluding: [session.directory])
+    case .windowMode:
+      handleWindowMode()
+    case .copyMode:
+      handleCopyMode()
+    case .yankHints(let action):
+      handleYankHints(action: action)
+    case .togglePopup(let name):
+      handlePopupToggle(name: name)
+    case .focusTab(let index):
+      guard let session = state.activeSession,
+        index < session.tabs.count
+      else { return }
+      session.activeTab = session.tabs[index]
+    case .focusSession(let index):
+      guard index < state.sessions.count else { return }
+      state.activeSession = state.sessions[index]
+    case .nextTab:
+      state.activeSession?.nextTab()
+    case .prevTab:
+      state.activeSession?.prevTab()
+    case .nextSession:
+      state.nextSession()
+    case .prevSession:
+      state.prevSession()
+    case .moveSessionUp:
+      state.moveActiveSessionUp()
+    case .moveSessionDown:
+      state.moveActiveSessionDown()
+    case .toggleTabBar:
+      let configured = configuredTabBarShow()
+      withAnimation(.easeInOut(duration: 0.15)) {
+        tabBarOverride = tabBarOverride.toggled(configuredShow: configured)
+      }
+    }
   }
 
   private var contentWithNotifications: some View {
-    contentWithHintEntryNotifications
-      .onReceive(NotificationCenter.default.publisher(for: .misttyPopupToggle)) { notification in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handlePopupToggle(notification)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyClosePane)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleClosePane()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyWindowMode)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleWindowMode()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyCopyMode)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleCopyMode()
-      }
+    contentWithOverlays
       .onReceive(NotificationCenter.default.publisher(for: .misttyScrollChanged)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
         guard var copyState = state.activeSession?.activeTab?.copyModeState,
@@ -95,10 +108,6 @@ struct ContentView: View {
               let source = copyState.hint?.source else { return }
         populateHintMatches(&copyState, source: source)
         state.activeSession?.activeTab?.copyModeState = copyState
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyCloseTab)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleCloseTab()
       }
       .onReceive(NotificationCenter.default.publisher(for: .ghosttySetTitle)) { notification in
         handleSetTitle(notification)
@@ -182,24 +191,6 @@ struct ContentView: View {
       }
   }
 
-  /// Three closely-related notifications, split out so the type-checker
-  /// doesn't choke on the parent's `.onReceive` chain.
-  private var contentWithHintEntryNotifications: some View {
-    contentWithOverlays
-      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHints)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleYankHints(action: .copy)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHintsOpen)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleYankHints(action: .open)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyYankHintsCursor)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        handleYankHints(action: .cursor)
-      }
-  }
-
   private var contentWithOverlays: some View {
     mainContent
       .overlay { sessionManagerOverlay }
@@ -221,51 +212,6 @@ struct ContentView: View {
           // window mode appears to ignore the shortcut until something
           // else forces focus back to the terminal.
           returnFocusToActivePane()
-        }
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyNewTab)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        addTab(inheritSsh: true)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyNewTabPlain)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        addTab(inheritSsh: false)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontal)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        splitPane(direction: .horizontal, inheritSsh: true)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttySplitHorizontalPlain)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        splitPane(direction: .horizontal, inheritSsh: false)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttySplitVertical)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        splitPane(direction: .vertical, inheritSsh: true)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttySplitVerticalPlain)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        splitPane(direction: .vertical, inheritSsh: false)
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttySessionManager)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        showingSessionManager = true
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyReparentSession)) { notification in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        let explicitID = (notification.userInfo?["sessionID"] as? Int)
-        let targetID = explicitID ?? state.activeSession?.id
-        guard let targetID,
-              let session = state.sessions.first(where: { $0.id == targetID })
-        else { return }
-        reparentTargetSessionID = targetID
-        directoryPickerVM = DirectoryPickerViewModel(excluding: [session.directory])
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .misttyToggleTabBar)) { _ in
-        guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        let configured = configuredTabBarShow()
-        withAnimation(.easeInOut(duration: 0.15)) {
-          tabBarOverride = tabBarOverride.toggled(configuredShow: configured)
         }
       }
       .onChange(of: state.sidebarVisible) { _, _ in
@@ -623,10 +569,8 @@ struct ContentView: View {
 
   // MARK: - Notification Handlers
 
-  private func handlePopupToggle(_ notification: Notification) {
-    guard let session = state.activeSession,
-      let name = notification.userInfo?["name"] as? String
-    else { return }
+  private func handlePopupToggle(name: String) {
+    guard let session = state.activeSession else { return }
     let config = MisttyConfig.load()
     guard let definition = config.popups.first(where: { $0.name == name }) else { return }
     session.togglePopup(definition: definition)

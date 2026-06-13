@@ -4,6 +4,7 @@ import SwiftUI
 
 struct WindowRootView: View {
   let windowsStore: WindowsStore
+  let commandRouter: WindowCommandRouter
   let config: MisttyConfig
   @State private var state: WindowState?
   @Environment(\.openWindow) private var openWindow
@@ -11,7 +12,9 @@ struct WindowRootView: View {
   var body: some View {
     Group {
       if let state {
-        ContentView(state: state, windowsStore: windowsStore, config: config)
+        ContentView(
+          state: state, windowsStore: windowsStore,
+          commandRouter: commandRouter, config: config)
       } else {
         Color.clear
       }
