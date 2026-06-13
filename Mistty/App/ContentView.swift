@@ -1602,28 +1602,7 @@ struct ContentView: View {
   }
 
   private func readTerminalLine(row: Int) -> String? {
-    guard let pane = copyModePane,
-      let surface = pane.surfaceView.surface
-    else { return nil }
-
-    let size = ghostty_surface_size(surface)
-
-    var sel = ghostty_selection_s()
-    sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
-    sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.top_left.x = 0
-    sel.top_left.y = UInt32(row)
-    sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
-    sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.bottom_right.x = UInt32(size.columns - 1)
-    sel.bottom_right.y = UInt32(row)
-    sel.rectangle = false
-
-    var text = ghostty_text_s()
-    guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
-    defer { ghostty_surface_free_text(surface, &text) }
-    guard let ptr = text.text else { return nil }
-    return String(cString: ptr)
+    copyModePane?.surfaceView.readRow(row)
   }
 
   /// Read a line by screen row, preferring VIEWPORT reading when the row is visible.
@@ -1639,28 +1618,7 @@ struct ContentView: View {
   }
 
   private func readScreenLine(row: Int) -> String? {
-    guard let pane = copyModePane,
-      let surface = pane.surfaceView.surface
-    else { return nil }
-
-    let size = ghostty_surface_size(surface)
-
-    var sel = ghostty_selection_s()
-    sel.top_left.tag = GHOSTTY_POINT_SCREEN
-    sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.top_left.x = 0
-    sel.top_left.y = UInt32(row)
-    sel.bottom_right.tag = GHOSTTY_POINT_SCREEN
-    sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.bottom_right.x = UInt32(size.columns - 1)
-    sel.bottom_right.y = UInt32(row)
-    sel.rectangle = false
-
-    var text = ghostty_text_s()
-    guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
-    defer { ghostty_surface_free_text(surface, &text) }
-    guard let ptr = text.text else { return nil }
-    return String(cString: ptr)
+    copyModePane?.surfaceView.readRow(row, pointTag: GHOSTTY_POINT_SCREEN)
   }
 
   private func scanViewportForHints(source: HintSource) -> [HintMatch] {
@@ -1699,8 +1657,7 @@ struct ContentView: View {
         anchor: (row: anchor.row + offset, col: anchor.col),
         cursor: (row: copyState.cursorRow + offset, col: copyState.cursorCol)
       )
-      textToCopy = readGhosttyText(
-        surface: surface,
+      textToCopy = pane.surfaceView.readText(
         startRow: top.row, startCol: top.col,
         endRow: bottom.row, endCol: bottom.col,
         rectangle: false,
@@ -1711,8 +1668,7 @@ struct ContentView: View {
       // Line-wise: full lines from min to max row
       let minRow = min(anchor.row, copyState.cursorRow)
       let maxRow = max(anchor.row, copyState.cursorRow)
-      textToCopy = readGhosttyText(
-        surface: surface,
+      textToCopy = pane.surfaceView.readText(
         startRow: minRow + offset, startCol: 0,
         endRow: maxRow + offset, endCol: cols - 1,
         rectangle: false,
@@ -1763,28 +1719,4 @@ struct ContentView: View {
     }
   }
 
-  private func readGhosttyText(
-    surface: ghostty_surface_t,
-    startRow: Int, startCol: Int,
-    endRow: Int, endCol: Int,
-    rectangle: Bool,
-    pointTag: ghostty_point_tag_e = GHOSTTY_POINT_VIEWPORT
-  ) -> String? {
-    var sel = ghostty_selection_s()
-    sel.top_left.tag = pointTag
-    sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.top_left.x = UInt32(startCol)
-    sel.top_left.y = UInt32(startRow)
-    sel.bottom_right.tag = pointTag
-    sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
-    sel.bottom_right.x = UInt32(endCol)
-    sel.bottom_right.y = UInt32(endRow)
-    sel.rectangle = rectangle
-
-    var text = ghostty_text_s()
-    guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
-    defer { ghostty_surface_free_text(surface, &text) }
-    guard let ptr = text.text else { return nil }
-    return String(cString: ptr)
-  }
 }

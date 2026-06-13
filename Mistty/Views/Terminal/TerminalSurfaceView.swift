@@ -27,6 +27,46 @@ final class TerminalSurfaceView: NSView {
     return Int32(ghostty_surface_pty_fd(surface))
   }
 
+  /// Read a text range from the surface. The ONLY sanctioned way to read
+  /// terminal text — builds the `ghostty_selection_s`, reads, and frees
+  /// the C buffer in one place. Returns nil when the surface is gone or
+  /// the read fails.
+  @MainActor
+  func readText(
+    startRow: Int, startCol: Int, endRow: Int, endCol: Int,
+    rectangle: Bool = false,
+    pointTag: ghostty_point_tag_e = GHOSTTY_POINT_VIEWPORT
+  ) -> String? {
+    guard let surface else { return nil }
+    var sel = ghostty_selection_s()
+    sel.top_left.tag = pointTag
+    sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.top_left.x = UInt32(startCol)
+    sel.top_left.y = UInt32(startRow)
+    sel.bottom_right.tag = pointTag
+    sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
+    sel.bottom_right.x = UInt32(endCol)
+    sel.bottom_right.y = UInt32(endRow)
+    sel.rectangle = rectangle
+    var text = ghostty_text_s()
+    guard ghostty_surface_read_text(surface, sel, &text) else { return nil }
+    defer { ghostty_surface_free_text(surface, &text) }
+    guard let ptr = text.text else { return nil }
+    return String(cString: ptr)
+  }
+
+  /// Read one full row (viewport row by default, screen row via pointTag).
+  @MainActor
+  func readRow(
+    _ row: Int, pointTag: ghostty_point_tag_e = GHOSTTY_POINT_VIEWPORT
+  ) -> String? {
+    guard let surface else { return nil }
+    let cols = Int(ghostty_surface_size(surface).columns)
+    guard cols > 0 else { return nil }
+    return readText(
+      startRow: row, startCol: 0, endRow: row, endCol: cols - 1, pointTag: pointTag)
+  }
+
   var onSelect: (() -> Void)?
   var scrollbarState = ScrollbarState()
 

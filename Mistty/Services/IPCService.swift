@@ -392,35 +392,14 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
       let surface = try self.require(
         pane.surfaceView.surface, .operationFailed, "Pane has no active surface")
 
+      // Read the entire visible viewport as a single selection
       let size = ghostty_surface_size(surface)
       let rows = Int(size.rows)
       let cols = Int(size.columns)
-
-      // Read the entire visible viewport as a single selection
-      var sel = ghostty_selection_s()
-      sel.top_left.tag = GHOSTTY_POINT_VIEWPORT
-      sel.top_left.coord = GHOSTTY_POINT_COORD_EXACT
-      sel.top_left.x = 0
-      sel.top_left.y = 0
-      sel.bottom_right.tag = GHOSTTY_POINT_VIEWPORT
-      sel.bottom_right.coord = GHOSTTY_POINT_COORD_EXACT
-      sel.bottom_right.x = UInt32(cols - 1)
-      sel.bottom_right.y = UInt32(rows - 1)
-      sel.rectangle = false
-
-      var text = ghostty_text_s()
-      guard ghostty_surface_read_text(surface, sel, &text) else {
-        throw MisttyIPC.error(.operationFailed, "Failed to read text from surface")
-      }
-      defer { ghostty_surface_free_text(surface, &text) }
-
-      let content: String
-      if let ptr = text.text {
-        content = String(cString: ptr)
-      } else {
-        content = ""
-      }
-
+      let content = try self.require(
+        pane.surfaceView.readText(
+          startRow: 0, startCol: 0, endRow: rows - 1, endCol: cols - 1),
+        .operationFailed, "Failed to read text from surface")
       return GetTextResponse(text: content)
     }
   }
