@@ -36,6 +36,15 @@ struct CopyModeState {
   /// because the struct value changes, even when cursorRow/cursorCol don't
   /// (e.g., j at bottom row scrolls viewport but cursor stays at row 23).
   var scrollGeneration: Int = 0
+  /// Cached search-match positions in SCREEN coordinates, sorted by
+  /// (row, col). Rebuilt by ContentView's `runSearch` when the query or
+  /// the scrollback row count changes — n/N presses reuse the cache
+  /// instead of re-reading the entire scrollback over FFI twice per
+  /// keypress. `searchMatchesQuery`/`searchMatchesTotalRows` are the
+  /// cache key.
+  var searchMatches: [SearchMatch] = []
+  var searchMatchesQuery: String?
+  var searchMatchesTotalRows: Int = 0
   var hint: HintState?
 
   init(rows: Int, cols: Int, cursorRow: Int? = nil, cursorCol: Int? = nil) {

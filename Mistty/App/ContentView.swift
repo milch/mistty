@@ -1318,17 +1318,14 @@ struct ContentView: View {
         case .updateSearch:
           break  // searchQuery already updated
         case .confirmSearch:
-          self.performSearch(&copyState, direction: copyState.searchDirection)
-          self.countSearchMatches(&copyState)
+          self.runSearch(&copyState, direction: copyState.searchDirection)
         case .cancelSearch:
           break  // Already handled in copyState
         case .searchNext:
-          self.performSearch(&copyState, direction: copyState.searchDirection)
-          self.countSearchMatches(&copyState)
+          self.runSearch(&copyState, direction: copyState.searchDirection)
         case .searchPrev:
           let reversed: SearchDirection = copyState.searchDirection == .forward ? .reverse : .forward
-          self.performSearch(&copyState, direction: reversed)
-          self.countSearchMatches(&copyState)
+          self.runSearch(&copyState, direction: reversed)
         case .scroll(let deltaRows):
           self.scrollViewport(&copyState, delta: deltaRows)
           if copyState.isHinting, let source = copyState.hint?.source {
@@ -1538,7 +1535,13 @@ struct ContentView: View {
     shortcutMonitor = nil
   }
 
-  private func performSearch(_ state: inout CopyModeState, direction: SearchDirection) {
+  /// One search pass per (query, scrollback-size): scans every screen row
+  /// once into `state.searchMatches`, then derives both the jump target
+  /// and the [index/total] display from the cached array. Previously
+  /// `performSearch` + `countSearchMatches` EACH scanned the entire
+  /// scrollback (one `ghostty_surface_read_text` FFI call + String
+  /// allocation per row) on every n/N/confirm keypress.
+  private func runSearch(_ state: inout CopyModeState, direction: SearchDirection) {
     guard !state.searchQuery.isEmpty,
       let pane = copyModePane,
       let surface = pane.surfaceView.surface
@@ -1546,113 +1549,56 @@ struct ContentView: View {
 
     let scrollbar = pane.surfaceView.scrollbarState
     let totalRows = Int(scrollbar.total)
-    let viewportOffset = Int(scrollbar.offset)
-    let cols = Int(ghostty_surface_size(surface).columns)
     guard totalRows > 0 else { return }
+    let cols = Int(ghostty_surface_size(surface).columns)
 
-    let cursorScreenRow = state.cursorRow + viewportOffset
-    let isForward = direction == .forward
-
-    // Search all rows, starting from the current row.
-    // On the current row, only consider matches AFTER (forward) or BEFORE (reverse) the cursor.
-    for i in 0...totalRows {
-      let screenRow: Int
-      if isForward {
-        screenRow = (cursorScreenRow + i) % totalRows
-      } else {
-        screenRow = (cursorScreenRow - i + totalRows) % totalRows
-      }
-
-      guard let line = readLineByScreenRow(screenRow) else { continue }
-
-      // Find the right match on this line
-      let matchCol: Int?
-      if i == 0 {
-        // Current row: find the next/prev match relative to cursor column
-        matchCol = findMatchOnLine(
-          line, query: state.searchQuery, cursorCol: state.cursorCol, forward: isForward)
-      } else {
-        // Other rows: find the first (forward) or last (reverse) match
-        matchCol = findMatchOnLine(
-          line, query: state.searchQuery, cursorCol: isForward ? -1 : Int.max, forward: isForward)
-      }
-
-      if let col = matchCol {
-        // Scroll to make the match visible — center it in viewport
-        let viewportRows = Int(scrollbar.len)
-        let targetOffset = max(0, min(screenRow - viewportRows / 2, totalRows - viewportRows))
-        let actionStr = "scroll_to_row:\(targetOffset)"
-        _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
-
-        // Update scrollbar state synchronously — the async callback will
-        // eventually arrive with the same value, but we need it now for
-        // subsequent searches (n/N) to compute correct screen coordinates.
-        pane.surfaceView.scrollbarState.offset = UInt64(targetOffset)
-
-        state.cursorRow = screenRow - targetOffset
-        state.cursorCol = min(col, cols - 1)
-        state.desiredCol = nil
-        return
-      }
-    }
-  }
-
-  /// Find the next (forward) or previous (reverse) match on a line relative to cursorCol.
-  /// Returns the column of the match, or nil if none found.
-  private func findMatchOnLine(
-    _ line: String, query: String, cursorCol: Int, forward: Bool
-  ) -> Int? {
-    var bestCol: Int?
-    var searchStart = line.startIndex
-    while let range = line.range(of: query, options: .caseInsensitive, range: searchStart..<line.endIndex) {
-      let col = line.distance(from: line.startIndex, to: range.lowerBound)
-      if forward {
-        // Find first match with col > cursorCol
-        if col > cursorCol {
-          return col
-        }
-      } else {
-        // Find last match with col < cursorCol
-        if col < cursorCol {
-          bestCol = col
+    if state.searchMatchesQuery != state.searchQuery
+      || state.searchMatchesTotalRows != totalRows
+    {
+      var matches: [SearchMatch] = []
+      for row in 0..<totalRows {
+        guard let line = readLineByScreenRow(row) else { continue }
+        var searchStart = line.startIndex
+        while let range = line.range(
+          of: state.searchQuery, options: .caseInsensitive,
+          range: searchStart..<line.endIndex)
+        {
+          matches.append(SearchMatch(
+            row: row, col: line.distance(from: line.startIndex, to: range.lowerBound)))
+          searchStart = range.upperBound
         }
       }
-      searchStart = range.upperBound
-    }
-    return bestCol
-  }
-
-  private func countSearchMatches(_ state: inout CopyModeState) {
-    guard !state.searchQuery.isEmpty,
-      let pane = copyModePane
-    else { return }
-
-    let scrollbar = pane.surfaceView.scrollbarState
-    let totalRows = Int(scrollbar.total)
-    let viewportOffset = Int(scrollbar.offset)
-    let cursorScreenRow = state.cursorRow + viewportOffset
-
-    var total = 0
-    var currentIndex = 0
-
-    for row in 0..<totalRows {
-      guard let line = readLineByScreenRow(row) else { continue }
-      var searchStart = line.startIndex
-      while let range = line.range(
-        of: state.searchQuery, options: .caseInsensitive,
-        range: searchStart..<line.endIndex)
-      {
-        total += 1
-        let matchCol = line.distance(from: line.startIndex, to: range.lowerBound)
-        if row < cursorScreenRow || (row == cursorScreenRow && matchCol <= state.cursorCol) {
-          currentIndex = total
-        }
-        searchStart = range.upperBound
-      }
+      state.searchMatches = matches
+      state.searchMatchesQuery = state.searchQuery
+      state.searchMatchesTotalRows = totalRows
     }
 
-    state.searchMatchTotal = total > 0 ? total : nil
-    state.searchMatchIndex = total > 0 ? currentIndex : nil
+    let cursorScreenRow = state.cursorRow + Int(scrollbar.offset)
+    guard let target = SearchMatching.nextMatch(
+      after: cursorScreenRow, col: state.cursorCol,
+      in: state.searchMatches, forward: direction == .forward)
+    else {
+      state.searchMatchTotal = nil
+      state.searchMatchIndex = nil
+      return
+    }
+
+    // Scroll to make the match visible — center it in viewport.
+    let viewportRows = Int(scrollbar.len)
+    let targetOffset = max(0, min(target.row - viewportRows / 2, totalRows - viewportRows))
+    let actionStr = "scroll_to_row:\(targetOffset)"
+    _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+
+    // Update scrollbar state synchronously — the async callback will
+    // eventually arrive with the same value, but we need it now for
+    // subsequent searches (n/N) to compute correct screen coordinates.
+    pane.surfaceView.scrollbarState.offset = UInt64(targetOffset)
+
+    state.cursorRow = target.row - targetOffset
+    state.cursorCol = min(target.col, cols - 1)
+    state.desiredCol = nil
+    state.searchMatchTotal = state.searchMatches.count
+    state.searchMatchIndex = SearchMatching.index(of: target, in: state.searchMatches)
   }
 
   private func readTerminalLine(row: Int) -> String? {
