@@ -27,7 +27,7 @@ cursor_style = "block"
 scrollback_lines = 10000
 
 # Show the session sidebar on launch.
-# Toggle at runtime with cmd+\.
+# Toggle at runtime with cmd+s.
 sidebar_visible = true
 
 # Multiplier applied to precision (trackpad / Magic Mouse) scroll deltas

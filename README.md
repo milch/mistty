@@ -11,6 +11,7 @@ The same, GPU-accelerated rendering engine you are used to from Ghostty. Mistty 
 - **Session manager** (`Cmd+J`) — one fuzzy palette over your open sessions, recent directories (via [zoxide](https://github.com/ajeetdsouza/zoxide)), and SSH hosts from `~/.ssh/config`. Type a few letters, hit return, and you're in the right place.
 - **Sessions, tabs, and split panes** — a working-directory-scoped session holds tabs; tabs hold split panes. Standard terminal multiplexing without tmux.
 - **Sidebar** (`Cmd+S`) — a persistent tree of your sessions and tabs.
+- **Popups** — launch TUIs like `lazygit` or quick commands you run all the time by binding them to a keyboard shortcut.
 - **Window mode** (`Cmd+X`) — a modal layer for moving, resizing, zooming, and rearranging panes with single keystrokes, plus one-key standard layouts.
 - **Copy mode** (`Cmd+Shift+C`) — vim-style keyboard navigation, selection, search, and link/path hints for yanking or opening without the mouse. Also try **yank mode** (`Cmd+Shift+V`) or **copy mode** (`Cmd+Shift+O`) to copy or open text shaped like numbers, URLs, paths, and more, with a few keystrokes.
 - **State restoration** — relaunch and your sessions, tabs, panes, and working directories come back; allow-listed programs (nvim, ssh, …) relaunch too. Configure restoration strategies like passing environment variables, or repeating the previous arguments.
@@ -56,7 +57,7 @@ Every shortcut is rebindable. The [keyboard shortcuts reference](docs/user-guide
 
 ## Documentation
 
-The [**user guide**](docs/user-guide/) covers everything in depth:
+The [**user guide**](docs/user-guide/README.md) covers everything in depth:
 
 - [Installation](docs/user-guide/installation.md) — Homebrew, zoxide, and building from source
 - [Getting started](docs/user-guide/getting-started.md) — windows, sessions, tabs, panes, and the session manager
