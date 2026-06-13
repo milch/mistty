@@ -1040,10 +1040,9 @@ struct ContentView: View {
     var cursorRow: Int?
     var cursorCol: Int?
     let surfaceView = activePane.surfaceView
-    if let surface = surfaceView.surface {
-      let size = ghostty_surface_size(surface)
-      rows = Int(size.rows)
-      cols = Int(size.columns)
+    if let size = surfaceView.viewportGridSize() {
+      rows = size.rows
+      cols = size.cols
     }
     if let pos = surfaceView.cursorPosition() {
       cursorRow = pos.row
@@ -1056,9 +1055,7 @@ struct ContentView: View {
     // `ghostty_surface_pin_viewport` (Mistty patch
     // `patches/ghostty/0005-pin-viewport.patch`) transitions the viewport
     // from `.active` to `.pin` at the current top row with no visual shift.
-    if let surface = surfaceView.surface {
-      ghostty_surface_pin_viewport(surface)
-    }
+    surfaceView.pinViewport()
 
     // When the user enters copy mode while looking at scrollback, the live
     // cursor row is below the visible viewport and our `cursorPosition()`
@@ -1085,9 +1082,8 @@ struct ContentView: View {
   @discardableResult
   private func scrollViewport(_ state: inout CopyModeState, delta: Int) -> Int {
     guard let pane = copyModePane,
-          let surface = pane.surfaceView.surface else { return 0 }
-    let actionStr = "scroll_page_lines:\(delta)"
-    _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+          pane.surfaceView.surface != nil else { return 0 }
+    pane.surfaceView.runBindingAction("scroll_page_lines:\(delta)")
     // Update scrollbar offset synchronously — the async callback will
     // eventually arrive, but we need correct offset immediately for
     // subsequent search coordinate conversion.
@@ -1120,10 +1116,7 @@ struct ContentView: View {
     // mode state keep their scroll position until the user navigates back
     // to them and exits there too.
     let active = state.activeSession?.activeTab?.activePane
-    if let surface = active?.surfaceView.surface {
-      let actionStr = "scroll_to_bottom"
-      _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
-    }
+    active?.surfaceView.runBindingAction("scroll_to_bottom")
     active?.copyModeState = nil
   }
 
@@ -1479,13 +1472,12 @@ struct ContentView: View {
   private func runSearch(_ state: inout CopyModeState, direction: SearchDirection) {
     guard !state.searchQuery.isEmpty,
       let pane = copyModePane,
-      let surface = pane.surfaceView.surface
+      let cols = pane.surfaceView.viewportGridSize()?.cols
     else { return }
 
     let scrollbar = pane.surfaceView.scrollbarState
     let totalRows = Int(scrollbar.total)
     guard totalRows > 0 else { return }
-    let cols = Int(ghostty_surface_size(surface).columns)
 
     if state.searchMatchesQuery != state.searchQuery
       || state.searchMatchesTotalRows != totalRows
@@ -1521,8 +1513,7 @@ struct ContentView: View {
     // Scroll to make the match visible — center it in viewport.
     let viewportRows = Int(scrollbar.len)
     let targetOffset = max(0, min(target.row - viewportRows / 2, totalRows - viewportRows))
-    let actionStr = "scroll_to_row:\(targetOffset)"
-    _ = ghostty_surface_binding_action(surface, actionStr, UInt(actionStr.utf8.count))
+    pane.surfaceView.runBindingAction("scroll_to_row:\(targetOffset)")
 
     // Update scrollbar state synchronously — the async callback will
     // eventually arrive with the same value, but we need it now for
@@ -1574,11 +1565,9 @@ struct ContentView: View {
     guard let pane = state.activeSession?.activeTab?.activePane,
       let copyState = pane.copyModeState,
       let anchor = copyState.anchor,
-      let surface = pane.surfaceView.surface
+      let cols = pane.surfaceView.viewportGridSize()?.cols
     else { return }
 
-    let size = ghostty_surface_size(surface)
-    let cols = Int(size.columns)
     var textToCopy: String?
 
     let anchorOutOfViewport = anchor.row < 0 || anchor.row >= copyState.rows

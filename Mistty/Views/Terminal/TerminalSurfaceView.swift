@@ -67,6 +67,25 @@ final class TerminalSurfaceView: NSView {
       startRow: row, startCol: 0, endRow: row, endCol: cols - 1, pointTag: pointTag)
   }
 
+  /// Run a ghostty keybinding action by name (e.g. "scroll_to_bottom",
+  /// "scroll_page_lines:5", "scroll_to_row:42"). Centralizes the
+  /// binding-action C call so copy-mode orchestration doesn't touch the
+  /// surface pointer directly.
+  @MainActor
+  func runBindingAction(_ action: String) {
+    guard let surface else { return }
+    _ = ghostty_surface_binding_action(surface, action, UInt(action.utf8.count))
+  }
+
+  /// Freeze the viewport at its current top row (transition .active → .pin)
+  /// so streaming output can't scroll a copy-mode selection out from under
+  /// the user. Mistty patch `0005-pin-viewport`.
+  @MainActor
+  func pinViewport() {
+    guard let surface else { return }
+    ghostty_surface_pin_viewport(surface)
+  }
+
   var onSelect: (() -> Void)?
   var scrollbarState = ScrollbarState()
 
