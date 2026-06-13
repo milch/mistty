@@ -40,8 +40,6 @@ enum PendingMotion: Equatable {
   case wordBackward(bigWord: Bool)
   case wordEndForward(bigWord: Bool)
   case wordEndBackward(bigWord: Bool)
-  case lineDown
-  case lineUp
 }
 
 struct ContinuationState: Equatable {
@@ -126,7 +124,6 @@ struct HintState: Equatable {
 enum CopyModeAction: Equatable {
   case cursorMoved
   case updateSelection
-  case yank(text: String)
   case exitCopyMode
   case enterSubMode(CopySubMode)
   case showHelp

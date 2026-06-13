@@ -1,7 +1,6 @@
 import Foundation
 
 public enum MisttyIPC {
-    public static let serviceName = "com.mistty.cli-service"
     public static let errorDomain = "com.mistty.error"
 
     /// Env var the main app sets on spawned shells so `mistty-cli` from inside

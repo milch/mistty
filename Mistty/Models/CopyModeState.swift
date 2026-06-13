@@ -809,9 +809,6 @@ struct CopyModeState {
       } else {
         cursorCol = 0
       }
-    case .lineDown, .lineUp:
-      clampCursorToLineContent(lineReader: lineReader)
-      return motionActions()
     }
 
     // If remaining count > 1, continue the motion
@@ -832,8 +829,6 @@ struct CopyModeState {
       case .wordEndBackward(let bigWord):
         motionFn = { line, col in WordMotion.prevWordEnd(in: line, from: col, bigWord: bigWord) }
         isForward = false
-      case .lineDown, .lineUp:
-        return motionActions()  // already handled above
       }
 
       if isForward {

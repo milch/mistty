@@ -1022,13 +1022,6 @@ struct ContentView: View {
     tab.layout.rotateDirection(containing: pane)
   }
 
-  private func resizeActivePane(delta: CGFloat, along direction: SplitDirection) {
-    guard let tab = state.activeSession?.activeTab,
-      let pane = tab.activePane
-    else { return }
-    tab.layout.resizeSplit(containing: pane, delta: delta, along: direction)
-  }
-
   /// Decide whether the window-mode toast should sit at the top edge instead
   /// of its default bottom-center home. Flip to the top when the active
   /// pane's terminal cursor is in the lower portion of its viewport — that's
@@ -1299,8 +1292,6 @@ struct ContentView: View {
           break  // Position already in copyState
         case .updateSelection:
           break  // Selection derived from copyState
-        case .yank:
-          break  // Not used — yank is signaled by exitCopyMode
         case .exitCopyMode:
           // Yank if there's a selection before exiting
           if copyState.isSelecting {

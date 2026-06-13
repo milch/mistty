@@ -13,7 +13,7 @@ private struct Reply: @unchecked Sendable {
   }
 }
 
-final class MisttyIPCService: MisttyServiceProtocol, Sendable {
+final class MisttyIPCService: Sendable {
   private let windowsStore: WindowsStore
 
   init(windowsStore: WindowsStore) {
@@ -59,10 +59,6 @@ final class MisttyIPCService: MisttyServiceProtocol, Sendable {
   ) throws -> T {
     guard let value else { throw MisttyIPC.error(code, message) }
     return value
-  }
-
-  private func notImplemented(_ reply: @escaping (Data?, Error?) -> Void) {
-    reply(nil, MisttyIPC.error(.operationFailed, "Not implemented"))
   }
 
   @MainActor private func sessionResponse(_ session: MisttySession, windowID: Int) -> SessionResponse {
