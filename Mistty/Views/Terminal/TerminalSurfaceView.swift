@@ -195,52 +195,32 @@ final class TerminalSurfaceView: NSView {
         execInitialInput ? "exec \(input)\n" : "\(input)\n"
     }
 
+    // Bridge an optional String to an optional C pointer that stays alive
+    // for the duration of `body`. Collapses the 2^3 presence-combination
+    // pyramid that previously enumerated every optional-field combination
+    // with its own ghostty_surface_new call.
+    func withOptionalCString(
+      _ string: String?, _ body: (UnsafePointer<CChar>?) -> Void
+    ) {
+      if let string {
+        string.withCString { body($0) }
+      } else {
+        body(nil)
+      }
+    }
+
     // Both C pointers from withCString are only valid inside the closure,
     // so we nest them to ensure they're alive when ghostty_surface_new is called.
     func createSurface(_ cfg: inout ghostty_surface_config_s) {
-      if let path = workingDirectoryPath {
-        path.withCString { dirPtr in
-          cfg.working_directory = dirPtr
-          if let cmd = commandString {
-            cmd.withCString { cmdPtr in
-              cfg.command = cmdPtr
-              if let input = initialInputString {
-                input.withCString { inputPtr in
-                  cfg.initial_input = inputPtr
-                  surface = ghostty_surface_new(app, &cfg)
-                }
-              } else {
-                surface = ghostty_surface_new(app, &cfg)
-              }
-            }
-          } else if let input = initialInputString {
-            input.withCString { inputPtr in
-              cfg.initial_input = inputPtr
-              surface = ghostty_surface_new(app, &cfg)
-            }
-          } else {
+      withOptionalCString(workingDirectoryPath) { dirPtr in
+        if dirPtr != nil { cfg.working_directory = dirPtr }
+        withOptionalCString(commandString) { cmdPtr in
+          if cmdPtr != nil { cfg.command = cmdPtr }
+          withOptionalCString(initialInputString) { inputPtr in
+            if inputPtr != nil { cfg.initial_input = inputPtr }
             surface = ghostty_surface_new(app, &cfg)
           }
         }
-      } else if let cmd = commandString {
-        cmd.withCString { cmdPtr in
-          cfg.command = cmdPtr
-          if let input = initialInputString {
-            input.withCString { inputPtr in
-              cfg.initial_input = inputPtr
-              surface = ghostty_surface_new(app, &cfg)
-            }
-          } else {
-            surface = ghostty_surface_new(app, &cfg)
-          }
-        }
-      } else if let input = initialInputString {
-        input.withCString { inputPtr in
-          cfg.initial_input = inputPtr
-          surface = ghostty_surface_new(app, &cfg)
-        }
-      } else {
-        surface = ghostty_surface_new(app, &cfg)
       }
     }
 
