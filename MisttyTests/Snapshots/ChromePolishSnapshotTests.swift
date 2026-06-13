@@ -273,7 +273,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     // Point back to the first session so the snapshot shows the tab bar.
     store.activeSession = s1
 
-    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), configStore: ConfigStore(config: .default))
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -300,7 +300,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1  // s1 has 1 tab → tab bar hidden
 
-    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), configStore: ConfigStore(config: .default))
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -322,7 +322,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1
 
-    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), configStore: ConfigStore(config: .default))
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -356,7 +356,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     session.openPopup(definition: PopupDefinition(
       name: "Quick Command", command: "echo hi"))
 
-    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), configStore: ConfigStore(config: .default))
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -382,7 +382,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
 
     store.activeSession = s1
 
-    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), config: .default)
+    let view = ContentView(state: store, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), configStore: ConfigStore(config: .default))
       .frame(width: 1200, height: 800)
 
     assertSnapshot(
@@ -493,7 +493,7 @@ final class ChromePolishSnapshotTests: XCTestCase {
     cfg.ui = ui
 
     let view =
-      ContentView(state: winState, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), config: cfg)
+      ContentView(state: winState, windowsStore: windowsStore, commandRouter: WindowCommandRouter(windowsStore: windowsStore), configStore: ConfigStore(config: cfg))
       .applyTopSafeArea(style: titleBarStyle)
       .overlay(alignment: .topLeading) {
         chromeOverlay(style: titleBarStyle)

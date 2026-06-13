@@ -18,8 +18,12 @@ final class ConfigStore {
 
   @ObservationIgnored private var observer: NSObjectProtocol?
 
-  init() {
-    config = MisttyConfig.current
+  /// `config: nil` (production) seeds from `MisttyConfig.current`. Tests pass
+  /// an explicit config to render a specific configuration without mutating
+  /// the global. `refresh()` always re-reads `.current`, so an injected config
+  /// is the initial value only — fine for snapshot tests, which don't reload.
+  init(config: MisttyConfig? = nil) {
+    self.config = config ?? MisttyConfig.current
     observer = NotificationCenter.default.addObserver(
       forName: .misttyConfigDidReload, object: nil, queue: .main
     ) { [weak self] _ in

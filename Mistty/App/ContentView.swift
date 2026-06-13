@@ -7,7 +7,7 @@ struct ContentView: View {
   var state: WindowState
   var windowsStore: WindowsStore
   var commandRouter: WindowCommandRouter
-  var config: MisttyConfig
+  var configStore: ConfigStore
   @State private var tabBarOverride: TabBarVisibilityOverride = .auto
   @SceneStorage("sidebarWidth") var sidebarWidth: Double = 220
   @State var showingSessionManager = false
@@ -242,7 +242,7 @@ struct ContentView: View {
               get: { CGFloat(sidebarWidth) },
               set: { sidebarWidth = Double($0) }
             ),
-            titleBarStyle: config.ui.titleBarStyle,
+            titleBarStyle: configStore.config.ui.titleBarStyle,
             tabBarVisible: tabBarShouldShow)
           Divider()
         }
@@ -259,7 +259,7 @@ struct ContentView: View {
                 TabBarView(
                   session: session,
                   leadingInset:
-                    (config.ui.titleBarStyle.hasTrafficLights && !state.sidebarVisible) ? 72 : 0
+                    (configStore.config.ui.titleBarStyle.hasTrafficLights && !state.sidebarVisible) ? 72 : 0
                 )
                 Divider()
               }
@@ -296,8 +296,8 @@ struct ContentView: View {
                   windowModeState: tab.windowModeState,
                   joinPickTabNames: joinPickTabNames,
                   paneCount: tab.panes.count,
-                  borderColor: config.ui.paneBorderColor,
-                  borderWidth: CGFloat(config.ui.paneBorderWidth),
+                  borderColor: configStore.config.ui.paneBorderColor,
+                  borderWidth: CGFloat(configStore.config.ui.paneBorderWidth),
                   onClosePane: { pane in closePane(pane) },
                   onSelectPane: { pane in tab.activePane = pane },
                   onResizeBetween: { aRep, bRep, delta in
@@ -508,7 +508,7 @@ struct ContentView: View {
   /// Falls back to a tab count of 1 when no session is active.
   private func configuredTabBarShow() -> Bool {
     let tabCount = state.activeSession?.tabs.count ?? 1
-    return config.ui.tabBarMode.shouldShow(
+    return configStore.config.ui.tabBarMode.shouldShow(
       sidebarVisible: state.sidebarVisible, tabCount: tabCount)
   }
 

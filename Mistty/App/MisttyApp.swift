@@ -13,10 +13,10 @@ struct MisttyApp: App {
   /// Created in `init()` once `windowsStore` exists.
   @State private var commandRouter: WindowCommandRouter
   @State private var ipcListener: IPCListener?
-  // Shared parse — see `MisttyConfig.current`. Reading the same cache
-  // GhosttyAppManager uses keeps SwiftUI state and libghostty in lockstep and
-  // avoids parsing the TOML twice at bootstrap.
-  @State private var config: MisttyConfig = MisttyConfig.current
+  // View-layer source of truth for config. Wraps `MisttyConfig.current` (the
+  // same cache GhosttyAppManager uses) and refreshes on reload, so the view
+  // tree observes one reactive value instead of a snapshot that can drift.
+  @State private var configStore = ConfigStore()
 
   init() {
     // Initialize the router first: it has no default value, and Swift won't
@@ -36,7 +36,7 @@ struct MisttyApp: App {
 
     _ = GhosttyAppManager.shared
     Self.registerBundledFonts()
-    DebugLog.shared.configure(enabled: config.debugLogging)
+    DebugLog.shared.configure(enabled: configStore.config.debugLogging)
     DebugLog.shared.log("restore", "MisttyApp.init")
     appDelegate.windowsStore = _windowsStore.wrappedValue
     appDelegate.observer = StateRestorationObserver(windowsStore: _windowsStore.wrappedValue)
@@ -61,8 +61,9 @@ struct MisttyApp: App {
 
   var body: some Scene {
     WindowGroup(id: "terminal") {
-      WindowRootView(windowsStore: windowsStore, commandRouter: commandRouter, config: config)
-        .applyTopSafeArea(style: config.ui.titleBarStyle)
+      WindowRootView(
+        windowsStore: windowsStore, commandRouter: commandRouter, configStore: configStore)
+        .applyTopSafeArea(style: configStore.config.ui.titleBarStyle)
         .onAppear {
           if ipcListener == nil {
             let service = MisttyIPCService(windowsStore: windowsStore)
@@ -73,9 +74,12 @@ struct MisttyApp: App {
           applyTitleBarStyleToWindows()
         }
         .onReceive(NotificationCenter.default.publisher(for: .misttyConfigDidReload)) { _ in
-          config = MisttyConfig.current
+          // Refresh explicitly so the reads below see the new value regardless
+          // of observer ordering vs ConfigStore's own .misttyConfigDidReload
+          // observer (both fire on this same notification).
+          configStore.refresh()
           applyTitleBarStyleToWindows()
-          DebugLog.shared.configure(enabled: config.debugLogging)
+          DebugLog.shared.configure(enabled: configStore.config.debugLogging)
         }
         .onReceive(NotificationCenter.default.publisher(for: .misttyReloadConfig)) { _ in
           do {
@@ -145,7 +149,7 @@ struct MisttyApp: App {
           }
           .keyboardShortcut(
             KeyEquivalent(Character("\(index)")),
-            modifiers: config.shortcuts.tabIndexModifier.swiftUIModifiers)
+            modifiers: configStore.config.shortcuts.tabIndexModifier.swiftUIModifiers)
         }
 
         ForEach(1...9, id: \.self) { index in
@@ -158,7 +162,7 @@ struct MisttyApp: App {
           }
           .keyboardShortcut(
             KeyEquivalent(Character("\(index)")),
-            modifiers: config.shortcuts.sessionIndexModifier.swiftUIModifiers)
+            modifiers: configStore.config.shortcuts.sessionIndexModifier.swiftUIModifiers)
         }
 
         menuButton(.nextTab, "Next Tab")
@@ -170,7 +174,7 @@ struct MisttyApp: App {
 
         Divider()
 
-        ForEach(Array(config.popups.enumerated()), id: \.offset) { _, popup in
+        ForEach(Array(configStore.config.popups.enumerated()), id: \.offset) { _, popup in
           if let chord = popup.shortcutChord {
             let (key, mods) = chord.swiftUI()
             Button("Toggle \(popup.name)") {
@@ -196,7 +200,7 @@ struct MisttyApp: App {
   /// `SceneBuilder` can't branch over window styles) and then adjust the
   /// AppKit windows here to realize each style.
   private func applyTitleBarStyleToWindows() {
-    let style = config.ui.titleBarStyle
+    let style = configStore.config.ui.titleBarStyle
     DispatchQueue.main.async {
       for window in NSApplication.shared.windows {
         switch style {
@@ -232,7 +236,7 @@ struct MisttyApp: App {
   private func kbShortcut<V: View>(
     _ action: ShortcutAction, on view: V
   ) -> some View {
-    if let chord = config.shortcuts.primary(for: action) {
+    if let chord = configStore.config.shortcuts.primary(for: action) {
       let (key, mods) = chord.swiftUI()
       view.keyboardShortcut(key, modifiers: mods)
     } else {
