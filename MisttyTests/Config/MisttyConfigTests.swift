@@ -346,6 +346,19 @@ final class MisttyConfigTests: XCTestCase {
     XCTAssertFalse(config.notifications.explicitlyEnabled)
   }
 
+  func test_allowClipboardRead_defaultsFalse_parsesAndRoundTrips() throws {
+    XCTAssertFalse(MisttyConfig().allowClipboardRead)
+    XCTAssertTrue(try MisttyConfig.parse("allow_clipboard_read = true").allowClipboardRead)
+
+    var config = MisttyConfig()
+    config.allowClipboardRead = true
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("mistty-clipread-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try config.save(to: tmp)
+    XCTAssertTrue(try MisttyConfig.loadThrowing(from: tmp).allowClipboardRead)
+  }
+
   func test_save_notifications_roundTrip_explicitTrue() throws {
     var config = MisttyConfig()
     config.notifications = NotificationsConfig(enabled: true, explicitlyEnabled: true)

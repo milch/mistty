@@ -204,6 +204,14 @@ struct MisttyConfig: Sendable, Equatable {
   /// because logs go through a file handle per write.
   var debugLogging: Bool = false
 
+  /// Allow programs running in a pane to READ the system clipboard via OSC-52.
+  /// Off by default: a program-initiated clipboard read silently exfiltrates
+  /// whatever's on the clipboard (often passwords/tokens), so Mistty denies it
+  /// like most terminals. Set `allow_clipboard_read = true` to opt in when you
+  /// trust the programs you run (e.g. tmux/nvim clipboard sync over SSH).
+  /// Does NOT affect Cmd+V paste, which is always allowed (user-initiated).
+  var allowClipboardRead: Bool = false
+
   /// Multiplier applied to precision (trackpad / Magic Mouse) scroll deltas
   /// before they reach libghostty. 1.0 = raw macOS deltas (too fast in
   /// practice); 2.0 matches ghostty's own AppKit default feel. Mouse-wheel
@@ -249,6 +257,7 @@ struct MisttyConfig: Sendable, Equatable {
       config.zoxidePath = trimmed.isEmpty ? nil : (trimmed as NSString).expandingTildeInPath
     }
     if let debug = table["debug_logging"]?.bool { config.debugLogging = debug }
+    if let allow = table["allow_clipboard_read"]?.bool { config.allowClipboardRead = allow }
     if let mult = table["scroll_multiplier"]?.double, mult > 0 {
       config.scrollMultiplier = mult
     } else if let mult = table["scroll_multiplier"]?.int, mult > 0 {
@@ -500,6 +509,9 @@ struct MisttyConfig: Sendable, Equatable {
     lines.append("sidebar_visible = \(sidebarVisible)")
     if debugLogging {
       lines.append("debug_logging = true")
+    }
+    if allowClipboardRead {
+      lines.append("allow_clipboard_read = true")
     }
     if scrollMultiplier != MisttyConfig().scrollMultiplier {
       lines.append("scroll_multiplier = \(scrollMultiplier)")

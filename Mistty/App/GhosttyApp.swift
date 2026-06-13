@@ -183,11 +183,12 @@ private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = {
 /// (the default `clipboard-read = ask`). Cmd+V pastes are user-initiated,
 /// so they auto-confirm (no prompt UI yet). OSC-52 reads are
 /// program-initiated: auto-confirming them hands the user's clipboard
-/// (passwords, tokens) to whatever runs in the pane, silently — so they
-/// are denied. Denial completes the request with an empty string +
-/// confirmed=true, matching ghostty's own cancel path
-/// (BaseTerminalController.clipboardConfirmationComplete), which frees
-/// the core's request state.
+/// (passwords, tokens) to whatever runs in the pane, silently — so they are
+/// denied by default, and allowed only when the user opts in via
+/// `allow_clipboard_read = true`. Denial completes the request with an empty
+/// string + confirmed=true, matching ghostty's own cancel path
+/// (BaseTerminalController.clipboardConfirmationComplete), which frees the
+/// core's request state.
 private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard_cb = {
   userdata, str, state, request in
   guard let userdata, let state, let str else { return }
@@ -197,8 +198,13 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
   case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
     ghostty_surface_complete_clipboard_request(surface, str, state, true)
   default:
-    // OSC-52 read (and any future program-initiated request): deny.
-    ghostty_surface_complete_clipboard_request(surface, "", state, true)
+    // OSC-52 read (and any future program-initiated request). Honor the
+    // user's opt-in; otherwise deny with an empty completion.
+    if MisttyConfig.current.allowClipboardRead {
+      ghostty_surface_complete_clipboard_request(surface, str, state, true)
+    } else {
+      ghostty_surface_complete_clipboard_request(surface, "", state, true)
+    }
   }
 }
 
