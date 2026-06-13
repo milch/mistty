@@ -93,188 +93,34 @@ struct MisttyApp: App {
       CommandGroup(after: .toolbar) {
         Divider()
 
-        kbShortcut(
-          .toggleSidebar,
-          on: Button("Toggle Sidebar") {
-            NotificationCenter.default.post(name: .misttyToggleSidebar, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .toggleTabBar,
-          on: Button("Toggle Tab Bar") {
-            NotificationCenter.default.post(name: .misttyToggleTabBar, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .reloadConfig,
-          on: Button("Reload Config") {
-            NotificationCenter.default.post(name: .misttyReloadConfig, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .newTab,
-          on: Button("New Tab") {
-            NotificationCenter.default.post(name: .misttyNewTab, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .newTabPlain,
-          on: Button("New Tab (Plain)") {
-            NotificationCenter.default.post(name: .misttyNewTabPlain, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .splitHorizontal,
-          on: Button("Split Pane Horizontally") {
-            NotificationCenter.default.post(name: .misttySplitHorizontal, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .splitHorizontalPlain,
-          on: Button("Split Pane Horizontally (Plain)") {
-            NotificationCenter.default.post(name: .misttySplitHorizontalPlain, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .splitVertical,
-          on: Button("Split Pane Vertically") {
-            NotificationCenter.default.post(name: .misttySplitVertical, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .splitVerticalPlain,
-          on: Button("Split Pane Vertically (Plain)") {
-            NotificationCenter.default.post(name: .misttySplitVerticalPlain, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .sessionManager,
-          on: Button("Session Manager") {
-            NotificationCenter.default.post(name: .misttySessionManager, object: nil)
-          }
-        )
+        menuButton(.toggleSidebar, "Toggle Sidebar")
+        menuButton(.toggleTabBar, "Toggle Tab Bar")
+        menuButton(.reloadConfig, "Reload Config")
+        menuButton(.newTab, "New Tab")
+        menuButton(.newTabPlain, "New Tab (Plain)")
+        menuButton(.splitHorizontal, "Split Pane Horizontally")
+        menuButton(.splitHorizontalPlain, "Split Pane Horizontally (Plain)")
+        menuButton(.splitVertical, "Split Pane Vertically")
+        menuButton(.splitVerticalPlain, "Split Pane Vertically (Plain)")
+        menuButton(.sessionManager, "Session Manager")
 
         Divider()
 
-        kbShortcut(
-          .closePane,
-          on: Button("Close Pane") {
-            // If a non-terminal window (e.g. Settings) is key, let the system
-            // close that window instead of routing the shortcut to the terminal.
-            if windowsStore.isTerminalWindowKey() {
-              DebugLog.shared.log("cmdw", "menu Close Pane → posting notification")
-              NotificationCenter.default.post(name: .misttyClosePane, object: nil)
-            } else {
-              DebugLog.shared.log(
-                "cmdw",
-                "menu Close Pane → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
-              )
-              NSApp.keyWindow?.performClose(nil)
-            }
-          }
-        )
-
-        kbShortcut(
-          .closeTab,
-          on: Button("Close Tab") {
-            if windowsStore.isTerminalWindowKey() {
-              DebugLog.shared.log("cmdw", "menu Close Tab → posting notification")
-              NotificationCenter.default.post(name: .misttyCloseTab, object: nil)
-            } else {
-              DebugLog.shared.log(
-                "cmdw",
-                "menu Close Tab → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
-              )
-              NSApp.keyWindow?.performClose(nil)
-            }
-          }
-        )
-
-        kbShortcut(
-          .closeWindow,
-          on: Button("Close Window") {
-            if windowsStore.isTerminalWindowKey() {
-              DebugLog.shared.log("cmdw", "menu Close Window → posting notification")
-              NotificationCenter.default.post(name: .misttyCloseWindow, object: nil)
-            } else {
-              NSApp.keyWindow?.performClose(nil)
-            }
-          }
-        )
-
-        kbShortcut(
-          .reopenClosedWindow,
-          on: Button("Reopen Closed Window") {
-            NotificationCenter.default.post(name: .misttyReopenClosedWindow, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .windowMode,
-          on: Button("Window Mode") {
-            NotificationCenter.default.post(name: .misttyWindowMode, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .copyMode,
-          on: Button("Copy Mode") {
-            NotificationCenter.default.post(name: .misttyCopyMode, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .yankHints,
-          on: Button("Yank Hints (Copy)") {
-            NotificationCenter.default.post(name: .misttyYankHints, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .yankHintsOpen,
-          on: Button("Yank Hints (Open)") {
-            NotificationCenter.default.post(name: .misttyYankHintsOpen, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .yankHintsCursor,
-          on: Button("Yank Hints (Cursor)") {
-            NotificationCenter.default.post(name: .misttyYankHintsCursor, object: nil)
-          }
-        )
+        closeMenuButton(.closePane, "Close Pane")
+        closeMenuButton(.closeTab, "Close Tab")
+        closeMenuButton(.closeWindow, "Close Window")
+        menuButton(.reopenClosedWindow, "Reopen Closed Window")
+        menuButton(.windowMode, "Window Mode")
+        menuButton(.copyMode, "Copy Mode")
+        menuButton(.yankHints, "Yank Hints (Copy)")
+        menuButton(.yankHintsOpen, "Yank Hints (Open)")
+        menuButton(.yankHintsCursor, "Yank Hints (Cursor)")
 
         Divider()
 
-        kbShortcut(
-          .renameTab,
-          on: Button("Rename Tab") {
-            NotificationCenter.default.post(name: .misttyRenameTab, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .renameSession,
-          on: Button("Rename Session") {
-            NotificationCenter.default.post(name: .misttyRenameSession, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .reparentSession,
-          on: Button("Change Session Directory…") {
-            NotificationCenter.default.post(name: .misttyReparentSession, object: nil)
-          }
-        )
+        menuButton(.renameTab, "Rename Tab")
+        menuButton(.renameSession, "Rename Session")
+        menuButton(.reparentSession, "Change Session Directory…")
 
         Divider()
 
@@ -304,47 +150,12 @@ struct MisttyApp: App {
             modifiers: config.shortcuts.sessionIndexModifier.swiftUIModifiers)
         }
 
-        kbShortcut(
-          .nextTab,
-          on: Button("Next Tab") {
-            NotificationCenter.default.post(name: .misttyNextTab, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .prevTab,
-          on: Button("Previous Tab") {
-            NotificationCenter.default.post(name: .misttyPrevTab, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .prevSession,
-          on: Button("Previous Session") {
-            NotificationCenter.default.post(name: .misttyPrevSession, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .nextSession,
-          on: Button("Next Session") {
-            NotificationCenter.default.post(name: .misttyNextSession, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .swapSessionUp,
-          on: Button("Move Session Up") {
-            NotificationCenter.default.post(name: .misttyMoveSessionUp, object: nil)
-          }
-        )
-
-        kbShortcut(
-          .swapSessionDown,
-          on: Button("Move Session Down") {
-            NotificationCenter.default.post(name: .misttyMoveSessionDown, object: nil)
-          }
-        )
+        menuButton(.nextTab, "Next Tab")
+        menuButton(.prevTab, "Previous Tab")
+        menuButton(.prevSession, "Previous Session")
+        menuButton(.nextSession, "Next Session")
+        menuButton(.swapSessionUp, "Move Session Up")
+        menuButton(.swapSessionDown, "Move Session Down")
 
         Divider()
 
@@ -416,6 +227,42 @@ struct MisttyApp: App {
     } else {
       view
     }
+  }
+
+  /// Standard menu item: title + post the action's notification, with the
+  /// user-configured shortcut attached. Replaces 20+ hand-written
+  /// Button/post/kbShortcut triples that re-encoded the action→notification
+  /// mapping ShortcutAction.notificationName already owns.
+  @ViewBuilder
+  private func menuButton(_ action: ShortcutAction, _ title: String) -> some View {
+    kbShortcut(
+      action,
+      on: Button(title) {
+        NotificationCenter.default.post(name: action.notificationName, object: nil)
+      }
+    )
+  }
+
+  /// Close Pane/Tab/Window share a guard: when a non-terminal window
+  /// (e.g. Settings) is key, let the system close that window instead of
+  /// routing the shortcut to the terminal.
+  @ViewBuilder
+  private func closeMenuButton(_ action: ShortcutAction, _ title: String) -> some View {
+    kbShortcut(
+      action,
+      on: Button(title) {
+        if windowsStore.isTerminalWindowKey() {
+          DebugLog.shared.log("cmdw", "menu \(title) → posting notification")
+          NotificationCenter.default.post(name: action.notificationName, object: nil)
+        } else {
+          DebugLog.shared.log(
+            "cmdw",
+            "menu \(title) → performClose on keyWindow=\(NSApp.keyWindow.map { "num=\($0.windowNumber) title=\"\($0.title)\"" } ?? "nil")"
+          )
+          NSApp.keyWindow?.performClose(nil)
+        }
+      }
+    )
   }
 
 }
