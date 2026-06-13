@@ -17,6 +17,13 @@ final class IPCListener {
   private let state = OSAllocatedUnfairLock(initialState: ListenerState())
   private let queue = DispatchQueue(label: "com.mistty.ipc-listener", qos: .userInitiated)
 
+  /// At most this many connections may be in flight at once. Each connection
+  /// parks a GCD worker on the main-actor reply; without a cap, a script
+  /// firing many calls while the main thread is busy (e.g. a modal NSAlert
+  /// at launch) would grow the pool toward GCD's ~64-thread limit. The
+  /// accept loop blocks here until a slot frees — backpressure, not collapse.
+  private nonisolated static let connectionSlots = DispatchSemaphore(value: 16)
+
   init(service: MisttyIPCService) {
     self.service = service
   }
@@ -136,8 +143,12 @@ final class IPCListener {
       setsockopt(clientFD, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
       setsockopt(clientFD, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
 
-      // Handle connection on a separate queue to not block accept loop
+      // Acquire a slot before dispatching; blocks the accept loop when all
+      // 16 are in flight so workers can't pile up faster than the main
+      // actor drains them.
+      connectionSlots.wait()
       DispatchQueue.global(qos: .userInitiated).async {
+        defer { connectionSlots.signal() }
         handleConnection(clientFD, service: service)
       }
     }
@@ -151,7 +162,9 @@ final class IPCListener {
     guard let requestData = UnixSocket.receiveFrame(fd: fd, maxSize: Int(MisttyIPC.maxMessageSize))
     else { return }
 
-    // Parse request
+    // Parse request. This happens before we know the client's protocol
+    // version, so a parse failure replies with plain text (a v1 client
+    // still decodes it via its plain-text fallback).
     guard let json = try? JSONSerialization.jsonObject(with: requestData) as? [String: Any],
       let method = json["method"] as? String
     else {
@@ -159,22 +172,35 @@ final class IPCListener {
       return
     }
 
+    // v0 (key absent) = legacy client → plain-text errors; v1+ → structured.
+    let clientVersion = json["v"] as? Int ?? 0
+
     // Dispatch to service (synchronous via semaphore — service methods are @MainActor)
     let semaphore = DispatchSemaphore(value: 0)
     var responseData: Data?
-    var responseError: String?
+    var responseError: Error?
 
     let reply: (Data?, Error?) -> Void = { data, error in
       responseData = data
-      responseError = error?.localizedDescription
+      responseError = error
       semaphore.signal()
     }
 
     IPCListener.dispatch(service: service, method: method, params: json, reply: reply)
-    semaphore.wait()
 
-    if let errorMsg = responseError {
-      UnixSocket.sendFrame(fd: fd, payload: errorResponse(errorMsg))
+    // Bound the wait so a wedged main thread (e.g. a modal NSAlert) can't
+    // park this worker forever. On timeout we reply and return WITHOUT
+    // reading responseData/responseError — a late reply then only writes
+    // to the (heap-boxed) captured vars, never the closed fd.
+    if semaphore.wait(timeout: .now() + 10) == .timedOut {
+      let err = MisttyIPC.error(
+        .operationFailed, "Mistty.app did not respond within 10s (main thread busy?)")
+      UnixSocket.sendFrame(fd: fd, payload: errorFrame(err, clientVersion: clientVersion))
+      return
+    }
+
+    if let error = responseError {
+      UnixSocket.sendFrame(fd: fd, payload: errorFrame(error, clientVersion: clientVersion))
     } else {
       var result = Data([0x00])
       if let d = responseData { result.append(d) }
@@ -182,9 +208,23 @@ final class IPCListener {
     }
   }
 
+  /// `[0x01]` status byte + a plain-text message. Used only for the
+  /// pre-version-known parse-error path.
   private nonisolated static func errorResponse(_ message: String) -> Data {
     var result = Data([0x01])
     result.append(Data(message.utf8))
+    return result
+  }
+
+  /// `[0x01]` status byte + a structured `WireError` for v1+ clients, or
+  /// the plain-text `localizedDescription` for legacy clients.
+  private nonisolated static func errorFrame(_ error: Error, clientVersion: Int) -> Data {
+    var result = Data([0x01])
+    if clientVersion >= 1 {
+      result.append(MisttyIPC.encodeWireError(error))
+    } else {
+      result.append(Data(error.localizedDescription.utf8))
+    }
     return result
   }
 
