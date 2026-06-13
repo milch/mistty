@@ -31,24 +31,10 @@ struct TabCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
             var params: [String: Any] = ["sessionId": session]
             if let name { params["name"] = name }
             if let exec { params["exec"] = exec }
-
-            let data: Data
-            do {
-                data = try client.call("createTab", params)
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let tab = try JSONDecoder().decode(TabResponse.self, from: data)
-            formatter.print(tab)
+            try IPCRun.single("createTab", params, format: format, as: TabResponse.self)
         }
     }
 
@@ -62,20 +48,7 @@ struct TabCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("listTabs", ["sessionId": session])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let tabs = try JSONDecoder().decode([TabResponse].self, from: data)
-            formatter.print(tabs)
+            try IPCRun.list("listTabs", ["sessionId": session], format: format, as: TabResponse.self)
         }
     }
 
@@ -89,20 +62,7 @@ struct TabCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("getTab", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let tab = try JSONDecoder().decode(TabResponse.self, from: data)
-            formatter.print(tab)
+            try IPCRun.single("getTab", ["id": id], format: format, as: TabResponse.self)
         }
     }
 
@@ -116,18 +76,8 @@ struct TabCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("closeTab", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Tab \(id) closed")
+            IPCRun.fireAndForget("closeTab", ["id": id], format: format,
+                                 success: "Tab \(id) closed")
         }
     }
 
@@ -144,20 +94,7 @@ struct TabCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("renameTab", ["id": id, "name": name])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let tab = try JSONDecoder().decode(TabResponse.self, from: data)
-            formatter.print(tab)
+            try IPCRun.single("renameTab", ["id": id, "name": name], format: format, as: TabResponse.self)
         }
     }
 }

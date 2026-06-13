@@ -18,17 +18,8 @@ extension DebugCommand {
         )
 
         func run() throws {
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("getStateSnapshot")
-            } catch {
-                fputs("error: \(error.localizedDescription)\n", stderr)
-                Foundation.exit(1)
-            }
-
+            let data = IPCRun.call(
+                "getStateSnapshot", formatter: OutputFormatter(format: .auto))
             let json = String(decoding: data, as: UTF8.self)
             print(json)
         }

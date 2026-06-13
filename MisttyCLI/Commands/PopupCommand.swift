@@ -43,10 +43,7 @@ struct PopupCommand: ParsableCommand {
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
+            let sessionId = resolveSessionId(session, formatter: formatter)
             let popupName = name ?? exec ?? "popup"
             guard let command = exec ?? name else {
                 formatter.printError(
@@ -56,24 +53,17 @@ struct PopupCommand: ParsableCommand {
 
             let shouldCloseOnExit = closeOnExit || !keepOnExit
 
-            let data: Data
-            do {
-                data = try client.call(
-                    "openPopup",
-                    [
-                        "sessionId": sessionId,
-                        "name": popupName,
-                        "exec": command,
-                        "width": width,
-                        "height": height,
-                        "closeOnExit": shouldCloseOnExit,
-                    ])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-            let popup = try JSONDecoder().decode(PopupResponse.self, from: data)
-            formatter.print(popup)
+            try IPCRun.single(
+                "openPopup",
+                [
+                    "sessionId": sessionId,
+                    "name": popupName,
+                    "exec": command,
+                    "width": width,
+                    "height": height,
+                    "closeOnExit": shouldCloseOnExit,
+                ],
+                format: format, as: PopupResponse.self)
         }
     }
 
@@ -87,18 +77,8 @@ struct PopupCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("closePopup", ["popupId": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Popup \(id) closed")
+            IPCRun.fireAndForget("closePopup", ["popupId": id], format: format,
+                                 success: "Popup \(id) closed")
         }
     }
 
@@ -116,18 +96,10 @@ struct PopupCommand: ParsableCommand {
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
+            let sessionId = resolveSessionId(session, formatter: formatter)
 
-            let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
-
-            let data: Data
-            do {
-                data = try client.call("togglePopup", ["sessionId": sessionId, "name": name])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
+            let data = IPCRun.call(
+                "togglePopup", ["sessionId": sessionId, "name": name], formatter: formatter)
 
             // togglePopup may return an empty object when the popup was hidden,
             // or a PopupResponse when it became visible.
@@ -150,31 +122,17 @@ struct PopupCommand: ParsableCommand {
 
         func run() throws {
             let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let sessionId = try resolveSessionId(session, client: client, formatter: formatter)
-
-            let data: Data
-            do {
-                data = try client.call("listPopups", ["sessionId": sessionId])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let popups = try JSONDecoder().decode([PopupResponse].self, from: data)
-            formatter.print(popups)
+            let sessionId = resolveSessionId(session, formatter: formatter)
+            try IPCRun.list(
+                "listPopups", ["sessionId": sessionId], format: format, as: PopupResponse.self)
         }
     }
 }
 
 /// Resolve session ID: use provided value or look up the first (active) session.
-private func resolveSessionId(_ provided: Int?, client: IPCClient, formatter: OutputFormatter)
-    throws -> Int
-{
+private func resolveSessionId(_ provided: Int?, formatter: OutputFormatter) -> Int {
     if let sid = provided { return sid }
-    let data = try client.call("listSessions")
+    let data = IPCRun.call("listSessions", formatter: formatter)
     guard let sessions = try? JSONDecoder().decode([SessionResponse].self, from: data),
         let first = sessions.first
     else {

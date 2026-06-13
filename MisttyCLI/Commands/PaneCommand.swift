@@ -33,23 +33,9 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
             var params: [String: Any] = ["tabId": tab]
             if let direction { params["direction"] = direction }
-
-            let data: Data
-            do {
-                data = try client.call("createPane", params)
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
-            formatter.print(pane)
+            try IPCRun.single("createPane", params, format: format, as: PaneResponse.self)
         }
     }
 
@@ -63,20 +49,7 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("listPanes", ["tabId": tab])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let panes = try JSONDecoder().decode([PaneResponse].self, from: data)
-            formatter.print(panes)
+            try IPCRun.list("listPanes", ["tabId": tab], format: format, as: PaneResponse.self)
         }
     }
 
@@ -90,20 +63,7 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("getPane", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
-            formatter.print(pane)
+            try IPCRun.single("getPane", ["id": id], format: format, as: PaneResponse.self)
         }
     }
 
@@ -117,18 +77,8 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("closePane", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Pane \(id) closed")
+            IPCRun.fireAndForget("closePane", ["id": id], format: format,
+                                 success: "Pane \(id) closed")
         }
     }
 
@@ -154,29 +104,17 @@ struct PaneCommand: ParsableCommand {
         }
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                if let direction {
-                    data = try client.call(
-                        "focusPaneByDirection", ["direction": direction, "sessionId": session])
-                } else if let id {
-                    data = try client.call("focusPane", ["id": id])
-                } else {
-                    // Should not reach here due to validate()
-                    formatter.printError("Provide either a pane ID or --direction")
-                    Foundation.exit(1)
-                }
-            } catch {
-                formatter.printError(error.localizedDescription)
+            if let direction {
+                try IPCRun.single(
+                    "focusPaneByDirection", ["direction": direction, "sessionId": session],
+                    format: format, as: PaneResponse.self)
+            } else if let id {
+                try IPCRun.single("focusPane", ["id": id], format: format, as: PaneResponse.self)
+            } else {
+                // Should not reach here due to validate()
+                OutputFormatter(format: format).printError("Provide either a pane ID or --direction")
                 Foundation.exit(1)
             }
-
-            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
-            formatter.print(pane)
         }
     }
 
@@ -196,19 +134,9 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call(
-                    "resizePane", ["id": id, "direction": direction, "amount": amount])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Pane \(id) resized")
+            IPCRun.fireAndForget(
+                "resizePane", ["id": id, "direction": direction, "amount": amount],
+                format: format, success: "Pane \(id) resized")
         }
     }
 
@@ -219,20 +147,7 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("activePane")
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let pane = try JSONDecoder().decode(PaneResponse.self, from: data)
-            formatter.print(pane)
+            try IPCRun.single("activePane", format: format, as: PaneResponse.self)
         }
     }
 
@@ -252,18 +167,9 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("sendKeys", ["paneId": pane, "keys": keys])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Keys sent")
+            IPCRun.fireAndForget(
+                "sendKeys", ["paneId": pane, "keys": keys], format: format,
+                success: "Keys sent")
         }
     }
 
@@ -283,18 +189,9 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("runCommand", ["paneId": pane, "command": command])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Command sent")
+            IPCRun.fireAndForget(
+                "runCommand", ["paneId": pane, "command": command], format: format,
+                success: "Command sent")
         }
     }
 
@@ -311,21 +208,8 @@ struct PaneCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("getText", ["paneId": pane])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            // Print the raw data/text
-            let text = try JSONDecoder().decode(GetTextResponse.self, from: data)
-            formatter.print(text, printHeader: false)
+            try IPCRun.single("getText", ["paneId": pane], format: format,
+                              as: GetTextResponse.self, printHeader: false)
         }
     }
 }

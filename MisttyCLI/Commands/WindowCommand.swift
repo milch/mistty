@@ -22,20 +22,7 @@ struct WindowCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("createWindow")
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let window = try JSONDecoder().decode(WindowResponse.self, from: data)
-            formatter.print(window)
+            try IPCRun.single("createWindow", format: format, as: WindowResponse.self)
         }
     }
 
@@ -46,20 +33,7 @@ struct WindowCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("listWindows")
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let windows = try JSONDecoder().decode([WindowResponse].self, from: data)
-            formatter.print(windows)
+            try IPCRun.list("listWindows", format: format, as: WindowResponse.self)
         }
     }
 
@@ -73,20 +47,7 @@ struct WindowCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("getWindow", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let window = try JSONDecoder().decode(WindowResponse.self, from: data)
-            formatter.print(window)
+            try IPCRun.single("getWindow", ["id": id], format: format, as: WindowResponse.self)
         }
     }
 
@@ -100,18 +61,8 @@ struct WindowCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("closeWindow", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Window \(id) closed")
+            IPCRun.fireAndForget("closeWindow", ["id": id], format: format,
+                                 success: "Window \(id) closed")
         }
     }
 
@@ -125,18 +76,8 @@ struct WindowCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("focusWindow", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Window \(id) focused")
+            IPCRun.fireAndForget("focusWindow", ["id": id], format: format,
+                                 success: "Window \(id) focused")
         }
     }
 }

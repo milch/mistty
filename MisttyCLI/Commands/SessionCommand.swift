@@ -34,26 +34,12 @@ struct SessionCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
             var params: [String: Any] = [:]
             if let name { params["name"] = name }
             if let directory { params["directory"] = directory }
             if let exec { params["exec"] = exec }
             if let window { params["windowID"] = window }
-
-            let data: Data
-            do {
-                data = try client.call("createSession", params)
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let session = try JSONDecoder().decode(SessionResponse.self, from: data)
-            formatter.print(session)
+            try IPCRun.single("createSession", params, format: format, as: SessionResponse.self)
         }
     }
 
@@ -64,20 +50,7 @@ struct SessionCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("listSessions")
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let sessions = try JSONDecoder().decode([SessionResponse].self, from: data)
-            formatter.print(sessions)
+            try IPCRun.list("listSessions", format: format, as: SessionResponse.self)
         }
     }
 
@@ -91,20 +64,7 @@ struct SessionCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("getSession", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let session = try JSONDecoder().decode(SessionResponse.self, from: data)
-            formatter.print(session)
+            try IPCRun.single("getSession", ["id": id], format: format, as: SessionResponse.self)
         }
     }
 
@@ -122,20 +82,9 @@ struct SessionCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            let data: Data
-            do {
-                data = try client.call("reparentSession", ["id": id, "directory": directory])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            let session = try JSONDecoder().decode(SessionResponse.self, from: data)
-            formatter.print(session)
+            try IPCRun.single(
+                "reparentSession", ["id": id, "directory": directory],
+                format: format, as: SessionResponse.self)
         }
     }
 
@@ -149,18 +98,8 @@ struct SessionCommand: ParsableCommand {
         var format: OutputFormat = .auto
 
         func run() throws {
-            let formatter = OutputFormatter(format: format)
-            let client = IPCClient()
-            try client.ensureReachable()
-
-            do {
-                _ = try client.call("closeSession", ["id": id])
-            } catch {
-                formatter.printError(error.localizedDescription)
-                Foundation.exit(1)
-            }
-
-            formatter.printSuccess("Session \(id) closed")
+            IPCRun.fireAndForget("closeSession", ["id": id], format: format,
+                                 success: "Session \(id) closed")
         }
     }
 }
