@@ -48,4 +48,52 @@ public enum UnixSocket {
         }
         return fd
     }
+
+    /// Read exactly `count` bytes, looping on EINTR and short reads.
+    /// Returns nil on error, EOF, or timeout.
+    public static func readExact(fd: Int32, count: Int) -> Data? {
+        var buffer = Data(count: count)
+        var offset = 0
+        while offset < count {
+            let n = buffer.withUnsafeMutableBytes { ptr in
+                read(fd, ptr.baseAddress! + offset, count - offset)
+            }
+            if n < 0 && errno == EINTR { continue }
+            if n <= 0 { return nil }
+            offset += n
+        }
+        return buffer
+    }
+
+    /// Write all bytes, looping on EINTR and short writes.
+    @discardableResult
+    public static func writeAll(fd: Int32, data: Data) -> Bool {
+        var offset = 0
+        while offset < data.count {
+            let n = data.withUnsafeBytes { ptr in
+                write(fd, ptr.baseAddress! + offset, data.count - offset)
+            }
+            if n < 0 && errno == EINTR { continue }
+            if n <= 0 { return false }
+            offset += n
+        }
+        return true
+    }
+
+    /// Write a frame: 4-byte big-endian length prefix + payload.
+    @discardableResult
+    public static func sendFrame(fd: Int32, payload: Data) -> Bool {
+        var length = UInt32(payload.count).bigEndian
+        let lengthData = Data(bytes: &length, count: 4)
+        return writeAll(fd: fd, data: lengthData) && writeAll(fd: fd, data: payload)
+    }
+
+    /// Read a frame: 4-byte big-endian length prefix + payload. Returns
+    /// nil on I/O error or when the length is 0 or exceeds `maxSize`.
+    public static func receiveFrame(fd: Int32, maxSize: Int) -> Data? {
+        guard let lengthBytes = readExact(fd: fd, count: 4) else { return nil }
+        let length = lengthBytes.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        guard length > 0, Int(length) <= maxSize else { return nil }
+        return readExact(fd: fd, count: Int(length))
+    }
 }

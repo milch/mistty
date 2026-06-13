@@ -148,20 +148,14 @@ final class IPCListener {
   private nonisolated static func handleConnection(_ fd: Int32, service: MisttyIPCService) {
     defer { Darwin.close(fd) }
 
-    // Read length prefix (4 bytes, big-endian UInt32)
-    guard let lengthBytes = readExact(fd: fd, count: 4) else { return }
-    let length = lengthBytes.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-
-    guard length > 0, length <= MisttyIPC.maxMessageSize else { return }
-
-    // Read request payload
-    guard let requestData = readExact(fd: fd, count: Int(length)) else { return }
+    guard let requestData = UnixSocket.receiveFrame(fd: fd, maxSize: Int(MisttyIPC.maxMessageSize))
+    else { return }
 
     // Parse request
     guard let json = try? JSONSerialization.jsonObject(with: requestData) as? [String: Any],
       let method = json["method"] as? String
     else {
-      writeResponse(fd: fd, data: errorResponse("Invalid request format"))
+      UnixSocket.sendFrame(fd: fd, payload: errorResponse("Invalid request format"))
       return
     }
 
@@ -180,11 +174,11 @@ final class IPCListener {
     semaphore.wait()
 
     if let errorMsg = responseError {
-      writeResponse(fd: fd, data: errorResponse(errorMsg))
+      UnixSocket.sendFrame(fd: fd, payload: errorResponse(errorMsg))
     } else {
       var result = Data([0x00])
       if let d = responseData { result.append(d) }
-      writeResponse(fd: fd, data: result)
+      UnixSocket.sendFrame(fd: fd, payload: result)
     }
   }
 
@@ -192,45 +186,6 @@ final class IPCListener {
     var result = Data([0x01])
     result.append(Data(message.utf8))
     return result
-  }
-
-  // MARK: - Socket I/O Helpers
-
-  /// Read exactly `count` bytes, looping for short reads and EINTR. Returns nil on error/timeout.
-  private nonisolated static func readExact(fd: Int32, count: Int) -> Data? {
-    var buffer = Data(count: count)
-    var offset = 0
-    while offset < count {
-      let n = buffer.withUnsafeMutableBytes { ptr in
-        Darwin.read(fd, ptr.baseAddress! + offset, count - offset)
-      }
-      if n < 0 && errno == EINTR { continue }
-      if n <= 0 { return nil }
-      offset += n
-    }
-    return buffer
-  }
-
-  /// Write response with length prefix, looping for short writes.
-  private nonisolated static func writeResponse(fd: Int32, data: Data) {
-    // Write length prefix
-    var length = UInt32(data.count).bigEndian
-    let lengthData = Data(bytes: &length, count: 4)
-    writeAll(fd: fd, data: lengthData)
-    // Write payload
-    writeAll(fd: fd, data: data)
-  }
-
-  private nonisolated static func writeAll(fd: Int32, data: Data) {
-    var offset = 0
-    while offset < data.count {
-      let n = data.withUnsafeBytes { ptr in
-        Darwin.write(fd, ptr.baseAddress! + offset, data.count - offset)
-      }
-      if n < 0 && errno == EINTR { continue }
-      if n <= 0 { return }
-      offset += n
-    }
   }
 
   // MARK: - Method Dispatch

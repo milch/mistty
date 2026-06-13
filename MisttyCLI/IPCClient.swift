@@ -70,19 +70,14 @@ final class IPCClient {
         request["method"] = method
         let requestData = try JSONSerialization.data(withJSONObject: request)
 
-        var length = UInt32(requestData.count).bigEndian
-        let lengthData = Data(bytes: &length, count: 4)
-        try writeAll(fd: fd, data: lengthData)
-        try writeAll(fd: fd, data: requestData)
-
-        let responseLengthData = try readExact(fd: fd, count: 4)
-        let responseLength = responseLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-
-        guard responseLength > 0, responseLength <= MisttyIPC.maxMessageSize else {
-            throw IPCClientError.connectionFailed("Invalid response length")
+        guard UnixSocket.sendFrame(fd: fd, payload: requestData) else {
+            throw IPCClientError.connectionFailed("Write failed")
         }
-
-        let responseData = try readExact(fd: fd, count: Int(responseLength))
+        guard let responseData = UnixSocket.receiveFrame(
+            fd: fd, maxSize: Int(MisttyIPC.maxMessageSize))
+        else {
+            throw IPCClientError.connectionFailed("Read failed")
+        }
 
         guard !responseData.isEmpty else {
             throw IPCClientError.connectionFailed("Empty response")
@@ -106,37 +101,5 @@ final class IPCClient {
         guard fd >= 0 else { return false }
         Darwin.close(fd)
         return true
-    }
-
-    // MARK: - Socket I/O Helpers
-
-    private func readExact(fd: Int32, count: Int) throws -> Data {
-        var buffer = Data(count: count)
-        var offset = 0
-        while offset < count {
-            let n = buffer.withUnsafeMutableBytes { ptr in
-                Darwin.read(fd, ptr.baseAddress! + offset, count - offset)
-            }
-            if n < 0 && errno == EINTR { continue }
-            if n <= 0 {
-                throw IPCClientError.connectionFailed("Read failed")
-            }
-            offset += n
-        }
-        return buffer
-    }
-
-    private func writeAll(fd: Int32, data: Data) throws {
-        var offset = 0
-        while offset < data.count {
-            let n = data.withUnsafeBytes { ptr in
-                Darwin.write(fd, ptr.baseAddress! + offset, data.count - offset)
-            }
-            if n < 0 && errno == EINTR { continue }
-            if n <= 0 {
-                throw IPCClientError.connectionFailed("Write failed")
-            }
-            offset += n
-        }
     }
 }
