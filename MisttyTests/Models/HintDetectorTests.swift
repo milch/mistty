@@ -97,6 +97,29 @@ final class HintDetectorTests: XCTestCase {
     XCTAssertTrue(m.allSatisfy { $0.kind != .quoted })
   }
 
+  // MARK: - Line source (characterization for the allocation-free rewrite)
+
+  func test_lineSource_skipsWhitespaceOnlyAndEmptyLines() {
+    let m = HintDetector.detect(lines: ["   ", "\t\t", ""], source: .lines)
+    XCTAssertTrue(m.isEmpty)
+  }
+
+  func test_lineSource_keepsLeadingWhitespace_trimsTrailing() {
+    let m = HintDetector.detect(lines: ["  hello world   "], source: .lines)
+    XCTAssertEqual(m.count, 1)
+    XCTAssertEqual(m[0].text, "  hello world")
+    XCTAssertEqual(m[0].kind, .line)
+    XCTAssertEqual(m[0].range.startCol, 0)
+    XCTAssertEqual(m[0].range.endCol, 12)
+  }
+
+  func test_lineSource_rowIndexPreserved() {
+    let m = HintDetector.detect(lines: ["first", "", "third"], source: .lines)
+    // detect() sorts bottom-to-top.
+    XCTAssertEqual(m.map(\.range.startRow), [2, 0])
+    XCTAssertEqual(m.map(\.text), ["third", "first"])
+  }
+
   func test_line_source_nonAscii_startsAtFirstNonWhitespace() {
     let matches = HintDetector.detect(lines: ["  😀 hello"], source: .lines)
     XCTAssertEqual(matches.count, 1)

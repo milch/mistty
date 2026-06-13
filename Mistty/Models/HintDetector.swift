@@ -28,26 +28,17 @@ enum HintDetector {
   // MARK: Line source
 
   private static func lineMatch(line: String, row: Int) -> HintMatch? {
-    let ns = line as NSString
-    let len = ns.length
-    // Detect if line is all-whitespace (skip it).
-    var first = 0
-    while first < len {
-      let s = ns.substring(with: NSRange(location: first, length: 1))
-      if !s.first!.isWhitespace { break }
-      first += 1
-    }
-    guard first < len else { return nil }
-    var last = len - 1
-    while last > first {
-      let s = ns.substring(with: NSRange(location: last, length: 1))
-      if !s.first!.isWhitespace { break }
-      last -= 1
+    // Single backward pass, no per-character NSString allocations — the
+    // old substring(with:)-per-character trim ran for every viewport row
+    // on every hint rescan (each scroll event while hinting).
+    guard let lastIdx = line.lastIndex(where: { !$0.isWhitespace }) else {
+      return nil  // all-whitespace (or empty) line
     }
     // Include leading whitespace in text and pill starts at column 0.
-    let text = ns.substring(with: NSRange(location: 0, length: last + 1))
+    let text = String(line[...lastIdx])
+    let endCol = text.utf16.count - 1
     return HintMatch(
-      range: HintRange(startRow: row, startCol: 0, endRow: row, endCol: last),
+      range: HintRange(startRow: row, startCol: 0, endRow: row, endCol: endCol),
       text: text,
       kind: .line
     )
