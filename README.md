@@ -1,130 +1,86 @@
 # Mistty
 
-A macOS terminal emulator built on [libghostty](https://github.com/ghostty-org/ghostty) with native session management. Mistty brings tmux-style workflows directly into the terminal — sessions, tabs, split panes, and a fuzzy session switcher, all without a separate multiplexer.
+A native macOS terminal built on [libghostty](https://github.com/ghostty-org/ghostty), with tmux-style session management built in. Sessions, tabs, split panes, and a fuzzy switcher live inside the terminal — no separate multiplexer to run, configure, or keep alive.
 
-## Features (planned)
+The same, GPU-accelerated rendering engine you are used to from Ghostty. Mistty wraps it in a SwiftUI shell that organizes your work into a tree of windows, sessions, tabs, and panes you can drive entirely from the keyboard or script from the command line.
 
-- **Session manager** (`Cmd+J`) — fuzzy-find and switch between sessions, recent directories (via zoxide), and SSH hosts
-- **Tabs and split panes** — standard terminal multiplexing built in
-- **Sidebar** — persistent session tree, collapsible with `Cmd+S`
-- **Keyboard-driven** — every function accessible via keyboard shortcut
-- **Configurable** — XDG-compliant config at `~/.config/mistty/config.toml`
-- **Native macOS** — SwiftUI interface, system integration
+> Requires macOS 14 (Sonoma) or later on Apple Silicon.
 
-## CLI Control
+## Features
 
-Mistty includes a CLI tool for scripting and automation:
+- **Session manager** (`Cmd+J`) — one fuzzy palette over your open sessions, recent directories (via [zoxide](https://github.com/ajeetdsouza/zoxide)), and SSH hosts from `~/.ssh/config`. Type a few letters, hit return, and you're in the right place.
+- **Sessions, tabs, and split panes** — a working-directory-scoped session holds tabs; tabs hold split panes. Standard terminal multiplexing without tmux.
+- **Sidebar** (`Cmd+S`) — a persistent tree of your sessions and tabs.
+- **Window mode** (`Cmd+X`) — a modal layer for moving, resizing, zooming, and rearranging panes with single keystrokes, plus one-key standard layouts.
+- **Copy mode** (`Cmd+Shift+C`) — vim-style keyboard navigation, selection, search, and link/path hints for yanking or opening without the mouse. Also try **yank mode** (`Cmd+Shift+V`) or **copy mode** (`Cmd+Shift+O`) to copy or open text shaped like numbers, URLs, paths, and more, with a few keystrokes.
+- **State restoration** — relaunch and your sessions, tabs, panes, and working directories come back; allow-listed programs (nvim, ssh, …) relaunch too. Configure restoration strategies like passing environment variables, or repeating the previous arguments.
+- **CLI control** (`mistty-cli`) — script sessions, tabs, and panes; send keys, run commands, and read pane text over a local socket.
+- **Configurable** — a single TOML file at `~/.config/mistty/config.toml`, plus full passthrough to any [Ghostty option](https://ghostty.org/docs/config/reference).
+- **Desktop notifications** — programs can raise a macOS notification (OSC 9 / 777) from inside a pane; the originating tab and the Dock icon are flagged when it's not focused. `claude`, `codex`, or other agent harnesses will be highlighted in the sidebar when they are waiting for your response.
 
-```bash
-# Install
-just install-cli
+## Install
 
-# Sessions
-mistty-cli session list
-mistty-cli session create --name "project" --directory ~/code
-
-# Tabs
-mistty-cli tab create --session 1 --name "editor"
-mistty-cli tab list --session 1
-
-# Panes
-mistty-cli pane active
-mistty-cli pane create --tab 1 --direction horizontal
-mistty-cli pane send-keys "echo hello"
-mistty-cli pane run-command "npm test"
-
-# JSON output (auto-detected when piped, or force with --json)
-mistty-cli session list | jq .
-mistty-cli session list --json
-```
-
-## Prerequisites
-
-- macOS 14 (Sonoma) or later
-- Xcode 16+ (for Swift 6 and the Metal Toolchain)
-- [Nix](https://nixos.org/download/) (for the build environment — provides Zig)
-- [just](https://github.com/casey/just) (command runner, optional but recommended)
-
-If the Metal Toolchain is not installed, run:
+### Homebrew (recommended)
 
 ```sh
-xcodebuild -downloadComponent MetalToolchain
+brew install --cask milch/mistty/mistty
 ```
 
-## Setup
+This installs `Mistty.app` and puts the `mistty-cli` tool on your `PATH`.
+
+It is recommended to install [zoxide](https://github.com/ajeetdsouza/zoxide) to populate recent directories in the session manager:
 
 ```sh
-# Clone with submodules
-git clone --recurse-submodules https://github.com/your-user/mistty.git
-cd mistty
-
-# Or if already cloned:
-just setup
-
-# Build libghostty (requires nix for Zig 0.15.2)
-just build-libghostty
-
-# Build the app
-just build
-
-# Run
-just run
+brew install zoxide
 ```
+
+### Build from source
+
+See [Building from source](docs/user-guide/installation.md#building-from-source) — you'll need Xcode, [Nix](https://nixos.org/download/) (for the pinned Zig that builds libghostty), and [just](https://github.com/casey/just).
+
+## Quick start
+
+Launch Mistty and you get one window with a single session, tab, and pane. From there:
+
+| Shortcut                | Action                                                             |
+| ----------------------- | ------------------------------------------------------------------ |
+| `Cmd+J`                 | Session manager — jump to a session, recent directory, or SSH host |
+| `Cmd+T`                 | New tab                                                            |
+| `Cmd+D` / `Cmd+Shift+D` | Split pane right / down                                            |
+| `Cmd+X`                 | Window mode — move, resize, zoom, and lay out panes                |
+| `Cmd+Shift+C`           | Copy mode — keyboard scrollback, selection, and link hints         |
+| `Cmd+S`                 | Toggle the sidebar                                                 |
+| `Cmd+1`…`Cmd+9`         | Focus tab N (`Ctrl+1`…`9` focus session N)                         |
+
+Every shortcut is rebindable. The [keyboard shortcuts reference](docs/user-guide/keyboard-shortcuts.md) lists them all.
+
+## Documentation
+
+The [**user guide**](docs/user-guide/) covers everything in depth:
+
+- [Installation](docs/user-guide/installation.md) — Homebrew, zoxide, and building from source
+- [Getting started](docs/user-guide/getting-started.md) — windows, sessions, tabs, panes, and the session manager
+- [Keyboard shortcuts](docs/user-guide/keyboard-shortcuts.md) — every binding, plus window mode
+- [Copy mode](docs/user-guide/copy-mode.md) — vim-style navigation and link hints
+- [Configuration](docs/user-guide/configuration.md) — the full `config.toml` reference
+- [CLI](docs/user-guide/cli.md) — scripting Mistty with `mistty-cli`
+
+A fully-commented sample config lives at [`docs/config-example.toml`](docs/config-example.toml). There's also a [Neovim smart-splits integration](docs/integrations/neovim-smart-splits.md) for seamless vim ↔ pane navigation.
 
 ## Development
 
-| Command | Description |
-|---|---|
-| `just build` | Build debug |
-| `just build-release` | Build release |
-| `just run` | Build and run |
-| `just test` | Run tests |
-| `just clean` | Clean build artifacts |
-| `just build-libghostty` | Rebuild libghostty from vendored Ghostty |
-| `just dev` | Enter nix dev shell |
-| `just fmt` | Format Swift code |
-| `just info` | Show project info |
+| Command                 | Description                                            |
+| ----------------------- | ------------------------------------------------------ |
+| `just setup`            | Initialize submodules (first-time)                     |
+| `just build-libghostty` | Build libghostty from the vendored Ghostty (needs Nix) |
+| `just build`            | Build the app (debug)                                  |
+| `just run`              | Build, install to `/Applications`, and launch          |
+| `just test`             | Run the test suite                                     |
+| `just fmt`              | Format Swift sources                                   |
+| `just info`             | Show project info                                      |
 
-### Nix dev shell
-
-The project uses a Nix flake to provide Zig 0.15.2 (required by Ghostty's build system). Swift is expected from the system Xcode installation.
-
-```sh
-# Enter the shell manually
-nix develop
-
-# Or use direnv (with .envrc already configured)
-direnv allow
-```
-
-### Project structure
-
-```
-mistty/
-  Mistty/              # App source
-    MisttyApp.swift     # App entry point
-    ContentView.swift   # Root SwiftUI view
-    Spike/              # libghostty integration spike (temporary)
-  MisttyTests/          # Tests
-  vendor/ghostty/       # Ghostty git submodule
-  docs/
-    plans/              # Design and implementation docs
-    spike/              # libghostty API research
-  Package.swift         # Swift package manifest
-  flake.nix             # Nix dev environment
-  justfile              # Task runner
-```
-
-## Architecture
-
-Mistty uses a three-layer architecture:
-
-- **UI Layer** (SwiftUI) — sidebar, session manager, tab bar, terminal views
-- **Session Layer** (Swift protocols) — `SessionStore` > `MisttySession` > `MisttyTab` > `MisttyPane`, designed for future migration from in-memory to a background daemon
-- **Terminal Layer** (libghostty) — `NSViewRepresentable` wrapping a `ghostty_surface_t` for terminal rendering
-
-See [docs/plans/2026-03-06-mistty-design.md](docs/plans/2026-03-06-mistty-design.md) for the full design document.
+Run `just --list` for the full set. The architecture and contributor notes live in [`docs/user-guide/installation.md`](docs/user-guide/installation.md) and the design docs under [`docs/`](docs/).
 
 ## License
 
-TBD
+[MIT](LICENSE).
