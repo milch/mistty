@@ -73,9 +73,26 @@ final class MisttyPane: Identifiable {
   /// this property keeps remote nvim sessions navigating Mistty's local
   /// panes instead.
   var isInRemoteShell: Bool {
-    guard let fp = ForegroundProcessResolver.current(for: self) else { return false }
-    return ForegroundProcessResolver.remoteShellExecutables.contains(fp.executable)
+    // Resolving the foreground process is a multi-syscall walk (tcgetpgrp,
+    // proc_listpids, per-member describe). The ctrl-hjkl nav monitor reads
+    // this per keypress (incl. autorepeat) while nvim is focused, so cache
+    // the verdict briefly — foreground-process churn is human-timescale.
+    let now = ContinuousClock.now
+    if let cached = remoteShellCache, now - cached.at < .seconds(2) {
+      return cached.value
+    }
+    let value: Bool
+    if let fp = ForegroundProcessResolver.current(for: self) {
+      value = ForegroundProcessResolver.remoteShellExecutables.contains(fp.executable)
+    } else {
+      value = false
+    }
+    remoteShellCache = (value, now)
+    return value
   }
+
+  @ObservationIgnored
+  private var remoteShellCache: (value: Bool, at: ContinuousClock.Instant)?
 
   init(id: Int) {
     self.id = id
