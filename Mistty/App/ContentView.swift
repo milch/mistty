@@ -23,6 +23,11 @@ struct ContentView: View {
   @State private var ctrlNavMonitor: Any?
   @State private var shortcutMonitor: ShortcutMonitor?
 
+  /// Stateless orchestrator for copy-mode search/scroll/yank/hints. The view
+  /// keeps the NSEvent-monitor plumbing and per-pane state storage; the math
+  /// lives here behind `TerminalContentReading` (unit-tested separately).
+  private let copyModeController = CopyModeController()
+
   var body: some View {
     contentWithNotifications
       .onReceive(NotificationCenter.default.publisher(for: .misttyConfigDidReload)) { _ in
@@ -103,11 +108,13 @@ struct ContentView: View {
     contentWithOverlays
       .onReceive(NotificationCenter.default.publisher(for: .misttyScrollChanged)) { _ in
         guard windowsStore.isActiveTerminalWindow(state: state) else { return }
-        guard var copyState = state.activeSession?.activeTab?.copyModeState,
+        guard let pane = state.activeSession?.activeTab?.activePane,
+              var copyState = pane.copyModeState,
               copyState.isHinting,
               let source = copyState.hint?.source else { return }
-        populateHintMatches(&copyState, source: source)
-        state.activeSession?.activeTab?.copyModeState = copyState
+        copyModeController.populateHintMatches(
+          &copyState, source: source, reader: pane.surfaceView)
+        pane.copyModeState = copyState
       }
       .onReceive(NotificationCenter.default.publisher(for: .ghosttySetTitle)) { notification in
         handleSetTitle(notification)
@@ -648,7 +655,10 @@ struct ContentView: View {
       // exit-on-cancel behaviour stays for those.
       enteredDirectly: action != .cursor
     )
-    populateHintMatches(&copyState, source: .patterns)
+    if let pane = state.activeSession?.activeTab?.activePane {
+      copyModeController.populateHintMatches(
+        &copyState, source: .patterns, reader: pane.surfaceView)
+    }
     state.activeSession?.activeTab?.copyModeState = copyState
   }
 
@@ -1016,15 +1026,6 @@ struct ContentView: View {
 
   // MARK: - Copy Mode
 
-  /// Resolves the pane whose copy-mode session is currently driving keys.
-  /// That's always the focused pane: each pane carries its own
-  /// `copyModeState`, but only the active pane's state shows the overlay
-  /// and consumes keystrokes.
-  private var copyModePane: MisttyPane? {
-    let active = state.activeSession?.activeTab?.activePane
-    return active?.isCopyModeActive == true ? active : nil
-  }
-
   private func enterCopyMode() {
     guard let tab = state.activeSession?.activeTab,
       let activePane = tab.activePane
@@ -1033,81 +1034,8 @@ struct ContentView: View {
       tab.windowModeState = .inactive
       removeWindowModeMonitor()
     }
-
-    // Get actual terminal dimensions and cursor position from ghostty
-    var rows = 24
-    var cols = 80
-    var cursorRow: Int?
-    var cursorCol: Int?
-    let surfaceView = activePane.surfaceView
-    if let size = surfaceView.viewportGridSize() {
-      rows = size.rows
-      cols = size.cols
-    }
-    if let pos = surfaceView.cursorPosition() {
-      cursorRow = pos.row
-      cursorCol = pos.col
-    }
-
-    // Freeze the viewport on entry. Ghostty's viewport defaults to `.active`
-    // mode (auto-follows the live edge), so streaming output keeps scrolling
-    // the visible area and copy-mode selections become impossible.
-    // `ghostty_surface_pin_viewport` (Mistty patch
-    // `patches/ghostty/0005-pin-viewport.patch`) transitions the viewport
-    // from `.active` to `.pin` at the current top row with no visual shift.
-    surfaceView.pinViewport()
-
-    // When the user enters copy mode while looking at scrollback, the live
-    // cursor row is below the visible viewport and our `cursorPosition()`
-    // clamp lands the copy-mode cursor at the bottom of the viewport — so
-    // the first j/k motion snaps the view away from what they're looking
-    // at. Detect that case via the scrollbar offset (`< maxOffset` ⇔ user
-    // is in scrollback) and anchor the cursor at mid-viewport instead.
-    let sb = surfaceView.scrollbarState
-    let maxOffset = sb.total > sb.len ? sb.total - sb.len : 0
-    if sb.offset < maxOffset {
-      cursorRow = rows / 2
-      cursorCol = 0
-    }
-
-    activePane.copyModeState = CopyModeState(
-      rows: rows, cols: cols, cursorRow: cursorRow, cursorCol: cursorCol)
-  }
-
-  /// Scroll the focused pane's viewport by `delta` rows (positive = forward,
-  /// toward the live edge; negative = backward, into scrollback). Returns
-  /// the actual delta applied after clamping, which may be smaller in
-  /// absolute value than `delta` if the scroll hit the top of scrollback or
-  /// the live edge.
-  @discardableResult
-  private func scrollViewport(_ state: inout CopyModeState, delta: Int) -> Int {
-    guard let pane = copyModePane,
-          pane.surfaceView.surface != nil else { return 0 }
-    pane.surfaceView.runBindingAction("scroll_page_lines:\(delta)")
-    // Update scrollbar offset synchronously — the async callback will
-    // eventually arrive, but we need correct offset immediately for
-    // subsequent search coordinate conversion.
-    let oldOffset = pane.surfaceView.scrollbarState.offset
-    let total = pane.surfaceView.scrollbarState.total
-    let len = pane.surfaceView.scrollbarState.len
-    // Clamp the same way ghostty does internally: offset can't go below 0
-    // (top of scrollback) or above total-len (live area pinned to bottom).
-    let maxOffset = total > len ? total - len : 0
-    let target = Int64(oldOffset) + Int64(delta)
-    let clampedOffset = UInt64(max(0, min(Int64(maxOffset), target)))
-    pane.surfaceView.scrollbarState.offset = clampedOffset
-    // Adjust the anchor by the *actual* offset change, not the requested
-    // delta. Otherwise scrolls that ghostty refused to honor (because we
-    // hit the top or bottom of the scrollable area) silently drift the
-    // anchor away from its true screen position; on yank, the runaway
-    // anchor either passes ghostty's tag-aware pin clamp (selecting too
-    // much) or undershoots (selecting too little).
-    let actualDelta = Int(clampedOffset) - Int(oldOffset)
-    if let anchor = state.anchor {
-      state.anchor = (row: anchor.row - actualDelta, col: anchor.col)
-    }
-    state.scrollGeneration &+= 1
-    return actualDelta
+    activePane.copyModeState = copyModeController.makeInitialState(
+      reader: activePane.surfaceView)
   }
 
   private func exitCopyMode() {
@@ -1116,7 +1044,9 @@ struct ContentView: View {
     // mode state keep their scroll position until the user navigates back
     // to them and exits there too.
     let active = state.activeSession?.activeTab?.activePane
-    active?.surfaceView.runBindingAction("scroll_to_bottom")
+    if let active {
+      copyModeController.scrollToBottom(reader: active.surfaceView)
+    }
     active?.copyModeState = nil
   }
 
@@ -1191,165 +1121,35 @@ struct ContentView: View {
         var copyState = active.copyModeState
       else { return event }
 
-      // Pass through system shortcuts (Cmd+*) when not searching
-      if event.modifierFlags.contains(.command) && !copyState.isSearching {
-        return event
-      }
-
-      // Extract key from charactersIgnoringModifiers for correct Ctrl-v handling
+      // Extract key from charactersIgnoringModifiers for correct Ctrl-v
+      // handling. The Cmd-passthrough and Ctrl-hjkl-passthrough checks now
+      // live in CopyModeController.handleKey.
       guard let keyStr = event.charactersIgnoringModifiers, let key = keyStr.first else {
         return event
       }
 
-      // Let Ctrl-h/j/k/l reach the pane-nav monitor so the user can switch
-      // focus while copy mode stays parked on this pane (it resumes when
-      // they navigate back). All other Ctrl-* keys (d/u/f/b paging, Ctrl-v
-      // visual block, etc.) keep being handled here.
-      let onlyCtrl = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control
-      if onlyCtrl, !copyState.isSearching, ["h", "j", "k", "l"].contains(Character(keyStr.lowercased())) {
-        return event
-      }
+      // Resolve config once per keystroke (MisttyConfig.current is the cached
+      // value MisttyConfig.load() also returns — no disk read).
+      let cfg = MisttyConfig.current
+      let config = CopyModeController.Config(
+        scrolloff: cfg.copyModeScrolloff,
+        hintAlphabet: cfg.copyModeHints.alphabet,
+        hintUppercaseAction: cfg.copyModeHints.uppercaseAction)
 
-      let lineReader: (Int) -> String? = { row in
-        self.readTerminalLine(row: row)
-      }
-
-      let prevCursorRow = copyState.cursorRow
-      let actions = copyState.handleKey(
-        key: key,
-        keyCode: event.keyCode,
-        modifiers: event.modifierFlags,
-        lineReader: lineReader
-      )
-
-      // Apply actions
-      for action in actions {
-        switch action {
-        case .cursorMoved:
-          break  // Position already in copyState
-        case .updateSelection:
-          break  // Selection derived from copyState
-        case .exitCopyMode:
-          // Yank if there's a selection before exiting
-          if copyState.isSelecting {
-            self.state.activeSession?.activeTab?.copyModeState = copyState
-            self.yankSelection()
-          }
-          self.exitCopyMode()
-          return nil
-        case .enterSubMode:
-          break  // Sub-mode already in copyState
-        case .showHelp, .hideHelp:
-          break  // showingHelp already in copyState
-        case .startSearch:
-          break  // subMode already set to search
-        case .updateSearch:
-          break  // searchQuery already updated
-        case .confirmSearch:
-          self.runSearch(&copyState, direction: copyState.searchDirection)
-        case .cancelSearch:
-          break  // Already handled in copyState
-        case .searchNext:
-          self.runSearch(&copyState, direction: copyState.searchDirection)
-        case .searchPrev:
-          let reversed: SearchDirection = copyState.searchDirection == .forward ? .reverse : .forward
-          self.runSearch(&copyState, direction: reversed)
-        case .scroll(let deltaRows):
-          self.scrollViewport(&copyState, delta: deltaRows)
-          if copyState.isHinting, let source = copyState.hint?.source {
-            self.populateHintMatches(&copyState, source: source)
-          }
-        case .scrollToTop:
-          if let pane = self.copyModePane {
-            let offset = Int(pane.surfaceView.scrollbarState.offset)
-            if offset > 0 {
-              self.scrollViewport(&copyState, delta: -offset)
-            }
-          }
-          if copyState.isHinting, let source = copyState.hint?.source {
-            self.populateHintMatches(&copyState, source: source)
-          }
-        case .scrollToBottom:
-          if let pane = self.copyModePane {
-            let sb = pane.surfaceView.scrollbarState
-            let maxOffset = sb.total > sb.len ? sb.total - sb.len : 0
-            let delta = Int(Int64(maxOffset) - Int64(sb.offset))
-            if delta != 0 {
-              self.scrollViewport(&copyState, delta: delta)
-            }
-          }
-          if copyState.isHinting, let source = copyState.hint?.source {
-            self.populateHintMatches(&copyState, source: source)
-          }
-        case .enterHintMode(let action, let source):
-          let cfg = MisttyConfig.load()
-          copyState.applyHintEntry(
-            action: action,
-            source: source,
-            uppercaseAction: cfg.copyModeHints.uppercaseAction,
-            alphabet: cfg.copyModeHints.alphabet
-          )
-        case .requestHintScan:
-          let source = copyState.hint?.source ?? .patterns
-          self.populateHintMatches(&copyState, source: source)
-        case .hintInput:
-          break  // typedPrefix already set in copyState
-        case .exitHintMode:
-          break  // subMode already reset
-        case .copyText(let text):
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(text, forType: .string)
-        case .openItem(let text):
-          if let url = URL(string: text), url.scheme != nil {
-            NSWorkspace.shared.open(url)
-          } else {
-            let proc = Process()
-            proc.launchPath = "/usr/bin/open"
-            proc.arguments = [text]
-            try? proc.run()
-          }
-        case .needsContinuation:
-          let continuationActions = copyState.continuePendingMotion(lineReader: lineReader)
-          for contAction in continuationActions {
-            switch contAction {
-            case .scroll(let delta):
-              self.scrollViewport(&copyState, delta: delta)
-            case .needsContinuation:
-              let more = copyState.continuePendingMotion(lineReader: lineReader)
-              for a in more {
-                if case .scroll(let d) = a {
-                  self.scrollViewport(&copyState, delta: d)
-                }
-              }
-            default:
-              break
-            }
-          }
-        }
-      }
-
-      // Scrolloff: keep N rows of context visible above/below the cursor
-      // when vertical motions land near a viewport edge. Skips hint/search
-      // modes (their cursor positions aren't user-driven navigation) and
-      // moves that didn't change the row.
-      let scrolloff = MisttyConfig.current.copyModeScrolloff
-      if scrolloff > 0,
-        !copyState.isHinting, !copyState.isSearching,
-        copyState.cursorRow != prevCursorRow
+      switch self.copyModeController.handleKey(
+        key: key, keyStr: keyStr, keyCode: event.keyCode,
+        modifiers: event.modifierFlags, state: &copyState,
+        config: config, reader: active.surfaceView)
       {
-        let r = copyState.cursorRow
-        let bottomEdge = copyState.rows - 1 - scrolloff
-        if r > bottomEdge {
-          let actual = self.scrollViewport(&copyState, delta: r - bottomEdge)
-          copyState.cursorRow -= actual
-        } else if r < scrolloff {
-          let actual = self.scrollViewport(&copyState, delta: r - scrolloff)
-          copyState.cursorRow -= actual
-        }
+      case .passThrough:
+        return event
+      case .exit:
+        self.exitCopyMode()
+        return nil
+      case .consume:
+        active.copyModeState = copyState
+        return nil
       }
-
-      self.state.activeSession?.activeTab?.copyModeState = copyState
-      return nil
     }
   }
 
@@ -1461,186 +1261,6 @@ struct ContentView: View {
   private func removeShortcutMonitor() {
     shortcutMonitor?.uninstall()
     shortcutMonitor = nil
-  }
-
-  /// One search pass per (query, scrollback-size): scans every screen row
-  /// once into `state.searchMatches`, then derives both the jump target
-  /// and the [index/total] display from the cached array. Previously
-  /// `performSearch` + `countSearchMatches` EACH scanned the entire
-  /// scrollback (one `ghostty_surface_read_text` FFI call + String
-  /// allocation per row) on every n/N/confirm keypress.
-  private func runSearch(_ state: inout CopyModeState, direction: SearchDirection) {
-    guard !state.searchQuery.isEmpty,
-      let pane = copyModePane,
-      let cols = pane.surfaceView.viewportGridSize()?.cols
-    else { return }
-
-    let scrollbar = pane.surfaceView.scrollbarState
-    let totalRows = Int(scrollbar.total)
-    guard totalRows > 0 else { return }
-
-    if state.searchMatchesQuery != state.searchQuery
-      || state.searchMatchesTotalRows != totalRows
-    {
-      var matches: [SearchMatch] = []
-      for row in 0..<totalRows {
-        guard let line = readLineByScreenRow(row) else { continue }
-        var searchStart = line.startIndex
-        while let range = line.range(
-          of: state.searchQuery, options: .caseInsensitive,
-          range: searchStart..<line.endIndex)
-        {
-          matches.append(SearchMatch(
-            row: row, col: line.distance(from: line.startIndex, to: range.lowerBound)))
-          searchStart = range.upperBound
-        }
-      }
-      state.searchMatches = matches
-      state.searchMatchesQuery = state.searchQuery
-      state.searchMatchesTotalRows = totalRows
-    }
-
-    let cursorScreenRow = state.cursorRow + Int(scrollbar.offset)
-    guard let target = SearchMatching.nextMatch(
-      after: cursorScreenRow, col: state.cursorCol,
-      in: state.searchMatches, forward: direction == .forward)
-    else {
-      state.searchMatchTotal = nil
-      state.searchMatchIndex = nil
-      return
-    }
-
-    // Scroll to make the match visible — center it in viewport.
-    let viewportRows = Int(scrollbar.len)
-    let targetOffset = max(0, min(target.row - viewportRows / 2, totalRows - viewportRows))
-    pane.surfaceView.runBindingAction("scroll_to_row:\(targetOffset)")
-
-    // Update scrollbar state synchronously — the async callback will
-    // eventually arrive with the same value, but we need it now for
-    // subsequent searches (n/N) to compute correct screen coordinates.
-    pane.surfaceView.scrollbarState.offset = UInt64(targetOffset)
-
-    state.cursorRow = target.row - targetOffset
-    state.cursorCol = min(target.col, cols - 1)
-    state.desiredCol = nil
-    state.searchMatchTotal = state.searchMatches.count
-    state.searchMatchIndex = SearchMatching.index(of: target, in: state.searchMatches)
-  }
-
-  private func readTerminalLine(row: Int) -> String? {
-    copyModePane?.surfaceView.readRow(row)
-  }
-
-  /// Read a line by screen row, preferring VIEWPORT reading when the row is visible.
-  /// This ensures consistency with the highlight overlay (which uses VIEWPORT).
-  private func readLineByScreenRow(_ screenRow: Int) -> String? {
-    guard let pane = copyModePane else { return nil }
-    let scrollbar = pane.surfaceView.scrollbarState
-    let viewportRow = screenRow - Int(scrollbar.offset)
-    if viewportRow >= 0 && viewportRow < Int(scrollbar.len) {
-      return readTerminalLine(row: viewportRow)
-    }
-    return readScreenLine(row: screenRow)
-  }
-
-  private func readScreenLine(row: Int) -> String? {
-    copyModePane?.surfaceView.readRow(row, pointTag: GHOSTTY_POINT_SCREEN)
-  }
-
-  private func scanViewportForHints(source: HintSource) -> [HintMatch] {
-    guard let copyState = state.activeSession?.activeTab?.copyModeState else { return [] }
-    var lines: [String] = []
-    for row in 0..<copyState.rows {
-      lines.append(readTerminalLine(row: row) ?? "")
-    }
-    return HintDetector.detect(lines: lines, source: source)
-  }
-
-  private func populateHintMatches(_ state: inout CopyModeState, source: HintSource) {
-    let matches = scanViewportForHints(source: source)
-    state.setHintMatches(matches)
-  }
-
-  private func yankSelection() {
-    guard let pane = state.activeSession?.activeTab?.activePane,
-      let copyState = pane.copyModeState,
-      let anchor = copyState.anchor,
-      let cols = pane.surfaceView.viewportGridSize()?.cols
-    else { return }
-
-    var textToCopy: String?
-
-    let anchorOutOfViewport = anchor.row < 0 || anchor.row >= copyState.rows
-    let useScreenCoords = anchorOutOfViewport
-    let tag: ghostty_point_tag_e = useScreenCoords ? GHOSTTY_POINT_SCREEN : GHOSTTY_POINT_VIEWPORT
-    let offset = useScreenCoords ? Int(pane.surfaceView.scrollbarState.offset) : 0
-
-    switch copyState.subMode {
-    case .visual:
-      let (top, bottom) = CopyModeYank.normalize(
-        anchor: (row: anchor.row + offset, col: anchor.col),
-        cursor: (row: copyState.cursorRow + offset, col: copyState.cursorCol)
-      )
-      textToCopy = pane.surfaceView.readText(
-        startRow: top.row, startCol: top.col,
-        endRow: bottom.row, endCol: bottom.col,
-        rectangle: false,
-        pointTag: tag
-      )
-
-    case .visualLine:
-      // Line-wise: full lines from min to max row
-      let minRow = min(anchor.row, copyState.cursorRow)
-      let maxRow = max(anchor.row, copyState.cursorRow)
-      textToCopy = pane.surfaceView.readText(
-        startRow: minRow + offset, startCol: 0,
-        endRow: maxRow + offset, endCol: cols - 1,
-        rectangle: false,
-        pointTag: tag
-      )
-
-    case .visualBlock:
-      // Block-wise: read each row's slice, joined by newlines
-      let minRow = min(anchor.row, copyState.cursorRow)
-      let maxRow = max(anchor.row, copyState.cursorRow)
-      let minCol = min(anchor.col, copyState.cursorCol)
-      var lines: [String] = []
-      let logicalRightCol = max(anchor.col, copyState.cursorCol)
-      for row in minRow...maxRow {
-        let readRow = row + offset
-        let line: String?
-        if useScreenCoords {
-          line = readScreenLine(row: readRow)
-        } else {
-          line = readTerminalLine(row: readRow)
-        }
-        if let line = line {
-          let contentEnd = WordMotion.lastNonWhitespaceIndex(in: line)
-          guard contentEnd >= minCol else {
-            lines.append("")
-            continue
-          }
-          let rightCol = min(logicalRightCol, contentEnd)
-          let chars = Array(line)
-          let start = min(minCol, chars.count)
-          let end = min(rightCol + 1, chars.count)
-          if start < end {
-            lines.append(String(chars[start..<end]))
-          } else {
-            lines.append("")
-          }
-        }
-      }
-      textToCopy = lines.joined(separator: "\n")
-
-    default:
-      return
-    }
-
-    if let text = textToCopy, !text.isEmpty {
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(text, forType: .string)
-    }
   }
 
 }
