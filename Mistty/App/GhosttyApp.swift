@@ -217,6 +217,16 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
     // C function type forbids — so pane/surface are resolved inside the hop.
     let content = String(cString: str)
     let requestState = ClipboardRequestState(pointer: state)
+    // Resolve the foreground process NOW, synchronously, while the read is
+    // firing — NOT after the main-actor hop. Shell integrations (e.g. atuin)
+    // run precmd hooks the instant a command finishes, spawning helpers that
+    // join the foreground pgroup; resolving post-hop mis-attributes the read to
+    // them. `surface` is valid for this callback's duration. nil = a plain
+    // shell prompt (no specific program to name).
+    let executable = ForegroundProcessResolver.current(
+      ptyFD: Int32(ghostty_surface_pty_fd(surface)),
+      shellPID: pid_t(ghostty_surface_command_pid(surface))
+    )?.executable
     let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
     Task { @MainActor in
       // `decide` resolves the pane, decides (possibly via a sheet), and completes
@@ -225,7 +235,7 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
       // abandons if torn down rather than risk a use-after-free).
       let view = unmanagedView.takeRetainedValue()
       ClipboardPermissionCoordinator.shared.decide(
-        view: view, state: requestState.pointer, content: content)
+        view: view, executable: executable, state: requestState.pointer, content: content)
     }
   }
 }

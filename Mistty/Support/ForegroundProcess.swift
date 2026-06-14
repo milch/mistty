@@ -37,6 +37,25 @@ enum ForegroundProcessResolver {
     return current(via: probe)
   }
 
+  /// Nonisolated entrypoint resolving from a raw pty fd + shell pid, callable
+  /// from a libghostty C callback (no `@MainActor` pane needed). Lets the
+  /// OSC-52 clipboard callback capture the foreground process *synchronously,
+  /// at the instant the read fires* — before the async main-actor hop, by which
+  /// time shell integrations (atuin et al.) have run their post-command hooks
+  /// and polluted the foreground pgroup, mis-attributing the read.
+  nonisolated static func current(ptyFD: Int32, shellPID: pid_t) -> ForegroundProcess? {
+    let probe = ForegroundProcessProbe(
+      ptyFD: { ptyFD },
+      shellPID: { shellPID },
+      tcgetpgrpOnPTY: { fd in tcgetpgrp(fd) },
+      pidsInPgroup: Self.pidsInPgroup(_:),
+      childrenOf: Self.childrenOf(_:),
+      deepestDescendant: Self.deepestLiveDescendant(of:),
+      describe: Self.describe(pid:)
+    )
+    return current(via: probe)
+  }
+
   /// Basenames we treat as "nothing to capture" — plain shells where the
   /// user is at a prompt, plus macOS login-shell wrappers that ghostty
   /// inserts between the spawned command and the actual target process.

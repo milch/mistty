@@ -110,12 +110,16 @@ final class ClipboardPermissionCoordinator {
   // MARK: - libghostty entry
 
   /// Decide an OSC-52 read request and complete it. Called on the main actor
-  /// from the clipboard callback. `content` is the clipboard text already read
-  /// by libghostty; `state` belongs to the open request. The `view` is held
-  /// (not the raw surface) so completion can re-fetch a *live* surface — a
-  /// deferred prompt may outlive the pane.
+  /// from the clipboard callback. `executable` is the foreground process name
+  /// resolved *synchronously* by the caller at read time (nil = plain shell
+  /// prompt → keyed as "(unknown)"); resolving it post-hop would mis-attribute
+  /// the read to shell-integration helpers. `content` is the clipboard text
+  /// already read by libghostty; `state` belongs to the open request. The
+  /// `view` is held (not the raw surface) so completion can re-fetch a *live*
+  /// surface — a deferred prompt may outlive the pane.
   func decide(
-    view: TerminalSurfaceView, state: UnsafeMutableRawPointer, content: String
+    view: TerminalSurfaceView, executable: String?,
+    state: UnsafeMutableRawPointer, content: String
   ) {
     guard let paneID = view.pane?.id,
       let resolved = windowsStore?.pane(byId: paneID)
@@ -123,8 +127,7 @@ final class ClipboardPermissionCoordinator {
       complete(view: view, state: state, allow: false, content: content)
       return
     }
-    let executable = ForegroundProcessResolver.current(for: resolved.pane)?.executable
-      ?? "(unknown)"
+    let executable = executable ?? "(unknown)"
     let sessionID = resolved.session.id
 
     switch decision(
