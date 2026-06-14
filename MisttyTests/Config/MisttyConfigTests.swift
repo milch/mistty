@@ -377,6 +377,73 @@ final class MisttyConfigTests: XCTestCase {
     }
   }
 
+  func test_clipboardProcessRules_parse() throws {
+    let toml = """
+      [[clipboard.process]]
+      name = "nvim"
+      allow_clipboard_read = "allow"
+
+      [[clipboard.process]]
+      name = "sketchytui"
+      allow_clipboard_read = "deny"
+      """
+    let config = try MisttyConfig.parse(toml)
+    XCTAssertEqual(config.clipboardProcessRules, [
+      .init(name: "nvim", mode: .allow),
+      .init(name: "sketchytui", mode: .deny),
+    ])
+  }
+
+  func test_clipboardProcessRules_skipInvalidEntries() throws {
+    let toml = """
+      [[clipboard.process]]
+      allow_clipboard_read = "allow"
+
+      [[clipboard.process]]
+      name = "x"
+      allow_clipboard_read = "bogus"
+
+      [[clipboard.process]]
+      name = "nvim"
+      allow_clipboard_read = "prompt"
+      """
+    // First missing name → skipped; second bad mode → skipped; third kept.
+    XCTAssertEqual(try MisttyConfig.parse(toml).clipboardProcessRules,
+                   [.init(name: "nvim", mode: .prompt)])
+  }
+
+  func test_clipboardProcessRule_lookup_firstMatchWins() {
+    var config = MisttyConfig()
+    config.clipboardProcessRules = [
+      .init(name: "nvim", mode: .allow),
+      .init(name: "nvim", mode: .deny),
+    ]
+    XCTAssertEqual(config.clipboardProcessRule(for: "nvim"), .allow)
+    XCTAssertNil(config.clipboardProcessRule(for: "zsh"))
+  }
+
+  func test_settingClipboardProcessRule_upserts() {
+    let base = MisttyConfig()
+    let added = base.settingClipboardProcessRule(name: "nvim", mode: .allow)
+    XCTAssertEqual(added.clipboardProcessRules, [.init(name: "nvim", mode: .allow)])
+    let replaced = added.settingClipboardProcessRule(name: "nvim", mode: .deny)
+    XCTAssertEqual(replaced.clipboardProcessRules, [.init(name: "nvim", mode: .deny)])
+  }
+
+  func test_clipboardProcessRules_roundTrip() throws {
+    var config = MisttyConfig()
+    config.clipboardProcessRules = [
+      .init(name: "nvim", mode: .allow),
+      .init(name: "sketchytui", mode: .deny),
+    ]
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("mistty-cliprules-\(UUID().uuidString).toml")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try config.save(to: tmp)
+    XCTAssertEqual(try MisttyConfig.loadThrowing(from: tmp).clipboardProcessRules,
+                   config.clipboardProcessRules)
+  }
+
   func test_save_notifications_roundTrip_explicitTrue() throws {
     var config = MisttyConfig()
     config.notifications = NotificationsConfig(enabled: true, explicitlyEnabled: true)

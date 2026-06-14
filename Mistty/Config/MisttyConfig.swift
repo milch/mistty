@@ -12,6 +12,13 @@ enum ClipboardReadMode: String, Sendable, Equatable {
   case deny
 }
 
+/// A per-process override for OSC-52 clipboard reads, keyed on the local
+/// foreground executable basename (e.g. "nvim"). Mirrors `SSHHostOverride`.
+struct ClipboardProcessRule: Sendable, Equatable {
+  var name: String
+  var mode: ClipboardReadMode
+}
+
 struct SSHHostOverride: Sendable, Equatable {
   var hostname: String?
   var regex: String?
@@ -218,6 +225,10 @@ struct MisttyConfig: Sendable, Equatable {
   /// overrides take precedence. Does NOT affect Cmd+V paste.
   var clipboardRead: ClipboardReadMode = .prompt
 
+  /// Per-process OSC-52 read overrides, first exact-name match wins. Written
+  /// by the permission prompt's "always" choices; hand-editable.
+  var clipboardProcessRules: [ClipboardProcessRule] = []
+
   /// Multiplier applied to precision (trackpad / Magic Mouse) scroll deltas
   /// before they reach libghostty. 1.0 = raw macOS deltas (too fast in
   /// practice); 2.0 matches ghostty's own AppKit default feel. Mouse-wheel
@@ -231,6 +242,24 @@ struct MisttyConfig: Sendable, Equatable {
   var resolvedFontFamily: String { fontFamily ?? Self.defaultFontFamily }
   var resolvedCursorStyle: String { cursorStyle ?? Self.defaultCursorStyle }
   var resolvedScrollbackLines: Int { scrollbackLines ?? Self.defaultScrollbackLines }
+
+  /// The per-process rule mode for `executable`, or nil if none matches.
+  /// First exact-name match wins (mirrors `SSHConfig.resolveCommand`).
+  func clipboardProcessRule(for executable: String) -> ClipboardReadMode? {
+    clipboardProcessRules.first { $0.name == executable }?.mode
+  }
+
+  /// A copy with the rule for `name` upserted (replace existing by name,
+  /// else append). Used to persist an "always" prompt choice.
+  func settingClipboardProcessRule(name: String, mode: ClipboardReadMode) -> MisttyConfig {
+    var copy = self
+    if let idx = copy.clipboardProcessRules.firstIndex(where: { $0.name == name }) {
+      copy.clipboardProcessRules[idx].mode = mode
+    } else {
+      copy.clipboardProcessRules.append(ClipboardProcessRule(name: name, mode: mode))
+    }
+    return copy
+  }
 
   /// Rendered ghostty config lines assembled via the shared resolver.
   /// Top-level font/cursor first, then `[ghostty]` passthrough, then
@@ -323,6 +352,18 @@ struct MisttyConfig: Sendable, Equatable {
           default: break
           }
         }
+      }
+    }
+    if let clipboard = table["clipboard"]?.table,
+      let processArray = clipboard["process"]?.array
+    {
+      config.clipboardProcessRules = processArray.compactMap { entry -> ClipboardProcessRule? in
+        guard let t = entry.table,
+          let name = t["name"]?.string,
+          let modeStr = t["allow_clipboard_read"]?.string,
+          let mode = ClipboardReadMode(rawValue: modeStr)
+        else { return nil }
+        return ClipboardProcessRule(name: name, mode: mode)
       }
     }
     if let uiTable = table["ui"]?.table {
@@ -560,6 +601,14 @@ struct MisttyConfig: Sendable, Equatable {
           lines.append("regex = \"\(tomlEscape(regex))\"")
         }
         lines.append("command = \"\(tomlEscape(host.command))\"")
+      }
+    }
+    if !clipboardProcessRules.isEmpty {
+      for rule in clipboardProcessRules {
+        lines.append("")
+        lines.append("[[clipboard.process]]")
+        lines.append("name = \"\(tomlEscape(rule.name))\"")
+        lines.append("allow_clipboard_read = \"\(rule.mode.rawValue)\"")
       }
     }
     if copyModeScrolloff != 0 {
