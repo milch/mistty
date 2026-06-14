@@ -150,7 +150,10 @@ final class WindowsStore {
     // Tear down all surfaces now that the snapshot has been captured —
     // snapshotLayout's foreground-process probe reads the live pty, so
     // this must stay AFTER the WindowSnapshot construction above.
-    for session in state.sessions { session.releaseAllResources() }
+    for session in state.sessions {
+      session.releaseAllResources()
+      ClipboardPermissionCoordinator.shared.clearSession(session.id)
+    }
   }
 
   /// Pop the most recently closed window and queue it for restore.

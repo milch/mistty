@@ -219,22 +219,13 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
     let requestState = ClipboardRequestState(pointer: state)
     let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
     Task { @MainActor in
+      // `decide` resolves the pane, decides (possibly via a sheet), and completes
+      // the request — re-fetching a *live* surface at completion time, since a
+      // deferred prompt may outlive the pane (it guards `view.surface` and
+      // abandons if torn down rather than risk a use-after-free).
       let view = unmanagedView.takeRetainedValue()
-      // Re-fetch a *live* surface: the original may have been freed during the
-      // hop. Completing against a freed surface would be a use-after-free, so we
-      // abandon the request instead. NOTE: libghostty does NOT reclaim the
-      // request allocation on surface free — only completeClipboardRequest frees
-      // it — so this abandon path leaks one small request struct. Bounded and
-      // rare (only when a pane is torn down mid OSC-52 read); it never leaks the
-      // clipboard or wedges the requesting program.
-      guard let liveSurface = view.surface else { return }
-      guard let paneID = view.pane?.id else {
-        // Live surface but no pane → deny rather than leak silently.
-        ghostty_surface_complete_clipboard_request(liveSurface, "", requestState.pointer, true)
-        return
-      }
       ClipboardPermissionCoordinator.shared.decide(
-        paneID: paneID, surface: liveSurface, state: requestState.pointer, content: content)
+        view: view, state: requestState.pointer, content: content)
     }
   }
 }

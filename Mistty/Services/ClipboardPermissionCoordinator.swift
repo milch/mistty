@@ -111,13 +111,16 @@ final class ClipboardPermissionCoordinator {
 
   /// Decide an OSC-52 read request and complete it. Called on the main actor
   /// from the clipboard callback. `content` is the clipboard text already read
-  /// by libghostty; `state`/`surface` belong to the open request.
+  /// by libghostty; `state` belongs to the open request. The `view` is held
+  /// (not the raw surface) so completion can re-fetch a *live* surface — a
+  /// deferred prompt may outlive the pane.
   func decide(
-    paneID: Int, surface: ghostty_surface_t,
-    state: UnsafeMutableRawPointer, content: String
+    view: TerminalSurfaceView, state: UnsafeMutableRawPointer, content: String
   ) {
-    guard let resolved = windowsStore?.pane(byId: paneID) else {
-      complete(surface: surface, state: state, allow: false, content: content)
+    guard let paneID = view.pane?.id,
+      let resolved = windowsStore?.pane(byId: paneID)
+    else {
+      complete(view: view, state: state, allow: false, content: content)
       return
     }
     let executable = ForegroundProcessResolver.current(for: resolved.pane)?.executable
@@ -128,31 +131,38 @@ final class ClipboardPermissionCoordinator {
       forExecutable: executable, sessionID: sessionID, config: MisttyConfig.current)
     {
     case .allow:
-      complete(surface: surface, state: state, allow: true, content: content)
+      complete(view: view, state: state, allow: true, content: content)
     case .deny:
-      complete(surface: surface, state: state, allow: false, content: content)
+      complete(view: view, state: state, allow: false, content: content)
     case .prompt:
       let window = windowsStore?.trackedNSWindow(byId: resolved.window.id)?.window
       guard let window else {
         // No visible window to host the sheet → never leak silently.
-        complete(surface: surface, state: state, allow: false, content: content)
+        complete(view: view, state: state, allow: false, content: content)
         return
       }
       presentPrompt(executable: executable, on: window) { [weak self] choice in
         guard let self else { return }
         let result = self.applyChoice(choice, executable: executable, sessionID: sessionID)
         if let rule = result.persist { self.persist(rule) }
-        self.complete(
-          surface: surface, state: state, allow: result.allowed, content: content)
+        self.complete(view: view, state: state, allow: result.allowed, content: content)
       }
     }
   }
 
+  /// Complete the request, re-fetching the surface NOW. A deferred prompt can
+  /// outlive the pane: `tearDownSurface` frees and nils `view.surface`, and it
+  /// can run (e.g. via IPC `closeSession`) while a window-modal sheet is open.
+  /// Completing against a freed surface would be a use-after-free, so re-check
+  /// liveness here and abandon if it's gone. (libghostty doesn't reclaim the
+  /// request allocation on surface free — a bounded, documented leak; see the
+  /// callback in GhosttyApp.) Empty completion = deny; both free the request
+  /// state in the core.
   private func complete(
-    surface: ghostty_surface_t, state: UnsafeMutableRawPointer,
+    view: TerminalSurfaceView, state: UnsafeMutableRawPointer,
     allow: Bool, content: String
   ) {
-    // Empty completion = deny; both free the request's state in the core.
+    guard let surface = view.surface else { return }
     (allow ? content : "").withCString { ptr in
       ghostty_surface_complete_clipboard_request(surface, ptr, state, true)
     }
