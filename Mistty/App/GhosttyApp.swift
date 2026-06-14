@@ -178,15 +178,26 @@ private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = {
   return true
 }
 
+/// Carries the raw OSC-52 clipboard-request `state` pointer across the
+/// main-actor hop. `UnsafeMutableRawPointer` isn't `Sendable`, but this is
+/// safe: ghostty keeps the request alive until we complete it, and we only
+/// dereference it (via `ghostty_surface_complete_clipboard_request`) on the
+/// main actor.
+private struct ClipboardRequestState: @unchecked Sendable {
+  let pointer: UnsafeMutableRawPointer
+}
+
 /// Clipboard confirm-read callback — ghostty routes a clipboard read here
 /// when it needs confirmation: unsafe paste contents, or any OSC-52 read
 /// (the default `clipboard-read = ask`). Cmd+V pastes are user-initiated,
 /// so they auto-confirm (no prompt UI yet). OSC-52 reads are
 /// program-initiated: auto-confirming them hands the user's clipboard
 /// (passwords, tokens) to whatever runs in the pane, silently — so they are
-/// denied by default, and allowed only when the user opts in via
-/// `allow_clipboard_read = true`. Denial completes the request with an empty
-/// string + confirmed=true, matching ghostty's own cancel path
+/// routed to `ClipboardPermissionCoordinator`, which decides per foreground
+/// process using the global `allow_clipboard_read` policy plus any per-process
+/// rules/session overrides (prompting the user when the policy is `prompt`).
+/// Denial completes the request with an empty string + confirmed=true,
+/// matching ghostty's own cancel path
 /// (BaseTerminalController.clipboardConfirmationComplete), which frees the
 /// core's request state.
 private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard_cb = {
@@ -198,11 +209,32 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
   case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
     ghostty_surface_complete_clipboard_request(surface, str, state, true)
   default:
-    // Temporary: full per-process routing lands in Task 6.
-    if MisttyConfig.current.clipboardRead == .allow {
-      ghostty_surface_complete_clipboard_request(surface, str, state, true)
-    } else {
-      ghostty_surface_complete_clipboard_request(surface, "", state, true)
+    // OSC-52 read: resolve + decide on the main actor (may show a sheet). Copy
+    // the content now (the C string is only valid for this callback) and retain
+    // the view across the hop. We must NOT touch @MainActor view state (e.g.
+    // `view.pane`, an NSView member) at this nonisolated top level — doing so
+    // would make the whole @convention(c) closure main-actor-isolated, which the
+    // C function type forbids — so pane/surface are resolved inside the hop.
+    let content = String(cString: str)
+    let requestState = ClipboardRequestState(pointer: state)
+    let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
+    Task { @MainActor in
+      let view = unmanagedView.takeRetainedValue()
+      // Re-fetch a *live* surface: the original may have been freed during the
+      // hop. Completing against a freed surface would be a use-after-free, so we
+      // abandon the request instead. NOTE: libghostty does NOT reclaim the
+      // request allocation on surface free — only completeClipboardRequest frees
+      // it — so this abandon path leaks one small request struct. Bounded and
+      // rare (only when a pane is torn down mid OSC-52 read); it never leaks the
+      // clipboard or wedges the requesting program.
+      guard let liveSurface = view.surface else { return }
+      guard let paneID = view.pane?.id else {
+        // Live surface but no pane → deny rather than leak silently.
+        ghostty_surface_complete_clipboard_request(liveSurface, "", requestState.pointer, true)
+        return
+      }
+      ClipboardPermissionCoordinator.shared.decide(
+        paneID: paneID, surface: liveSurface, state: requestState.pointer, content: content)
     }
   }
 }

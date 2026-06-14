@@ -51,6 +51,7 @@ final class WindowState {
     sessions.removeAll { $0.id == session.id }
     if activeSession?.id == session.id { activeSession = sessions.last }
     session.releaseAllResources()
+    ClipboardPermissionCoordinator.shared.clearSession(session.id)
   }
 
   /// Append a fully-constructed `MisttySession` during restore. Bypasses

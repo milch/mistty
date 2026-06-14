@@ -41,6 +41,7 @@ struct MisttyApp: App {
     appDelegate.windowsStore = _windowsStore.wrappedValue
     appDelegate.observer = StateRestorationObserver(windowsStore: _windowsStore.wrappedValue)
     NotificationService.shared.start(windowsStore: _windowsStore.wrappedValue)
+    ClipboardPermissionCoordinator.shared.start(windowsStore: _windowsStore.wrappedValue)
   }
 
   private static func registerBundledFonts() {
