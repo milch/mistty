@@ -106,4 +106,85 @@ final class ClipboardPermissionCoordinator {
     }
     NotificationCenter.default.post(name: .misttyConfigDidReload, object: nil)
   }
+
+  // MARK: - libghostty entry
+
+  /// Decide an OSC-52 read request and complete it. Called on the main actor
+  /// from the clipboard callback. `content` is the clipboard text already read
+  /// by libghostty; `state`/`surface` belong to the open request.
+  func decide(
+    paneID: Int, surface: ghostty_surface_t,
+    state: UnsafeMutableRawPointer, content: String
+  ) {
+    guard let resolved = windowsStore?.pane(byId: paneID) else {
+      complete(surface: surface, state: state, allow: false, content: content)
+      return
+    }
+    let executable = ForegroundProcessResolver.current(for: resolved.pane)?.executable
+      ?? "(unknown)"
+    let sessionID = resolved.session.id
+
+    switch decision(
+      forExecutable: executable, sessionID: sessionID, config: MisttyConfig.current)
+    {
+    case .allow:
+      complete(surface: surface, state: state, allow: true, content: content)
+    case .deny:
+      complete(surface: surface, state: state, allow: false, content: content)
+    case .prompt:
+      let window = windowsStore?.trackedNSWindow(byId: resolved.window.id)?.window
+      guard let window else {
+        // No visible window to host the sheet → never leak silently.
+        complete(surface: surface, state: state, allow: false, content: content)
+        return
+      }
+      presentPrompt(executable: executable, on: window) { [weak self] choice in
+        guard let self else { return }
+        let result = self.applyChoice(choice, executable: executable, sessionID: sessionID)
+        if let rule = result.persist { self.persist(rule) }
+        self.complete(
+          surface: surface, state: state, allow: result.allowed, content: content)
+      }
+    }
+  }
+
+  private func complete(
+    surface: ghostty_surface_t, state: UnsafeMutableRawPointer,
+    allow: Bool, content: String
+  ) {
+    // Empty completion = deny; both free the request's state in the core.
+    (allow ? content : "").withCString { ptr in
+      ghostty_surface_complete_clipboard_request(surface, ptr, state, true)
+    }
+  }
+
+  private func presentPrompt(
+    executable: String, on window: NSWindow, completion: @escaping (Choice) -> Void
+  ) {
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = "Allow “\(executable)” to read your clipboard?"
+    alert.informativeText =
+      "A program running in this pane is requesting your clipboard contents via OSC-52."
+    // Order matters: first button is the default (rightmost / Return).
+    alert.addButton(withTitle: "Deny Once")        // index 1000 (.alertFirstButtonReturn)
+    alert.addButton(withTitle: "Allow Once")        // 1001
+    alert.addButton(withTitle: "Allow in This Session")  // 1002
+    alert.addButton(withTitle: "Allow Always")      // 1003
+    alert.addButton(withTitle: "Deny Always")       // 1004
+    alert.beginSheetModal(for: window) { response in
+      MainActor.assumeIsolated {
+        let choice: Choice
+        switch response {
+        case .alertFirstButtonReturn: choice = .denyOnce
+        case NSApplication.ModalResponse(rawValue: 1001): choice = .allowOnce
+        case NSApplication.ModalResponse(rawValue: 1002): choice = .allowSession
+        case NSApplication.ModalResponse(rawValue: 1003): choice = .allowAlways
+        case NSApplication.ModalResponse(rawValue: 1004): choice = .denyAlways
+        default: choice = .denyOnce
+        }
+        completion(choice)
+      }
+    }
+  }
 }
