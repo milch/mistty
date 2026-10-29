@@ -7,7 +7,7 @@ import SwiftUI
 @main
 struct MisttyApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-  @State private var windowsStore = WindowsStore()
+  @State private var windowsStore: WindowsStore
   /// Resolves window-scoped commands to the single focused terminal window
   /// and bridges the legacy mistty* notifications into typed dispatches.
   /// Created in `init()` once `windowsStore` exists.
@@ -19,12 +19,12 @@ struct MisttyApp: App {
   @State private var configStore = ConfigStore()
 
   init() {
-    // Initialize the router first: it has no default value, and Swift won't
-    // let `init` touch `self` (e.g. read `config`) until every stored
-    // property is set. `_windowsStore`'s wrappedValue is the
-    // property-initializer default, available before `init` runs.
-    _commandRouter = State(
-      initialValue: WindowCommandRouter(windowsStore: _windowsStore.wrappedValue))
+    // Create both State wrappers from one local store first: the router has
+    // no default value and needs the store, and Swift won't let `init` touch
+    // `self` (e.g. read `config`) until every stored property is set.
+    let store = WindowsStore()
+    _windowsStore = State(initialValue: store)
+    _commandRouter = State(initialValue: WindowCommandRouter(windowsStore: store))
 
     // Opt in to AppKit state restoration by default. Without this, macOS 14+
     // defaults to clearing saved state on quit (the OS-level "Close windows
