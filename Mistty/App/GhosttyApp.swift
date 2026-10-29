@@ -161,61 +161,77 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
 }
 
 /// Clipboard read callback — libghostty invokes this for `paste_from_clipboard`
-/// (default Cmd+V) and for OSC-52 reads issued from inside the terminal. We
-/// hand the pasteboard contents back via `ghostty_surface_complete_clipboard_request`;
-/// if ghostty decides the paste is unsafe it'll route back through
-/// `confirm_read_clipboard_cb` with the same `state` pointer.
+/// (default Cmd+V), OSC-52 reads, and kitty OSC-5522 reads/listings, passing
+/// the MIME types it wants served (text-like types arrive as `text/plain`)
+/// and whether to include the available-types listing. We only serve the
+/// pasteboard's plain text. A non-`STARTED` result leaves no request open
+/// (the core answers the program itself). Otherwise we complete with
+/// confirmed=false; if ghostty needs confirmation (unsafe paste, or
+/// `clipboard-read = ask`) it routes the same `state` back through
+/// `confirm_read_clipboard_cb` synchronously, before the completion returns.
 private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = {
-  userdata, clipboard, state in
-  guard let userdata, let state else { return false }
-  let pasteboard = NSPasteboard.general
-  guard let str = pasteboard.string(forType: .string), !str.isEmpty else { return false }
+  userdata, location, state, mimes, mimesLen, list in
+  guard let userdata, let state else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
   let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
-  guard let surface = view.surface else { return false }
-  str.withCString { ptr in
-    ghostty_surface_complete_clipboard_request(surface, ptr, state, false)
-  }
-  return true
+  guard let surface = view.surface else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
+  guard
+    let payload = GhosttyClipboard.payload(
+      requested: GhosttyClipboard.strings(mimes, count: mimesLen),
+      list: list,
+      pasteboardText: NSPasteboard.general.string(forType: .string))
+  else { return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE }
+  GhosttyClipboard.complete(surface, payload: payload, state: state, confirmed: false)
+  return GHOSTTY_CLIPBOARD_READ_STARTED
 }
 
-/// Carries the raw OSC-52 clipboard-request `state` pointer across the
-/// main-actor hop. `UnsafeMutableRawPointer` isn't `Sendable`, but this is
-/// safe: ghostty keeps the request alive until we complete it, and we only
-/// dereference it (via `ghostty_surface_complete_clipboard_request`) on the
-/// main actor.
+/// Carries the raw clipboard-request `state` pointer across the main-actor
+/// hop. `UnsafeMutableRawPointer` isn't `Sendable`, but this is safe: ghostty
+/// keeps the request alive until we complete or deny it, and we only hand it
+/// back (via `ghostty_surface_complete_clipboard_request` /
+/// `ghostty_surface_deny_clipboard_request`) on the main actor.
 private struct ClipboardRequestState: @unchecked Sendable {
   let pointer: UnsafeMutableRawPointer
 }
 
-/// Clipboard confirm-read callback — ghostty routes a clipboard read here
-/// when it needs confirmation: unsafe paste contents, or any OSC-52 read
-/// (the default `clipboard-read = ask`). Cmd+V pastes are user-initiated,
-/// so they auto-confirm (no prompt UI yet). OSC-52 reads are
-/// program-initiated: auto-confirming them hands the user's clipboard
+/// Clipboard confirm-read callback — ghostty routes a clipboard request here
+/// when it needs confirmation: unsafe paste contents, or any OSC-52 / kitty
+/// OSC-5522 read (the default `clipboard-read = ask`). `confirm` carries the
+/// would-be completion (contents + available listing), borrowed only for this
+/// call, so it's copied into a `ClipboardPayload` before any hop. Cmd+V pastes
+/// are user-initiated, so they auto-confirm (no prompt UI yet). Program reads
+/// are program-initiated: auto-confirming them hands the user's clipboard
 /// (passwords, tokens) to whatever runs in the pane, silently — so they are
 /// routed to `ClipboardPermissionCoordinator`, which decides per foreground
 /// process using the global `allow_clipboard_read` policy plus any per-process
 /// rules/session overrides (prompting the user when the policy is `prompt`).
-/// Denial completes the request with an empty string + confirmed=true,
-/// matching ghostty's own cancel path
-/// (BaseTerminalController.clipboardConfirmationComplete), which frees the
-/// core's request state.
+/// Each request ends in exactly one of `ghostty_surface_complete_clipboard_request`
+/// (confirmed=true) or `ghostty_surface_deny_clipboard_request` — unless the
+/// surface is torn down first, in which case it's abandoned (see
+/// `ClipboardPermissionCoordinator.complete`). Denial frees the core's request
+/// state and sends the protocol's denial reply, so the program doesn't hang.
 private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard_cb = {
-  userdata, str, state, request in
-  guard let userdata, let state, let str else { return }
+  userdata, confirm, state, request in
+  guard let userdata, let state else { return }
   let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
   guard let surface = view.surface else { return }
+  guard let confirm else {
+    ghostty_surface_deny_clipboard_request(surface, state)
+    return
+  }
+  let c = confirm.pointee
+  let payload = ClipboardPayload(
+    contents: GhosttyClipboard.contents(c.contents, count: c.contents_len),
+    available: GhosttyClipboard.strings(c.available, count: c.available_len))
   switch request {
   case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
-    ghostty_surface_complete_clipboard_request(surface, str, state, true)
+    GhosttyClipboard.complete(surface, payload: payload, state: state, confirmed: true)
   default:
-    // OSC-52 read: resolve + decide on the main actor (may show a sheet). Copy
-    // the content now (the C string is only valid for this callback) and retain
-    // the view across the hop. We must NOT touch @MainActor view state (e.g.
-    // `view.pane`, an NSView member) at this nonisolated top level — doing so
-    // would make the whole @convention(c) closure main-actor-isolated, which the
-    // C function type forbids — so pane/surface are resolved inside the hop.
-    let content = String(cString: str)
+    // Program read: resolve + decide on the main actor (may show a sheet). The
+    // payload was copied above and the view is retained across the hop. We
+    // must NOT touch @MainActor view state (e.g. `view.pane`, an NSView member)
+    // at this nonisolated top level — doing so would make the whole
+    // @convention(c) closure main-actor-isolated, which the C function type
+    // forbids — so pane/surface are resolved inside the hop.
     let requestState = ClipboardRequestState(pointer: state)
     // Resolve the foreground process NOW, synchronously, while the read is
     // firing — NOT after the main-actor hop. Shell integrations (e.g. atuin)
@@ -234,20 +250,21 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
       // abandons if torn down rather than risk a use-after-free).
       let view = unmanagedView.takeRetainedValue()
       ClipboardPermissionCoordinator.shared.decide(
-        view: view, executable: executable, state: requestState.pointer, content: content)
+        view: view, executable: executable, state: requestState.pointer, payload: payload)
     }
   }
 }
 
-/// Clipboard write callback.
+/// Clipboard write callback. Writes the `text/plain` representation (the data
+/// is length-delimited, not NUL-terminated); other representations are
+/// ignored.
 private let writeClipboardCallback: ghostty_runtime_write_clipboard_cb = {
-  userdata, clipboard, content, count, confirm in
-  guard let content, count > 0 else { return }
+  userdata, location, content, count, confirm in
+  guard let text = GhosttyClipboard.text(in: GhosttyClipboard.contents(content, count: count))
+  else { return }
   let pasteboard = NSPasteboard.general
   pasteboard.clearContents()
-  if let data = content.pointee.data {
-    pasteboard.setString(String(cString: data), forType: .string)
-  }
+  pasteboard.setString(text, forType: .string)
 }
 
 /// Close surface callback — shell exited. Retain the view across the

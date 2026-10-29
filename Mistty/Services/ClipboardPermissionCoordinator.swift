@@ -1,11 +1,12 @@
 import AppKit
 import GhosttyKit
 
-/// Owns OSC-52 clipboard-read permission decisions: in-memory session
-/// overrides, resolution against config + the pure `ClipboardPermission` core,
-/// the prompt sheet, and persistence of "always" choices. Reachable from the
-/// libghostty callback via `.shared`, configured with the WindowsStore at app
-/// start (same pattern as NotificationService.shared.start).
+/// Owns OSC-52 / kitty OSC-5522 clipboard-read permission decisions:
+/// in-memory session overrides, resolution against config + the pure
+/// `ClipboardPermission` core, the prompt sheet, and persistence of "always"
+/// choices. Reachable from the libghostty callback via `.shared`, configured
+/// with the WindowsStore at app start (same pattern as
+/// NotificationService.shared.start).
 @MainActor
 final class ClipboardPermissionCoordinator {
   static let shared = ClipboardPermissionCoordinator()
@@ -109,22 +110,23 @@ final class ClipboardPermissionCoordinator {
 
   // MARK: - libghostty entry
 
-  /// Decide an OSC-52 read request and complete it. Called on the main actor
-  /// from the clipboard callback. `executable` is the foreground process name
-  /// resolved *synchronously* by the caller at read time (nil = plain shell
-  /// prompt → keyed as "(unknown)"); resolving it post-hop would mis-attribute
-  /// the read to shell-integration helpers. `content` is the clipboard text
-  /// already read by libghostty; `state` belongs to the open request. The
-  /// `view` is held (not the raw surface) so completion can re-fetch a *live*
-  /// surface — a deferred prompt may outlive the pane.
+  /// Decide a program-initiated clipboard read (OSC-52 or kitty OSC-5522) and
+  /// complete or deny it. Called on the main actor from the clipboard callback.
+  /// `executable` is the foreground process name resolved *synchronously* by
+  /// the caller at read time (nil = plain shell prompt → keyed as "(unknown)");
+  /// resolving it post-hop would mis-attribute the read to shell-integration
+  /// helpers. `payload` is the would-be completion libghostty handed to the
+  /// confirm callback, copied before the hop; `state` belongs to the open
+  /// request. The `view` is held (not the raw surface) so completion can
+  /// re-fetch a *live* surface — a deferred prompt may outlive the pane.
   func decide(
     view: TerminalSurfaceView, executable: String?,
-    state: UnsafeMutableRawPointer, content: String
+    state: UnsafeMutableRawPointer, payload: ClipboardPayload
   ) {
     guard let paneID = view.pane?.id,
       let resolved = windowsStore?.pane(byId: paneID)
     else {
-      complete(view: view, state: state, allow: false, content: content)
+      complete(view: view, state: state, allow: false, payload: payload)
       return
     }
     let executable = executable ?? "(unknown)"
@@ -134,21 +136,21 @@ final class ClipboardPermissionCoordinator {
       forExecutable: executable, sessionID: sessionID, config: MisttyConfig.current)
     {
     case .allow:
-      complete(view: view, state: state, allow: true, content: content)
+      complete(view: view, state: state, allow: true, payload: payload)
     case .deny:
-      complete(view: view, state: state, allow: false, content: content)
+      complete(view: view, state: state, allow: false, payload: payload)
     case .prompt:
       let window = windowsStore?.trackedNSWindow(byId: resolved.window.id)?.window
       guard let window else {
         // No visible window to host the sheet → never leak silently.
-        complete(view: view, state: state, allow: false, content: content)
+        complete(view: view, state: state, allow: false, payload: payload)
         return
       }
       presentPrompt(executable: executable, on: window) { [weak self] choice in
         guard let self else { return }
         let result = self.applyChoice(choice, executable: executable, sessionID: sessionID)
         if let rule = result.persist { self.persist(rule) }
-        self.complete(view: view, state: state, allow: result.allowed, content: content)
+        self.complete(view: view, state: state, allow: result.allowed, payload: payload)
       }
     }
   }
@@ -159,15 +161,18 @@ final class ClipboardPermissionCoordinator {
   /// Completing against a freed surface would be a use-after-free, so re-check
   /// liveness here and abandon if it's gone. (libghostty doesn't reclaim the
   /// request allocation on surface free — a bounded, documented leak; see the
-  /// callback in GhosttyApp.) Empty completion = deny; both free the request
-  /// state in the core.
+  /// callback in GhosttyApp.) Allow completes with the confirmed payload; deny
+  /// goes through `ghostty_surface_deny_clipboard_request`, which sends the
+  /// protocol's denial reply. Both free the request state in the core.
   private func complete(
     view: TerminalSurfaceView, state: UnsafeMutableRawPointer,
-    allow: Bool, content: String
+    allow: Bool, payload: ClipboardPayload
   ) {
     guard let surface = view.surface else { return }
-    (allow ? content : "").withCString { ptr in
-      ghostty_surface_complete_clipboard_request(surface, ptr, state, true)
+    if allow {
+      GhosttyClipboard.complete(surface, payload: payload, state: state, confirmed: true)
+    } else {
+      ghostty_surface_deny_clipboard_request(surface, state)
     }
   }
 
@@ -178,7 +183,7 @@ final class ClipboardPermissionCoordinator {
     alert.alertStyle = .warning
     alert.messageText = "Allow “\(executable)” to read your clipboard?"
     alert.informativeText =
-      "A program running in this pane is requesting your clipboard contents via OSC-52."
+      "A program running in this pane is requesting your clipboard contents."
     // Order matters: first button is the default (rightmost / Return).
     alert.addButton(withTitle: "Deny Once")        // index 1000 (.alertFirstButtonReturn)
     alert.addButton(withTitle: "Allow Once")        // 1001
