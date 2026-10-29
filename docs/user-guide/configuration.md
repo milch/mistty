@@ -34,6 +34,8 @@ Some settings are passed straight through from Mistty to the Ghostty rendering l
 | `zoxide_path`       | string | _(auto-detected)_         | Absolute path to the `zoxide` binary. Skips Mistty's probe of common install locations. Leading `~` is expanded.                                                                                    |
 | `debug_logging`     | bool   | `false`                   | Write diagnostic logs to `~/Library/Logs/Mistty/mistty-debug.log`. For troubleshooting only — small per-write overhead.                                                                             |
 
+A `scrollback-limit-bytes` set in `~/.config/mistty/ghostty.conf` still applies alongside `scrollback_lines`; whichever limit is reached first wins.
+
 ## `[ssh]`
 
 Controls how the [session manager](getting-started.md#the-session-manager) opens SSH hosts.

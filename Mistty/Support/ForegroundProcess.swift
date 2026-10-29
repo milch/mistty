@@ -152,8 +152,9 @@ enum ForegroundProcessResolver {
     listPids(type: UInt32(PROC_PPID_ONLY), info: UInt32(parent))
   }
 
-  /// All pids that belong to the given process group. Used by the
-  /// foreground-detection primary path.
+  /// All pids that belong to the given process group. Backs the production
+  /// probes' `pidsInPgroup`, which `current(via:)` uses to enumerate the
+  /// foreground pgroup.
   static func pidsInPgroup(_ pgid: pid_t) -> [pid_t] {
     listPids(type: UInt32(PROC_PGRP_ONLY), info: UInt32(pgid))
   }

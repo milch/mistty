@@ -24,7 +24,7 @@ cursor_style = "block"
 # Scrollback buffer size, in lines. Forwarded to ghostty as
 # `scrollback-limit-lines`; 0 disables scrollback. Leave unset to use
 # ghostty's default (50 MB, no line cap).
-scrollback_lines = 10000
+# scrollback_lines = 10000
 
 # Show the session sidebar on launch.
 # Toggle at runtime with cmd+s.

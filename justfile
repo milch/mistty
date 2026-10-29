@@ -434,6 +434,7 @@ patch-ghostty:
     shopt -s nullglob
     patches=("$PWD"/patches/ghostty/*.patch)
     tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+    root=$PWD
     cd vendor/ghostty
     # Build the tree the series should produce in a scratch index, so a patch
     # that no longer applies fails here without touching the checkout.
@@ -441,6 +442,11 @@ patch-ghostty:
       for p in "${patches[@]}"; do
         git apply --cached "$p" || {
           echo "error: $(basename "$p") does not apply to vendor/ghostty@$(git rev-parse --short HEAD) — rebase it" >&2
+          head=$(git rev-parse HEAD)
+          pinned=$(git -C "$root" ls-tree HEAD vendor/ghostty | awk '{print $3}') || pinned=
+          if [ -n "$pinned" ] && [ "$pinned" != "$head" ]; then
+            echo "hint: vendor/ghostty is at $(git rev-parse --short "$head") but this checkout expects $(git rev-parse --short "$pinned"); run: git -C vendor/ghostty checkout -- . && git submodule update vendor/ghostty" >&2
+          fi
           exit 1
         }
       done
