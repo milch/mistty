@@ -853,6 +853,7 @@ enum CopyModeYank {
   ) -> (top: (row: Int, col: Int), bottom: (row: Int, col: Int)) {
     let aFirst = anchor.row < cursor.row
       || (anchor.row == cursor.row && anchor.col <= cursor.col)
-    return aFirst ? (anchor, cursor) : (cursor, anchor)
+    if aFirst { return (top: anchor, bottom: cursor) }
+    return (top: cursor, bottom: anchor)
   }
 }
