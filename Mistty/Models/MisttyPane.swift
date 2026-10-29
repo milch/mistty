@@ -45,18 +45,10 @@ final class MisttyPane: Identifiable {
   var copyModeState: CopyModeState?
   var isCopyModeActive: Bool { copyModeState != nil }
 
-  /// Process ID of the shell (or the command passed via `cfg.command`) that
-  /// libghostty spawned for this pane. `-1` when the surface hasn't started
-  /// yet, has exited, or libghostty wasn't built with the shell-PID patch.
-  /// Reads without forcing surface allocation.
-  var shellPID: pid_t {
-    surfaceViewIfLoaded?.shellPID ?? -1
-  }
-
-  /// Master fd of the pty pair. Use with `tcgetpgrp()` to resolve the
-  /// foreground process group on the tty. `-1` when unavailable.
-  var ptyFD: Int32 {
-    surfaceViewIfLoaded?.ptyFD ?? -1
+  /// Foreground process group of the pane's tty. `-1` when the surface hasn't
+  /// started yet or has exited. Reads without forcing surface allocation.
+  var foregroundPgid: pid_t {
+    surfaceViewIfLoaded?.foregroundPgid ?? -1
   }
 
   var isRunningNeovim: Bool {

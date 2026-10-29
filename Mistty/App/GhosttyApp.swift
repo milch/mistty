@@ -224,8 +224,7 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
     // them. `surface` is valid for this callback's duration. nil = a plain
     // shell prompt (no specific program to name).
     let executable = ForegroundProcessResolver.current(
-      ptyFD: Int32(ghostty_surface_pty_fd(surface)),
-      shellPID: pid_t(ghostty_surface_command_pid(surface))
+      foregroundPgid: TerminalSurfaceView.foregroundPgid(of: surface)
     )?.executable
     let unmanagedView = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).retain()
     Task { @MainActor in

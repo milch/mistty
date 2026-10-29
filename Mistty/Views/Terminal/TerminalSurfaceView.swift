@@ -10,21 +10,20 @@ final class TerminalSurfaceView: NSView {
 
   nonisolated(unsafe) private(set) var surface: ghostty_surface_t?
 
-  /// Shell / command child PID from libghostty. `-1` when unavailable.
+  /// Foreground process group of the surface's tty. `-1` when unavailable.
   /// Must be read on the main actor — `surface` is mutated during ghostty
   /// lifecycle callbacks but all Mistty-side consumers are SwiftUI/AppKit.
   @MainActor
-  var shellPID: pid_t {
+  var foregroundPgid: pid_t {
     guard let surface else { return -1 }
-    return pid_t(ghostty_surface_command_pid(surface))
+    return Self.foregroundPgid(of: surface)
   }
 
-  /// Master fd of the pty pair. `-1` when unavailable. Main-actor only; see
-  /// `shellPID`.
-  @MainActor
-  var ptyFD: Int32 {
-    guard let surface else { return -1 }
-    return Int32(ghostty_surface_pty_fd(surface))
+  /// Callable from a libghostty C callback, where `surface` is valid for the
+  /// callback's duration. `-1` when unavailable.
+  nonisolated static func foregroundPgid(of surface: ghostty_surface_t) -> pid_t {
+    let fd = ghostty_surface_pty_fd(surface)
+    return fd >= 0 ? tcgetpgrp(fd) : -1
   }
 
   /// Read a text range from the surface. The ONLY sanctioned way to read

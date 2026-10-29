@@ -11,12 +11,9 @@ struct ForegroundProcess: Equatable {
 /// Injectable probe so tests can drive the resolver without a real pane.
 /// Every closure returns `-1` / `nil` / `[]` for the "unavailable" case.
 struct ForegroundProcessProbe {
-  var ptyFD: () -> Int32
-  var shellPID: () -> pid_t
-  var tcgetpgrpOnPTY: (Int32) -> pid_t
+  var foregroundPgid: () -> pid_t
   var pidsInPgroup: (pid_t) -> [pid_t]
   var childrenOf: (pid_t) -> [pid_t]
-  var deepestDescendant: (pid_t) -> pid_t?
   var describe: (pid_t) -> ForegroundProcess?
 }
 
@@ -26,31 +23,25 @@ enum ForegroundProcessResolver {
   @MainActor
   static func current(for pane: MisttyPane) -> ForegroundProcess? {
     let probe = ForegroundProcessProbe(
-      ptyFD: { pane.ptyFD },
-      shellPID: { pane.shellPID },
-      tcgetpgrpOnPTY: { fd in tcgetpgrp(fd) },
+      foregroundPgid: { pane.foregroundPgid },
       pidsInPgroup: Self.pidsInPgroup(_:),
       childrenOf: Self.childrenOf(_:),
-      deepestDescendant: Self.deepestLiveDescendant(of:),
       describe: Self.describe(pid:)
     )
     return current(via: probe)
   }
 
-  /// Nonisolated entrypoint resolving from a raw pty fd + shell pid, callable
+  /// Nonisolated entrypoint resolving from a raw foreground pgid, callable
   /// from a libghostty C callback (no `@MainActor` pane needed). Lets the
   /// OSC-52 clipboard callback capture the foreground process *synchronously,
   /// at the instant the read fires* — before the async main-actor hop, by which
   /// time shell integrations (atuin et al.) have run their post-command hooks
   /// and polluted the foreground pgroup, mis-attributing the read.
-  nonisolated static func current(ptyFD: Int32, shellPID: pid_t) -> ForegroundProcess? {
+  nonisolated static func current(foregroundPgid: pid_t) -> ForegroundProcess? {
     let probe = ForegroundProcessProbe(
-      ptyFD: { ptyFD },
-      shellPID: { shellPID },
-      tcgetpgrpOnPTY: { fd in tcgetpgrp(fd) },
+      foregroundPgid: { foregroundPgid },
       pidsInPgroup: Self.pidsInPgroup(_:),
       childrenOf: Self.childrenOf(_:),
-      deepestDescendant: Self.deepestLiveDescendant(of:),
       describe: Self.describe(pid:)
     )
     return current(via: probe)
@@ -79,65 +70,46 @@ enum ForegroundProcessResolver {
 
   /// Pure dispatch logic; all I/O lives in the probe closures.
   ///
-  /// Strategy: ask the tty which *process group* has the foreground
-  /// (`tcgetpgrp`), enumerate all pids in that pgroup
-  /// (`proc_listpids(PROC_PGRP_ONLY,…)`), filter out shells and wrapper
-  /// processes, and return the remaining non-shell. This correctly
+  /// Strategy: start from the tty's foreground *process group*, enumerate all
+  /// pids in that pgroup (`proc_listpids(PROC_PGRP_ONLY,…)`), filter out shells
+  /// and wrapper processes, and return the remaining non-shell. This correctly
   /// distinguishes foreground from backgrounded siblings (e.g. a fish
   /// shell with both `nvim` in the foreground and `dark-notify` in the
   /// background — only nvim's pgroup owns the tty) AND unwraps ghostty's
   /// macOS login-shell spawn (`login → [bash →] ssh` inherit login's
   /// pgid; filtering `login` out leaves ssh).
-  ///
-  /// Fallback paths handle the `ptyFD = -1` case (ghostty patch missing)
-  /// via a descendant walk — less precise but better than nothing.
   static func current(via probe: ForegroundProcessProbe) -> ForegroundProcess? {
-    let fd = probe.ptyFD()
-    if fd >= 0 {
-      let pgid = probe.tcgetpgrpOnPTY(fd)
-      if pgid > 0 {
-        let pids = probe.pidsInPgroup(pgid)
-        // Preferred: the pgroup leader (pid == pgid). When a shell forks a
-        // command it typically `setpgid(child, child)`s the child, making
-        // the command itself the pgroup leader. That's the process the
-        // user ran — even when it later spawns helpers (nvim's LSP
-        // servers, plugin async jobs) that share the pgroup. Pinning on
-        // pgid avoids mis-capture when the kernel's arbitrary ordering of
-        // pgroup members happens to place a helper after the leader.
-        if pids.contains(pgid), let described = probe.describe(pgid),
-           !shellExecutables.contains(described.executable) {
-          return descendIntoSameExecutable(from: described, probe: probe)
-        }
-        // Fallback: the pgroup leader is a shell/wrapper (e.g. ghostty's
-        // `login → exec-into-bash → exec-into-ssh` chain leaves `login` as
-        // leader). Scan the remaining pgroup members for a non-shell.
-        // Kernel ordering usually places leaf processes after parents, so
-        // the last non-shell tends to be the one the user cares about.
-        var candidate: ForegroundProcess? = nil
-        for pid in pids {
-          guard let described = probe.describe(pid) else { continue }
-          if !shellExecutables.contains(described.executable) {
-            candidate = described
-          }
-        }
-        if let candidate { return descendIntoSameExecutable(from: candidate, probe: probe) }
-        // All pids in the foreground pgroup are shells/wrappers — user
-        // is at a plain prompt. Explicit nil, don't fall through.
-        if !pids.isEmpty { return nil }
-        // Empty pgroup listing (shouldn't happen in practice). Fall
-        // through to the descendant walk as a last resort.
+    let pgid = probe.foregroundPgid()
+    guard pgid > 0 else { return nil }
+    let pids = probe.pidsInPgroup(pgid)
+    if pids.isEmpty { return nil }
+    // Preferred: the pgroup leader (pid == pgid). When a shell forks a
+    // command it typically `setpgid(child, child)`s the child, making
+    // the command itself the pgroup leader. That's the process the
+    // user ran — even when it later spawns helpers (nvim's LSP
+    // servers, plugin async jobs) that share the pgroup. Pinning on
+    // pgid avoids mis-capture when the kernel's arbitrary ordering of
+    // pgroup members happens to place a helper after the leader.
+    if pids.contains(pgid), let described = probe.describe(pgid),
+       !shellExecutables.contains(described.executable) {
+      return descendIntoSameExecutable(from: described, probe: probe)
+    }
+    // Fallback: the pgroup leader is a shell/wrapper (e.g. ghostty's
+    // `login → exec-into-bash → exec-into-ssh` chain leaves `login` as
+    // leader). Scan the remaining pgroup members for a non-shell.
+    // Kernel ordering usually places leaf processes after parents, so
+    // the last non-shell tends to be the one the user cares about.
+    var candidate: ForegroundProcess? = nil
+    for pid in pids {
+      guard let described = probe.describe(pid) else { continue }
+      if !shellExecutables.contains(described.executable) {
+        candidate = described
       }
     }
-    // Fallback: descendant walk from ghostty's tracked pid. Used when
-    // the PTY fd is unavailable (patch missing) OR the pgroup lookup
-    // came back empty. Not as precise — picks arbitrarily within the
-    // deepest level — but still more useful than giving up.
-    let shell = probe.shellPID()
-    guard shell > 0, let deepest = probe.deepestDescendant(shell), deepest != shell,
-          let described = probe.describe(deepest),
-          !shellExecutables.contains(described.executable)
-    else { return nil }
-    return described
+    if let candidate { return descendIntoSameExecutable(from: candidate, probe: probe) }
+    // All pids in the foreground pgroup are shells/wrappers — user
+    // is at a plain prompt.
+    return nil
   }
 
   /// Follow a chain of same-executable children from `start`, returning the
@@ -175,26 +147,6 @@ enum ForegroundProcessResolver {
   }
 
   // MARK: - Real-syscall helpers
-
-  /// BFS through descendants of `rootPid`, returning the deepest PID. When
-  /// multiple children exist at the same depth the kernel's ordering decides
-  /// which one wins — the fallback path is a heuristic, not a guarantee
-  /// of "most-recently-forked." Reached only when `tcgetpgrp` is
-  /// unavailable; callers should treat this as best-effort.
-  static func deepestLiveDescendant(of rootPid: pid_t) -> pid_t? {
-    var deepest: pid_t? = nil
-    var frontier = [rootPid]
-    while !frontier.isEmpty {
-      var next: [pid_t] = []
-      for parent in frontier {
-        let children = Self.childrenOf(parent)
-        next.append(contentsOf: children)
-      }
-      if let last = next.last { deepest = last }
-      frontier = next
-    }
-    return deepest
-  }
 
   static func childrenOf(_ parent: pid_t) -> [pid_t] {
     listPids(type: UInt32(PROC_PPID_ONLY), info: UInt32(parent))

@@ -14,12 +14,9 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[4242] = .init(executable: "nvim", path: "/usr/bin/nvim",
                              argv: ["nvim", "foo"], pid: 4242)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 5 },
-      shellPID: { 1000 },
-      tcgetpgrpOnPTY: { _ in 4242 },
+      foregroundPgid: { 4242 },
       pidsInPgroup: { pgid in pgid == 4242 ? [4242] : [] },
       childrenOf: { _ in [] },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
@@ -34,12 +31,9 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[1000] = .init(executable: "zsh", path: "/bin/zsh",
                               argv: ["-zsh"], pid: 1000)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 5 },
-      shellPID: { 1000 },
-      tcgetpgrpOnPTY: { _ in 1000 },
+      foregroundPgid: { 1000 },
       pidsInPgroup: { pgid in pgid == 1000 ? [1000] : [] },
       childrenOf: { _ in [] },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     XCTAssertNil(ForegroundProcessResolver.current(via: probe))
@@ -57,12 +51,9 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[81418] = .init(executable: "ssh", path: "/usr/bin/ssh",
                               argv: ["ssh", "isengard"], pid: 81418)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 27 },
-      shellPID: { 81416 },
-      tcgetpgrpOnPTY: { _ in 81416 },
+      foregroundPgid: { 81416 },
       pidsInPgroup: { pgid in pgid == 81416 ? [81416, 81418] : [] },
       childrenOf: { _ in [] },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
@@ -85,16 +76,13 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[18102] = .init(executable: "nvim", path: "/usr/local/bin/nvim",
                               argv: ["nvim", "foo.txt"], pid: 18102)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 9 },
-      shellPID: { 9000 },
-      tcgetpgrpOnPTY: { _ in 18102 },                   // nvim is the leader
+      foregroundPgid: { 18102 },                        // nvim is the leader
       pidsInPgroup: { pgid in
         // Kernel orders helper AFTER nvim — with the old heuristic
         // this made helper win. pgid-equality fixes that.
         pgid == 18102 ? [18102, 18101] : []
       },
       childrenOf: { _ in [] },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
@@ -117,58 +105,32 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[6000] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
                               argv: ["nvim"], pid: 6000)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 7 },
-      shellPID: { 2000 },
-      tcgetpgrpOnPTY: { _ in 6000 },             // nvim owns the tty
+      foregroundPgid: { 6000 },                  // nvim owns the tty
       pidsInPgroup: { pgid in pgid == 6000 ? [6000] : [] },
       childrenOf: { _ in [] },
-      deepestDescendant: { _ in 5000 },          // would pick dark-notify — unused
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
     XCTAssertEqual(result?.executable, "nvim")
   }
 
-  // PTY fd unavailable (e.g. ghostty patch missing) → fall back to
-  // descendant walk.
-  func test_fallbackPath_walksDescendantsWhenPTYUnavailable() {
-    let fake = FakeDescribe()
-    fake.byPID[7] = .init(executable: "htop", path: "/usr/bin/htop",
-                          argv: ["htop"], pid: 7)
-    let probe = ForegroundProcessProbe(
-      ptyFD: { -1 },
-      shellPID: { 2 },
-      tcgetpgrpOnPTY: { _ in -1 },
-      pidsInPgroup: { _ in [] },
-      childrenOf: { _ in [] },
-      deepestDescendant: { _ in 7 },
-      describe: fake.describe
-    )
-    let result = ForegroundProcessResolver.current(via: probe)
-    XCTAssertEqual(result?.executable, "htop")
+  func test_unavailablePgid_returnsNil() {
+    for pgid: pid_t in [-1, 0] {
+      let probe = ForegroundProcessProbe(
+        foregroundPgid: { pgid },
+        pidsInPgroup: { _ in XCTFail("must not list an invalid pgid"); return [] },
+        childrenOf: { _ in [] },
+        describe: { _ in nil }
+      )
+      XCTAssertNil(ForegroundProcessResolver.current(via: probe))
+    }
   }
 
-  func test_fallbackPath_returnsNilWhenNoDescendants() {
+  func test_emptyPgroupListing_returnsNil() {
     let probe = ForegroundProcessProbe(
-      ptyFD: { -1 },
-      shellPID: { 2 },
-      tcgetpgrpOnPTY: { _ in -1 },
+      foregroundPgid: { 4242 },
       pidsInPgroup: { _ in [] },
       childrenOf: { _ in [] },
-      deepestDescendant: { _ in nil },
-      describe: { _ in nil }
-    )
-    XCTAssertNil(ForegroundProcessResolver.current(via: probe))
-  }
-
-  func test_bothPathsFail_returnsNil() {
-    let probe = ForegroundProcessProbe(
-      ptyFD: { -1 },
-      shellPID: { -1 },
-      tcgetpgrpOnPTY: { _ in -1 },
-      pidsInPgroup: { _ in [] },
-      childrenOf: { _ in [] },
-      deepestDescendant: { _ in nil },
       describe: { _ in nil }
     )
     XCTAssertNil(ForegroundProcessResolver.current(via: probe))
@@ -193,16 +155,13 @@ final class ForegroundProcessResolverTests: XCTestCase {
                               argv: ["/nix/store/.../bin/nvim", "--cmd", "…"],
                               pid: 23804)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 10 },
-      shellPID: { 23748 },
-      tcgetpgrpOnPTY: { _ in 23803 },
+      foregroundPgid: { 23803 },
       pidsInPgroup: { pgid in pgid == 23803 ? [23803] : [] },
       childrenOf: { parent in
         if parent == 23803 { return [23804] }
         if parent == 23804 { return [23805] }  // dark-notify, different exe
         return []
       },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
@@ -231,9 +190,7 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[200] = .init(executable: "nvim", path: "/opt/homebrew/bin/nvim",
                              argv: ["nvim"], pid: 200)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 7 },
-      shellPID: { 50 },
-      tcgetpgrpOnPTY: { _ in 100 },
+      foregroundPgid: { 100 },
       pidsInPgroup: { pgid in pgid == 100 ? [100, 101] : [] },
       childrenOf: { parent in
         if parent == 100 { return [101] }
@@ -241,7 +198,6 @@ final class ForegroundProcessResolverTests: XCTestCase {
         if parent == 150 { return [200] }   // shell's nvim
         return []
       },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
@@ -262,12 +218,9 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[501] = .init(executable: "nvim", path: "/usr/bin/nvim",
                              argv: ["nvim", "foo"], pid: 501)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 4 },
-      shellPID: { 400 },
-      tcgetpgrpOnPTY: { _ in 500 },
+      foregroundPgid: { 500 },
       pidsInPgroup: { pgid in pgid == 500 ? [500, 501] : [] },
       childrenOf: { parent in parent == 500 ? [501] : [] },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
@@ -287,13 +240,10 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[702] = .init(executable: "ssh", path: "/usr/bin/ssh",
                              argv: ["ssh", "host"], pid: 702)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 3 },
-      shellPID: { 700 },
-      tcgetpgrpOnPTY: { _ in 700 },
+      foregroundPgid: { 700 },
       pidsInPgroup: { pgid in pgid == 700 ? [700, 702] : [] },
       // ssh has no same-named children.
       childrenOf: { parent in parent == 702 ? [999] : [] },
-      deepestDescendant: { _ in nil },
       describe: { pid in
         if pid == 999 {
           return .init(executable: "sshd", path: "/usr/sbin/sshd", argv: ["sshd"], pid: 999)
@@ -317,12 +267,9 @@ final class ForegroundProcessResolverTests: XCTestCase {
     fake.byPID[9001] = .init(executable: "node", path: "/usr/bin/node",
                              argv: ["node"], pid: 9001)
     let probe = ForegroundProcessProbe(
-      ptyFD: { 5 },
-      shellPID: { 8000 },
-      tcgetpgrpOnPTY: { _ in 9000 },
+      foregroundPgid: { 9000 },
       pidsInPgroup: { pgid in pgid == 9000 ? [9000] : [] },
       childrenOf: { parent in parent == 9000 ? [9001] : [] },
-      deepestDescendant: { _ in nil },
       describe: fake.describe
     )
     let result = ForegroundProcessResolver.current(via: probe)
