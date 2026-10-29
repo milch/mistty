@@ -42,10 +42,10 @@ Mistty links against `libghostty`, which is built from a vendored Ghostty submod
 ### Prerequisites
 
 - **Xcode** (for the Swift 6 toolchain and the Metal toolchain). If the Metal toolchain is missing, run `xcodebuild -downloadComponent MetalToolchain`.
-- **[Nix](https://nixos.org/download/)** — provides the pinned Zig (0.15.2) that Ghostty's build system requires.
+- **[Nix](https://nixos.org/download/)** — provides the pinned Zig (0.17.0) that Ghostty's build system requires.
 - **[just](https://github.com/casey/just)** — the task runner (recommended).
 
-> **Xcode version note:** Zig 0.15.2 cannot link against the Xcode 26.4+ macOS SDK. If `just build-libghostty` fails with a flood of `undefined symbol` errors, switch to an older Xcode (`sudo xcode-select --switch /Applications/Xcode-26.3.app`) or build the xcframework elsewhere and copy it in. `just build-libghostty` prints this hint automatically on failure.
+> **Xcode version note:** libghostty builds with current Xcode, and upstream Ghostty builds with Xcode 27.1.
 
 ### Steps
 
@@ -86,4 +86,4 @@ Run `just --list` for the complete set, including release packaging, version bum
 
 ### Nix dev shell
 
-The Nix flake supplies Zig 0.15.2; Swift comes from your system Xcode. Enter it manually with `nix develop`, or use [direnv](https://direnv.net/) (`direnv allow` — an `.envrc` is already configured) to load it automatically when you `cd` into the repo.
+The Nix flake supplies Zig 0.17.0; Swift comes from your system Xcode. Enter it manually with `nix develop`, or use [direnv](https://direnv.net/) (`direnv allow` — an `.envrc` is already configured) to load it automatically when you `cd` into the repo.

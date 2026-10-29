@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
 
     steps:
@@ -28,7 +28,7 @@ jobs:
           submodules: recursive
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+        run: sudo xcode-select -s /Applications/Xcode_27.1.app
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
@@ -49,8 +49,9 @@ jobs:
           path: |
             vendor/ghostty/zig-out
             vendor/ghostty/.zig-cache
+            vendor/ghostty/zig-pkg
             ~/.cache/zig
-          key: zig-${{ runner.os }}-${{ hashFiles('vendor/ghostty/build.zig', 'vendor/ghostty/build.zig.zon') }}
+          key: zig-${{ runner.os }}-${{ hashFiles('vendor/ghostty/build.zig', 'vendor/ghostty/build.zig.zon', 'patches/ghostty/**', 'flake.lock') }}
           restore-keys: |
             zig-${{ runner.os }}-
 
