@@ -19,8 +19,8 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        # Ghostty requires Zig 0.15.2 — keep in sync with vendor/ghostty/flake.nix
-        zigPkg = zig.packages.${system}."0.15.2";
+        # Ghostty requires Zig 0.17.0 — keep in sync with vendor/ghostty/flake.nix
+        zigPkg = zig.packages.${system}."0.17.0";
       in {
         devShells.default = pkgs.mkShell {
           name = "mistty-dev";

@@ -22,8 +22,8 @@ final class TerminalSurfaceView: NSView {
   /// Callable from a libghostty C callback, where `surface` is valid for the
   /// callback's duration. `-1` when unavailable.
   nonisolated static func foregroundPgid(of surface: ghostty_surface_t) -> pid_t {
-    let fd = ghostty_surface_pty_fd(surface)
-    return fd >= 0 ? tcgetpgrp(fd) : -1
+    let pgid = ghostty_surface_foreground_pid(surface)
+    return pgid > 0 ? pid_t(truncatingIfNeeded: pgid) : -1
   }
 
   /// Read a text range from the surface. The ONLY sanctioned way to read

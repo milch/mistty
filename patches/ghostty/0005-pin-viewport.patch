@@ -1,22 +1,22 @@
 diff --git a/include/ghostty.h b/include/ghostty.h
+index 9a12b9cad..02fee3f85 100644
 --- a/include/ghostty.h
 +++ b/include/ghostty.h
-@@ -1087,6 +1087,9 @@ bool ghostty_surface_process_exited(ghostty_surface_t);
- /* Mistty patch: see embedded.zig. */
- int ghostty_surface_pty_fd(ghostty_surface_t);
- 
+@@ -1192,6 +1192,8 @@ GHOSTTY_API void ghostty_surface_set_occlusion(ghostty_surface_t, bool);
+ GHOSTTY_API void ghostty_surface_set_size(ghostty_surface_t, uint32_t, uint32_t);
+ GHOSTTY_API ghostty_surface_size_s ghostty_surface_size(ghostty_surface_t);
+ GHOSTTY_API uint64_t ghostty_surface_foreground_pid(ghostty_surface_t);
 +/* Mistty patch: see embedded.zig. */
-+void ghostty_surface_pin_viewport(ghostty_surface_t);
-+
- void ghostty_surface_refresh(ghostty_surface_t);
- void ghostty_surface_draw(ghostty_surface_t);
- void ghostty_surface_set_content_scale(ghostty_surface_t, double, double);
++GHOSTTY_API void ghostty_surface_pin_viewport(ghostty_surface_t);
+ GHOSTTY_API ghostty_string_s ghostty_surface_tty_name(ghostty_surface_t);
+ GHOSTTY_API void ghostty_surface_set_color_scheme(ghostty_surface_t,
+                                                      ghostty_color_scheme_e);
 diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 795533c80..bf07bd08c 100644
 --- a/src/apprt/embedded.zig
 +++ b/src/apprt/embedded.zig
-@@ -1648,7 +1648,40 @@ pub const CAPI = struct {
-             },
-         }
+@@ -1913,6 +1913,29 @@ pub const CAPI = struct {
+         return surface.core_surface.child_exited;
      }
  
 +    /// Mistty patch: pin the viewport at its current position without
@@ -36,22 +36,93 @@ diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
 +    /// reaches the renderer thread on the next frame.
 +    export fn ghostty_surface_pin_viewport(surface: *Surface) void {
 +        const core = &surface.core_surface;
-+        core.renderer_state.mutex.lock();
-+        defer core.renderer_state.mutex.unlock();
-+        const pages = &core.io.terminal.screens.active.pages;
-+        if (pages.explicit_max_size == 0) return;
-+        switch (pages.viewport) {
-+            .top, .pin => return,
-+            .active => {
-+                const top = pages.getTopLeft(.active);
-+                pages.viewport_pin.* = top;
-+                pages.viewport = .pin;
-+                pages.viewport_pin_row_offset = null;
-+            },
-+        }
++        core.renderer_state.mutex.lockUncancelable(global.io());
++        defer core.renderer_state.mutex.unlock(global.io());
++        core.io.terminal.screens.active.pages.pinViewport();
 +        core.renderer_thread.wakeup.notify() catch {};
 +    }
 +
      /// Returns true if the surface has a selection.
      export fn ghostty_surface_has_selection(surface: *Surface) bool {
          return surface.core_surface.hasSelection();
+diff --git a/src/terminal/PageList.zig b/src/terminal/PageList.zig
+index 8a62b6f02..bfd7c21db 100644
+--- a/src/terminal/PageList.zig
++++ b/src/terminal/PageList.zig
+@@ -3506,6 +3506,24 @@ pub fn scroll(self: *PageList, behavior: Scroll) void {
+     }
+ }
+ 
++/// Mistty patch: freeze the viewport where it is. `.active` becomes `.pin`
++/// at the active area's top-left so new output flows into scrollback without
++/// shifting visible content. No-op when already `.top`/`.pin` or when there
++/// is no scrollback (same guard as `scroll`).
++pub fn pinViewport(self: *PageList) void {
++    defer self.assertIntegrity();
++    if (self.limits.bytes.explicit == 0) return;
++    switch (self.viewport) {
++        .top, .pin => return,
++        .active => {},
++    }
++    self.viewport_pin.* = self.getTopLeft(.active);
++    self.viewport = .pin;
++    self.viewport_pin_row_offset = null;
++    self.page_compression.reset();
++    self.page_compression.markActivity();
++}
++
+ /// Jump the viewport forwards (positive) or backwards (negative) a set number of
+ /// prompts (delta).
+ fn scrollPrompt(self: *PageList, delta: isize) void {
+@@ -10207,6 +10225,51 @@ test "PageList scroll top" {
+     }, s.scrollbar());
+ }
+ 
++test "PageList pinViewport keeps the viewport fixed as rows grow" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    var s = try init(alloc, .{ .cols = 80, .rows = 24 });
++    defer s.deinit();
++    try s.growRows(10);
++
++    s.pinViewport();
++    try testing.expect(s.viewport == .pin);
++
++    try s.growRows(5);
++    {
++        const pt = s.getCell(.{ .viewport = .{} }).?.screenPoint();
++        try testing.expectEqual(point.Point{ .screen = .{
++            .x = 0,
++            .y = 10,
++        } }, pt);
++    }
++}
++
++test "PageList pinViewport is a no-op without scrollback" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    var s = try init(alloc, .{ .cols = 80, .rows = 24, .max_size = 0 });
++    defer s.deinit();
++
++    s.pinViewport();
++    try testing.expect(s.viewport == .active);
++}
++
++test "PageList pinViewport leaves a scrolled viewport alone" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    var s = try init(alloc, .{ .cols = 80, .rows = 24 });
++    defer s.deinit();
++    try s.growRows(10);
++
++    s.scroll(.{ .top = {} });
++    s.pinViewport();
++    try testing.expect(s.viewport == .top);
++}
++
+ test "PageList scroll delta row back" {
+     const testing = std.testing;
+     const alloc = testing.allocator;

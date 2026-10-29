@@ -455,25 +455,9 @@ patch-ghostty:
     for p in "${patches[@]}"; do echo "Applying $(basename "$p")"; git apply "$p"; done
 
 # Build libghostty from the vendored submodule (requires nix).
-# On failure, prints a hint if the user is on Xcode 26.4+, because zig
-# 0.15.2 (pinned by ghostty's build.zig.zon) can't link against that
-# SDK and the raw error is a flood of "undefined symbol: _abort / …".
 build-libghostty: patch-ghostty
     #!/usr/bin/env bash
-    if ! nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast"; then
-      xcode_version=$(xcodebuild -version 2>/dev/null | awk '/^Xcode/ {print $2}')
-      if [ -n "$xcode_version" ]; then
-        v=$(awk -F. '{print $1*100 + $2}' <<<"$xcode_version")
-        if [ "$v" -ge 2604 ]; then
-          echo "" >&2
-          echo "Hint: Xcode $xcode_version detected. Zig 0.15.2 (pinned by upstream ghostty) can't" >&2
-          echo "link against the Xcode 26.4+ macOS SDK — known upstream issue." >&2
-          echo "Workarounds:" >&2
-          echo "  - sudo xcode-select --switch /Applications/Xcode-26.3.app (or older)" >&2
-          echo "  - build libghostty on another machine and copy" >&2
-          echo "    vendor/ghostty/macos/GhosttyKit.xcframework" >&2
-        fi
-      fi
+    if ! nix develop --command bash -c "cd vendor/ghostty && zig build -Dapp-runtime=none -Doptimize=ReleaseFast -Dxcframework-target=native -Demit-macos-app=false"; then
       exit 1
     fi
 
