@@ -23,16 +23,16 @@ Some settings are passed straight through from Mistty to the Ghostty rendering l
 
 ## Top-level options
 
-| Key                 | Type   | Default             | Description                                                                                                                                                                                         |
-| ------------------- | ------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `font_size`         | int    | `13`                | Terminal font size, in points (Ghostty `font-size`).                                                                                                                                                |
-| `font_family`       | string | _(Ghostty default)_ | Monospace font family (Ghostty `font-family`). Leave unset to keep Ghostty's own font list.                                                                                                         |
-| `cursor_style`      | string | `"block"`           | Cursor shape: `block`, `bar`, or `underline` (Ghostty `cursor-style`).                                                                                                                              |
-| `scrollback_lines`  | int    | `10000`             | Scrollback buffer size in lines (Ghostty `scrollback-limit`).                                                                                                                                       |
-| `sidebar_visible`   | bool   | `true`              | Show the sidebar on launch. Toggle at runtime with `Cmd+S`.                                                                                                                                         |
-| `scroll_multiplier` | float  | `2.0`               | Multiplier for trackpad / Magic Mouse precision scroll deltas. `1.0` = raw macOS deltas (usually too fast). Mouse-wheel scrolling is unaffected — use `[ghostty] mouse-scroll-multiplier` for that. |
-| `zoxide_path`       | string | _(auto-detected)_   | Absolute path to the `zoxide` binary. Skips Mistty's probe of common install locations. Leading `~` is expanded.                                                                                    |
-| `debug_logging`     | bool   | `false`             | Write diagnostic logs to `~/Library/Logs/Mistty/mistty-debug.log`. For troubleshooting only — small per-write overhead.                                                                             |
+| Key                 | Type   | Default                   | Description                                                                                                                                                                                         |
+| ------------------- | ------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `font_size`         | int    | `13`                      | Terminal font size, in points (Ghostty `font-size`).                                                                                                                                                |
+| `font_family`       | string | _(Ghostty default)_       | Monospace font family (Ghostty `font-family`). Leave unset to keep Ghostty's own font list.                                                                                                         |
+| `cursor_style`      | string | `"block"`                 | Cursor shape: `block`, `bar`, or `underline` (Ghostty `cursor-style`).                                                                                                                              |
+| `scrollback_lines`  | int    | _Ghostty default (50 MB)_ | Scrollback buffer size in lines (Ghostty `scrollback-limit-lines`). `0` disables scrollback.                                                                                                        |
+| `sidebar_visible`   | bool   | `true`                    | Show the sidebar on launch. Toggle at runtime with `Cmd+S`.                                                                                                                                         |
+| `scroll_multiplier` | float  | `2.0`                     | Multiplier for trackpad / Magic Mouse precision scroll deltas. `1.0` = raw macOS deltas (usually too fast). Mouse-wheel scrolling is unaffected — use `[ghostty] mouse-scroll-multiplier` for that. |
+| `zoxide_path`       | string | _(auto-detected)_         | Absolute path to the `zoxide` binary. Skips Mistty's probe of common install locations. Leading `~` is expanded.                                                                                    |
+| `debug_logging`     | bool   | `false`                   | Write diagnostic logs to `~/Library/Logs/Mistty/mistty-debug.log`. For troubleshooting only — small per-write overhead.                                                                             |
 
 ## `[ssh]`
 

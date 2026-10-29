@@ -172,10 +172,10 @@ public struct GhosttyResolvedConfig: Sendable, Equatable {
   public var fontSize: Int?
   public var fontFamily: String?
   public var cursorStyle: String?
-  /// In lines. Converted to `scrollback-limit` bytes at render time using
-  /// ~1 000 bytes/line — ghostty's own default is 10 000 000 bytes (decimal
-  /// MB, see `vendor/ghostty/src/config/Config.zig:1385`), which lines up
-  /// with the historical 10 000-line scrollback budget at 1 000 bytes/line.
+  /// In lines. Forwarded as an exact `scrollback-limit-lines` cap; ghostty's
+  /// 50 MB `scrollback-limit-bytes` cap still applies on top. `0` disables
+  /// scrollback (emitted as `scrollback-limit-bytes = 0`, because ghostty
+  /// floors the line cap at its page minimum). Unset leaves ghostty's default.
   public var scrollbackLines: Int?
   public var passthrough: GhosttyPassthroughConfig = GhosttyPassthroughConfig()
   public var contentPaddingX: [Int]?
@@ -183,6 +183,10 @@ public struct GhosttyResolvedConfig: Sendable, Equatable {
   public var contentPaddingBalance: Bool?
 
   public init() {}
+
+  /// Restores Mistty's pre-1.4 select-to-copy behavior; Ghostty 1.4 changed the
+  /// macOS `copy-on-select` default to `none`.
+  public static let baseLines: [String] = ["copy-on-select = clipboard"]
 
   /// Ghostty config file lines. Top-level font/cursor first so `[ghostty]`
   /// passthrough entries for the same key (rare but legal) override them;
@@ -198,7 +202,9 @@ public struct GhosttyResolvedConfig: Sendable, Equatable {
     if let s = fontSize { lines.append("font-size = \(s)") }
     if let f = fontFamily, !f.isEmpty { lines.append("font-family = \(f)") }
     if let c = cursorStyle, !c.isEmpty { lines.append("cursor-style = \(c)") }
-    if let l = scrollbackLines { lines.append("scrollback-limit = \(l * 1000)") }
+    if let l = scrollbackLines {
+      lines.append(l == 0 ? "scrollback-limit-bytes = 0" : "scrollback-limit-lines = \(l)")
+    }
     lines.append(contentsOf: passthrough.configLines)
     if let xs = contentPaddingX {
       lines.append("window-padding-x = \(xs.map(String.init).joined(separator: ","))")

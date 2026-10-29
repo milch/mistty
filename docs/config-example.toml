@@ -22,8 +22,8 @@ font_size = 13
 cursor_style = "block"
 
 # Scrollback buffer size, in lines. Forwarded to ghostty as
-# `scrollback-limit = lines * 1000` bytes, matching ghostty's own default
-# of 10 000 000 bytes (~10 000 lines).
+# `scrollback-limit-lines`; 0 disables scrollback. Leave unset to use
+# ghostty's default (50 MB, no line cap).
 scrollback_lines = 10000
 
 # Show the session sidebar on launch.
@@ -216,7 +216,7 @@ title_bar_style = "hidden_with_lights"
 # mouse-scroll-multiplier = 1.0
 
 # ── Selection / clipboard ──
-# copy-on-select = "clipboard"
+# copy-on-select = "clipboard"   # Mistty default: clipboard
 # selection-clear-on-typing = true
 # clipboard-paste-protection = true
 # clipboard-read = "ask"

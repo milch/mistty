@@ -1,3 +1,4 @@
+import MisttyShared
 import XCTest
 
 @testable import Mistty
@@ -271,7 +272,7 @@ final class UIConfigTests: XCTestCase {
         "font-size = 15",
         "font-family = JetBrainsMono Nerd Font",
         "cursor-style = bar",
-        "scrollback-limit = \(20000 * 1000)",
+        "scrollback-limit-lines = 20000",
         "theme = Dracula",
         "window-padding-x = 4,8",
       ]
@@ -294,6 +295,18 @@ final class UIConfigTests: XCTestCase {
     // else — it adds IO for zero user-visible effect.
     let config = try MisttyConfig.parse("")
     XCTAssertTrue(config.ghosttyConfigLines.isEmpty)
+  }
+
+  func test_ghosttyConfigLines_zeroScrollbackDisablesHistory() throws {
+    // Ghostty 1.4 floors `scrollback-limit-lines` at the page minimum, so
+    // `scrollback_lines = 0` must map to the byte cap to keep disabling history.
+    let config = try MisttyConfig.parse("scrollback_lines = 0")
+    XCTAssertTrue(config.ghosttyConfigLines.contains("scrollback-limit-bytes = 0"))
+    XCTAssertFalse(config.ghosttyConfigLines.contains { $0.hasPrefix("scrollback-limit-lines") })
+  }
+
+  func test_baseLines_pinCopyOnSelectToClipboard() {
+    XCTAssertEqual(GhosttyResolvedConfig.baseLines, ["copy-on-select = clipboard"])
   }
 
   func test_ghosttyConfigLines_userCanOverrideWindowTheme() throws {

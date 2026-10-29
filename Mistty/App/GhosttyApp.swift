@@ -411,16 +411,19 @@ final class GhosttyAppManager {
     ghostty_app_tick(app)
   }
 
-  /// Build a fresh `ghostty_config_t` from the current `MisttyConfig`,
-  /// loading `~/.config/mistty/ghostty.conf` first and then applying our
-  /// resolved overrides via a temp file. Caller is responsible for the
-  /// returned config's lifetime — pass to `ghostty_app_update_config` and
-  /// retain until the next reload (or app shutdown).
+  /// Build a fresh `ghostty_config_t` from the current `MisttyConfig`.
+  /// Layers, lowest to highest precedence: `GhosttyResolvedConfig.baseLines`,
+  /// `~/.config/mistty/ghostty.conf`, then the resolved `config.toml`
+  /// overrides. Caller is responsible for the returned config's lifetime —
+  /// pass to `ghostty_app_update_config` and retain until the next reload
+  /// (or app shutdown).
   private func buildGhosttyConfig(from misttyConfig: MisttyConfig) -> ghostty_config_t? {
     guard let cfg = ghostty_config_new() else {
       print("[GhosttyAppManager] ghostty_config_new failed")
       return nil
     }
+
+    loadConfigLines(GhosttyResolvedConfig.baseLines, into: cfg)
 
     let misttyConfigPath = FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent(".config/mistty/ghostty.conf").path
@@ -430,21 +433,23 @@ final class GhosttyAppManager {
       }
     }
 
-    let ghosttyLines = misttyConfig.ghosttyConfigLines
-    if !ghosttyLines.isEmpty {
-      let tempURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent(
-          "mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString).conf")
-      let contents = ghosttyLines.joined(separator: "\n") + "\n"
-      if (try? contents.write(to: tempURL, atomically: true, encoding: .utf8)) != nil {
-        tempURL.path.withCString { path in
-          ghostty_config_load_file(cfg, path)
-        }
-      }
-    }
+    loadConfigLines(misttyConfig.ghosttyConfigLines, into: cfg)
 
     ghostty_config_finalize(cfg)
     return cfg
+  }
+
+  private func loadConfigLines(_ lines: [String], into cfg: ghostty_config_t) {
+    guard !lines.isEmpty else { return }
+    let tempURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(
+        "mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString).conf")
+    let contents = lines.joined(separator: "\n") + "\n"
+    if (try? contents.write(to: tempURL, atomically: true, encoding: .utf8)) != nil {
+      tempURL.path.withCString { path in
+        ghostty_config_load_file(cfg, path)
+      }
+    }
   }
 
   /// Re-parse the user's `~/.config/mistty/ghostty.conf` + the resolved
