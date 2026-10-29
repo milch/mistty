@@ -19,6 +19,31 @@ struct ClipboardPayload: Equatable, Sendable {
 enum GhosttyClipboard {
   static let textMime = "text/plain"
 
+  /// The core's `isTextMime` names, matched exactly (case-sensitive, no
+  /// parameter parsing).
+  static let textMimes: Set<String> = [
+    textMime, "text/plain;charset=utf-8", "UTF8_STRING", "TEXT", "STRING",
+  ]
+
+  enum ConfirmRoute: Equatable {
+    case autoConfirm
+    case askReadPermission
+  }
+
+  /// Pastes are user-initiated and writes only change the clipboard, so
+  /// neither goes through the read-permission system. Everything else
+  /// discloses clipboard contents (or types) to the program; unknown requests
+  /// fail closed.
+  static func confirmRoute(for request: ghostty_clipboard_request_e) -> ConfirmRoute {
+    switch request {
+    case GHOSTTY_CLIPBOARD_REQUEST_PASTE, GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE,
+      GHOSTTY_CLIPBOARD_REQUEST_KITTY_WRITE:
+      .autoConfirm
+    default:
+      .askReadPermission
+    }
+  }
+
   /// The completion for a read request asking for `requested` MIME types
   /// (plus the available-types listing when `list`). nil when there is
   /// nothing to serve and no listing was requested.
@@ -60,8 +85,12 @@ enum GhosttyClipboard {
     }
   }
 
+  /// The text to write: the exact `text/plain` entry if present, otherwise
+  /// the first entry under any of `textMimes`.
   static func text(in contents: [ClipboardContent]) -> String? {
-    contents.first { $0.mime == textMime }.map { String(decoding: $0.data, as: UTF8.self) }
+    let entry =
+      contents.first { $0.mime == textMime } ?? contents.first { textMimes.contains($0.mime) }
+    return entry.map { String(decoding: $0.data, as: UTF8.self) }
   }
 
   /// Exposes `payload` as a `ghostty_clipboard_complete_s`. The C memory is

@@ -164,16 +164,22 @@ private let actionCallback: ghostty_runtime_action_cb = { app, target, action in
 /// (default Cmd+V), OSC-52 reads, and kitty OSC-5522 reads/listings, passing
 /// the MIME types it wants served (text-like types arrive as `text/plain`)
 /// and whether to include the available-types listing. We only serve the
-/// pasteboard's plain text. A non-`STARTED` result leaves no request open
-/// (the core answers the program itself). Otherwise we complete with
-/// confirmed=false; if ghostty needs confirmation (unsafe paste, or
-/// `clipboard-read = ask`) it routes the same `state` back through
-/// `confirm_read_clipboard_cb` synchronously, before the completion returns.
+/// pasteboard's plain text; macOS has no primary selection, so `PRIMARY` reads
+/// are `UNSUPPORTED`. A non-`STARTED` result leaves no request open: the core
+/// answers a kitty read itself (ENOSYS for `UNSUPPORTED`, an empty read for
+/// `UNAVAILABLE`), an OSC-52 read gets no reply, and a paste binding reports
+/// not-performed (the default `performable` Cmd+V passes the key through).
+/// Otherwise we complete with confirmed=false; if ghostty needs confirmation
+/// (unsafe paste, or `clipboard-read = ask`) it routes the same `state` back
+/// through `confirm_read_clipboard_cb` synchronously, before the completion
+/// returns.
 private let readClipboardCallback: ghostty_runtime_read_clipboard_cb = {
   userdata, location, state, mimes, mimesLen, list in
   guard let userdata, let state else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
   let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
-  guard let surface = view.surface else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
+  guard let surface = view.surface, location != GHOSTTY_CLIPBOARD_PRIMARY else {
+    return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED
+  }
   guard
     let payload = GhosttyClipboard.payload(
       requested: GhosttyClipboard.strings(mimes, count: mimesLen),
@@ -193,17 +199,22 @@ private struct ClipboardRequestState: @unchecked Sendable {
   let pointer: UnsafeMutableRawPointer
 }
 
-/// Clipboard confirm-read callback — ghostty routes a clipboard request here
-/// when it needs confirmation: unsafe paste contents, or any OSC-52 / kitty
-/// OSC-5522 read (the default `clipboard-read = ask`). `confirm` carries the
-/// would-be completion (contents + available listing), borrowed only for this
-/// call, so it's copied into a `ClipboardPayload` before any hop. Cmd+V pastes
-/// are user-initiated, so they auto-confirm (no prompt UI yet). Program reads
-/// are program-initiated: auto-confirming them hands the user's clipboard
-/// (passwords, tokens) to whatever runs in the pane, silently — so they are
-/// routed to `ClipboardPermissionCoordinator`, which decides per foreground
-/// process using the global `allow_clipboard_read` policy plus any per-process
-/// rules/session overrides (prompting the user when the policy is `prompt`).
+/// Clipboard confirm callback — ghostty routes a clipboard request here when
+/// it needs confirmation: unsafe paste contents, any OSC-52 / kitty OSC-5522
+/// read (the default `clipboard-read = ask`), or a kitty write under a
+/// non-default `clipboard-write = ask`. `confirm` carries the would-be
+/// completion (contents + available listing, or the contents a write would
+/// commit), borrowed only for this call, so it's copied into a
+/// `ClipboardPayload` before any hop. `GhosttyClipboard.confirmRoute` picks the
+/// path. Cmd+V pastes are user-initiated and writes only replace the clipboard
+/// (OSC-52 writes already ignore `confirm` in the write callback), so both
+/// auto-confirm (no prompt UI yet) and never reach the read-permission system.
+/// Program reads are program-initiated: auto-confirming them hands the user's
+/// clipboard (passwords, tokens) to whatever runs in the pane, silently — so
+/// they are routed to `ClipboardPermissionCoordinator`, which decides per
+/// foreground process using the global `allow_clipboard_read` policy plus any
+/// per-process rules/session overrides (prompting the user when the policy is
+/// `prompt`).
 /// Each request ends in exactly one of `ghostty_surface_complete_clipboard_request`
 /// (confirmed=true) or `ghostty_surface_deny_clipboard_request` — unless the
 /// surface is torn down first, in which case it's abandoned (see
@@ -222,10 +233,10 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
   let payload = ClipboardPayload(
     contents: GhosttyClipboard.contents(c.contents, count: c.contents_len),
     available: GhosttyClipboard.strings(c.available, count: c.available_len))
-  switch request {
-  case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
+  switch GhosttyClipboard.confirmRoute(for: request) {
+  case .autoConfirm:
     GhosttyClipboard.complete(surface, payload: payload, state: state, confirmed: true)
-  default:
+  case .askReadPermission:
     // Program read: resolve + decide on the main actor (may show a sheet). The
     // payload was copied above and the view is retained across the hop. We
     // must NOT touch @MainActor view state (e.g. `view.pane`, an NSView member)
@@ -255,9 +266,9 @@ private let confirmReadClipboardCallback: ghostty_runtime_confirm_read_clipboard
   }
 }
 
-/// Clipboard write callback. Writes the `text/plain` representation (the data
-/// is length-delimited, not NUL-terminated); other representations are
-/// ignored.
+/// Clipboard write callback. Writes the text representation picked by
+/// `GhosttyClipboard.text(in:)` (the data is length-delimited, not
+/// NUL-terminated); other representations are ignored.
 private let writeClipboardCallback: ghostty_runtime_write_clipboard_cb = {
   userdata, location, content, count, confirm in
   guard let text = GhosttyClipboard.text(in: GhosttyClipboard.contents(content, count: count))
@@ -445,16 +456,22 @@ final class GhosttyAppManager {
       .appendingPathComponent(
         "mistty-ghostty-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString).conf")
     let contents = lines.joined(separator: "\n") + "\n"
-    if (try? contents.write(to: tempURL, atomically: true, encoding: .utf8)) != nil {
-      tempURL.path.withCString { path in
-        ghostty_config_load_file(cfg, path)
-      }
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+    do {
+      try contents.write(to: tempURL, atomically: true, encoding: .utf8)
+    } catch {
+      print("[GhosttyAppManager] dropped \(lines.count) config lines: \(error)")
+      return
+    }
+    tempURL.path.withCString { path in
+      ghostty_config_load_file(cfg, path)
     }
   }
 
-  /// Re-parse the user's `~/.config/mistty/ghostty.conf` + the resolved
-  /// passthrough lines and push the new config to ghostty. The previous
-  /// `ghostty_config_t` is retired and freed on app shutdown.
+  /// Rebuild the layered config (`GhosttyResolvedConfig.baseLines` <
+  /// `~/.config/mistty/ghostty.conf` < the resolved `config.toml` overrides)
+  /// and push it to ghostty. The previous `ghostty_config_t` is retired and
+  /// freed on app shutdown.
   func reloadConfig() {
     guard let app = self.app else { return }
     guard let newCfg = buildGhosttyConfig(from: MisttyConfig.current) else { return }

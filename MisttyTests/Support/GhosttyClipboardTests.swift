@@ -62,6 +62,49 @@ final class GhosttyClipboardTests: XCTestCase {
     XCTAssertNil(GhosttyClipboard.text(in: [png]))
   }
 
+  func test_text_acceptsCoreTextMimeAliases() {
+    let png = ClipboardContent(mime: "image/png", data: Data([0x89, 0x50]))
+    for alias in ["text/plain;charset=utf-8", "UTF8_STRING", "TEXT", "STRING"] {
+      XCTAssertEqual(
+        GhosttyClipboard.text(in: [png, .init(mime: alias, data: Data(alias.utf8))]), alias,
+        alias)
+    }
+
+    XCTAssertEqual(
+      GhosttyClipboard.text(in: [
+        .init(mime: "UTF8_STRING", data: Data("alias".utf8)),
+        .init(mime: "text/plain", data: Data("plain".utf8)),
+      ]), "plain")
+    XCTAssertEqual(
+      GhosttyClipboard.text(in: [
+        .init(mime: "STRING", data: Data("first".utf8)),
+        .init(mime: "TEXT", data: Data("second".utf8)),
+      ]), "first")
+
+    for nonText in ["Text/Plain", "text/plain; charset=utf-8", "utf8_string", "text/html"] {
+      XCTAssertNil(
+        GhosttyClipboard.text(in: [.init(mime: nonText, data: Data("x".utf8))]), nonText)
+    }
+  }
+
+  func test_confirmRoute_writesAndPasteAutoConfirm_readsAsk() {
+    XCTAssertEqual(
+      GhosttyClipboard.confirmRoute(for: GHOSTTY_CLIPBOARD_REQUEST_PASTE), .autoConfirm)
+    XCTAssertEqual(
+      GhosttyClipboard.confirmRoute(for: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE), .autoConfirm)
+    XCTAssertEqual(
+      GhosttyClipboard.confirmRoute(for: GHOSTTY_CLIPBOARD_REQUEST_KITTY_WRITE), .autoConfirm)
+    XCTAssertEqual(
+      GhosttyClipboard.confirmRoute(for: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ), .askReadPermission)
+    XCTAssertEqual(
+      GhosttyClipboard.confirmRoute(for: GHOSTTY_CLIPBOARD_REQUEST_KITTY_READ), .askReadPermission)
+    XCTAssertEqual(
+      GhosttyClipboard.confirmRoute(for: GHOSTTY_CLIPBOARD_REQUEST_LIST), .askReadPermission)
+    XCTAssertEqual(
+      GhosttyClipboard.confirmRoute(for: ghostty_clipboard_request_e(rawValue: 99)),
+      .askReadPermission)
+  }
+
   func test_withComplete_roundTripsPayload() {
     let payload = ClipboardPayload(
       contents: [
