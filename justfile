@@ -424,21 +424,35 @@ clean:
     swift package clean
     rm -rf build/
 
-# Apply all patches under patches/ghostty/ to the vendored submodule. Idempotent
-# (skips a patch if `git apply --check` fails, on the assumption it's already
-# in). Run after `git submodule update`; `build-libghostty` runs this first.
+# Apply all patches under patches/ghostty/ to the vendored submodule.
+# Idempotent: a no-op if the series is already applied. Errors (exit 1) on a
+# patch that does not apply or on local edits beyond the series. Run after
+# `git submodule update`; `build-libghostty` runs this first.
 patch-ghostty:
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
-    for p in patches/ghostty/*.patch; do
-      if git -C vendor/ghostty apply --check "../../$p" >/dev/null 2>&1; then
-        echo "Applying $p"
-        git -C vendor/ghostty apply "../../$p"
-      else
-        echo "Skipping $p (already applied or does not apply)"
-      fi
-    done
+    patches=("$PWD"/patches/ghostty/*.patch)
+    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+    cd vendor/ghostty
+    # Build the tree the series should produce in a scratch index, so a patch
+    # that no longer applies fails here without touching the checkout.
+    expected=$(export GIT_INDEX_FILE="$tmp/expected"; git read-tree HEAD
+      for p in "${patches[@]}"; do
+        git apply --cached "$p" || {
+          echo "error: $(basename "$p") does not apply to vendor/ghostty@$(git rev-parse --short HEAD) — rebase it" >&2
+          exit 1
+        }
+      done
+      git write-tree)
+    actual=$(export GIT_INDEX_FILE="$tmp/actual"; git read-tree HEAD; git add -u; git write-tree)
+    if [ "$actual" = "$expected" ]; then echo "ghostty patches already applied"; exit 0; fi
+    if [ "$actual" != "$(git rev-parse 'HEAD^{tree}')" ]; then
+      echo "error: vendor/ghostty has local changes that aren't the patch series." >&2
+      echo "Fold them into patches/ghostty/ or discard: git -C vendor/ghostty checkout -- ." >&2
+      exit 1
+    fi
+    for p in "${patches[@]}"; do echo "Applying $(basename "$p")"; git apply "$p"; done
 
 # Build libghostty from the vendored submodule (requires nix).
 # On failure, prints a hint if the user is on Xcode 26.4+, because zig
