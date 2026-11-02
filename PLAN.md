@@ -28,7 +28,6 @@ v1 is shipped (see `## Implemented` below). Outstanding work:
 - `match_regex` / `match_any` allowlist matchers if the flat-basename match turns out to be limiting.
 - Window frame / position persistence — unlocked once multi-window is fixed and we switch to per-window encoding.
 - Popup, copy/window/search mode, zoomed-pane persistence — all ephemeral today; snapshot schema can absorb them without migration if a real need shows up.
-- Upstream the shell-PID accessor patch to ghostty.
 - **Opt-out mechanism for builtin auto-restore** — `ssh` is in `RestoreConfig.builtinAutoRestore` so SSH sessions relaunch without requiring an allowlist entry. Users with unreachable hosts or one-shot SSH panes have no way to suppress the reconnect attempt short of also suppressing the session's existence. Consider a `strategy = false` or similar sentinel, or a per-executable `auto_restore = false` flag in the rule.
 
 ### Preference Pane
@@ -318,7 +317,7 @@ Spec: `docs/superpowers/specs/2026-04-22-state-restoration-design.md`; plan: `do
 - Auto-save workspace on quit (and on AppKit's periodic checkpoints) via `NSApplicationDelegate`'s `application(_:willEncodeRestorableState:)`; auto-restore on launch via `didDecodeRestorableState` before the SwiftUI window materializes (verified via spike). `applicationSupportsSecureRestorableState → true`.
 - Structure preserved: sessions/tabs/panes/layouts/CWDs, split ratios, custom session/tab names, `lastActivatedAt`, active session/tab/pane markers. Pane IDs preserved verbatim across restore; ID counters advance past max seen ID.
 - Allowlist-driven process relaunch via `[[restore.command]]` in `config.toml`. `match` on basename; optional `strategy` string replaces argv, absent/empty replays captured argv POSIX-shell-quoted. Examples in `docs/config-example.toml` cover nvim/vim/claude/ssh/less/htop.
-- Foreground process detection via `tcgetpgrp(pty_fd)` on the pane's PTY (primary) with a descendants-of-shell-PID walk as fallback. Both paths feed `proc_pidpath` + `KERN_PROCARGS2 sysctl` to read the executable and full argv. Two libghostty patches add `ghostty_surface_command_pid` and `ghostty_surface_pty_fd` exports.
+- Foreground process detection via libghostty's `ghostty_surface_foreground_pid` (the PTY's foreground process group, `tcgetpgrp`), fed to `proc_pidpath` + `KERN_PROCARGS2 sysctl` to read the executable and full argv.
 - `StateRestorationObserver` uses `withObservationTracking` to call `NSApp.invalidateRestorableState()` on any snapshot-relevant mutation (session/tab/pane add/remove, reorder, rename, activePane change, CWD/OSC-7 change, split ratio change). AppKit coalesces and serializes.
 - `WorkspaceSnapshot` schema versioned (`version = 1`); unknown versions bail to empty state with a log line. DTOs live in `MisttyShared/Snapshot/`.
 - Missing-directory fallback: pane CWDs that no longer exist at restore time (user deleted the dir) are replaced with `$HOME` so the shell doesn't die immediately.
