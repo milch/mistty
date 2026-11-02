@@ -31,9 +31,9 @@ final class ChromePolishSnapshotTests: XCTestCase {
       at: parent, includingPropertiesForKeys: nil)
     {
       for entry in entries where entry.pathExtension == "bundle" {
-        let candidate = entry.appendingPathComponent(
-          "SymbolsNerdFontMono-Regular.ttf")
-        if FileManager.default.fileExists(atPath: candidate.path) {
+        if let candidate = Bundle(url: entry)?.url(
+          forResource: "SymbolsNerdFontMono-Regular", withExtension: "ttf")
+        {
           var error: Unmanaged<CFError>?
           _ = CTFontManagerRegisterFontsForURL(
             candidate as CFURL, .process, &error)
